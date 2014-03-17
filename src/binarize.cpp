@@ -82,6 +82,26 @@ void probabilistic_hough(const cv::Mat& source_image, cv::Mat& dest_image){
     }
 }
 
+double ordered_distance(const cv::Vec2f& line){
+    auto rho = line[0];
+    auto theta = line[1];
+
+    double a = cos(theta);
+    double b = sin(theta);
+    double x0 = a*rho;
+    double y0 = b*rho;
+
+    cv::Point pt1(cvRound(x0 + 1000 * -b), cvRound(y0 + 1000 * a));
+
+    return sqrt(pt1.x * pt1.x + pt1.y * pt1.y);
+}
+
+double ordered_distance(const cv::Vec2f& l1, const cv::Vec2f& l2){
+    double d1 = ordered_distance(l1);
+    double d2 = ordered_distance(l2);
+    return d2 - d1;
+}
+
 double distance(const cv::Vec2f& l1, const cv::Vec2f& l2){
     double a = cos(l1[1]);
     double b = sin(l1[1]);
@@ -89,6 +109,30 @@ double distance(const cv::Vec2f& l1, const cv::Vec2f& l2){
     double c2 = l2[0];
 
     return abs(c2 - c1) / sqrt(a * a + b * b);
+}
+
+double average_distance(std::vector<cv::Vec2f>& group, std::vector<std::vector<size_t>>& distance_groups){
+    double average = 0;
+    for(size_t i = 0 ; i < distance_groups.size() - 1; ++i){
+        auto d = distance(group[distance_groups[i][0]], group[distance_groups[i+1][0]]);
+
+        average += d;
+    }
+
+    average /= distance_groups.size();
+    return average;
+}
+
+double ordered_average_distance(std::vector<cv::Vec2f>& group, std::vector<std::vector<size_t>>& distance_groups){
+    double average = 0;
+    for(size_t i = 0 ; i < distance_groups.size() - 1; ++i){
+        auto d = ordered_distance(group[distance_groups[i][0]], group[distance_groups[i+1][0]]);
+
+        average += d;
+    }
+
+    average /= distance_groups.size();
+    return average;
 }
 
 void draw_line(cv::Mat& dest_image, const cv::Vec2f& line){
@@ -106,35 +150,95 @@ void draw_line(cv::Mat& dest_image, const cv::Vec2f& line){
     cv::line(dest_image, pt1, pt2, cv::Scalar(0,0,255), 2, CV_AA);
 }
 
-double average_distance(std::vector<cv::Vec2f>& group, std::vector<std::vector<size_t>>& distance_groups){
-    double average = 0;
-    for(size_t i = 0 ; i < distance_groups.size() - 1; ++i){
-        auto d = distance(group[distance_groups[i][0]], group[distance_groups[i+1][0]]);
+bool acceptLinePair(cv::Vec2f line1, cv::Vec2f line2, float minTheta){
+    float theta1 = line1[1], theta2 = line2[1];
 
-        average += d;
+    if(theta1 < minTheta){
+        theta1 += CV_PI; // dealing with 0 and 180 ambiguities...
     }
 
-    average /= distance_groups.size();
-    return average;
+    if(theta2 < minTheta){
+        theta2 += CV_PI; // dealing with 0 and 180 ambiguities...
+    }
+
+    return abs(theta1 - theta2) > minTheta;
+}
+
+std::vector<cv::Point2f> lineToPointPair(cv::Vec2f line){
+    std::vector<cv::Point2f> points;
+
+    float r = line[0], t = line[1];
+    double cos_t = cos(t), sin_t = sin(t);
+    double x0 = r*cos_t, y0 = r*sin_t;
+    double alpha = 1000;
+
+    points.push_back(cv::Point2f(x0 + alpha*(-sin_t), y0 + alpha*cos_t));
+    points.push_back(cv::Point2f(x0 - alpha*(-sin_t), y0 - alpha*cos_t));
+
+    return points;
+}
+
+cv::Point2f computeIntersect(cv::Vec2f line1, cv::Vec2f line2){
+    std::vector<cv::Point2f> p1 = lineToPointPair(line1);
+    std::vector<cv::Point2f> p2 = lineToPointPair(line2);
+
+    float denom = (p1[0].x - p1[1].x)*(p2[0].y - p2[1].y) - (p1[0].y - p1[1].y)*(p2[0].x - p2[1].x);
+    cv::Point2f intersect(((p1[0].x*p1[1].y - p1[0].y*p1[1].x)*(p2[0].x - p2[1].x) -
+                       (p1[0].x - p1[1].x)*(p2[0].x*p2[1].y - p2[0].y*p2[1].x)) / denom,
+                      ((p1[0].x*p1[1].y - p1[0].y*p1[1].x)*(p2[0].y - p2[1].y) -
+                       (p1[0].y - p1[1].y)*(p2[0].x*p2[1].y - p2[0].y*p2[1].x)) / denom);
+
+    return intersect;
 }
 
 void sudoku_lines(const cv::Mat& source_image, cv::Mat& dest_image){
     dest_image = source_image.clone();
 
     cv::Mat binary_image;
-    method_3(source_image, binary_image);
+    method_4(source_image, binary_image);
 
     constexpr const size_t CANNY_THRESHOLD = 50;
     cv::Canny(binary_image, binary_image, CANNY_THRESHOLD, CANNY_THRESHOLD * 3, 3);
 
     std::vector<cv::Vec2f> lines;
-    HoughLines(binary_image, lines, 1, CV_PI/180, 125, 0, 0 );
+    HoughLines(binary_image, lines, 1, CV_PI/180, 125, 0, 0);
 
-    for(auto& line : lines){
-        draw_line(dest_image, line);
+    std::vector<cv::Point2f> intersections;
+    for( size_t i = 0; i < lines.size(); i++ ){
+        for(size_t j = 0; j < lines.size(); j++){
+            cv::Vec2f line1 = lines[i];
+            cv::Vec2f line2 = lines[j];
+            if(acceptLinePair(line1, line2, CV_PI / 32)){
+                cv::Point2f intersection = computeIntersect(line1, line2);
+                intersections.push_back(intersection);
+            }
+        }
+    }
+
+    for(auto& i : intersections){
+        cv::circle(dest_image, i, 1, cv::Scalar(0, 255, 0), 3);
+
     }
 
     return;
+
+    /*if(lines.size() > 1000000){
+        cv::Mat gray_image;
+        cv::cvtColor(source_image, gray_image, CV_RGB2GRAY);
+
+        cv::Canny(gray_image, gray_image, CANNY_THRESHOLD, CANNY_THRESHOLD * 3, 3);
+
+        lines.clear();
+        HoughLines(gray_image, lines, 1, CV_PI/180, 100, 0, 0);
+    }*/
+
+    std::cout << lines.size() << std::endl;
+
+    /*for(auto& line : lines){
+        draw_line(dest_image, line);
+    }
+
+    return;*/
 
     constexpr const size_t PARALLEL_RESOLUTION = 10;
     constexpr const size_t BUCKETS = 180 / PARALLEL_RESOLUTION;
@@ -157,16 +261,20 @@ void sudoku_lines(const cv::Mat& source_image, cv::Mat& dest_image){
     std::copy(groups.back().begin(), groups.back().end(), std::back_inserter(groups.front()));
     groups.back().clear();
 
-    for(size_t i = 0; i < groups.size(); ++i){
-        auto& group = groups[i];
+    for(size_t g = 0; g < groups.size(); ++g){
+        auto& group = groups[g];
 
-        if(group.size() < 9){
+        if(group.size() < 10){
             continue;
         }
 
-        std::cout << "group(" << i << "), size=" << group.size() << std::endl;
+        if(g != 9){
+            //continue;
+        }
 
-        auto angle_first = i * PARALLEL_RESOLUTION;
+        std::cout << "group(" << g << "), size=" << group.size() << std::endl;
+
+        auto angle_first = g * PARALLEL_RESOLUTION;
         auto angle_last = angle_first + PARALLEL_RESOLUTION - 1;
 
         std::vector<std::vector<size_t>> distance_groups;
@@ -177,7 +285,7 @@ void sudoku_lines(const cv::Mat& source_image, cv::Mat& dest_image){
             bool found = false;
             for(auto& distance_group : distance_groups){
                 for(auto j : distance_group){
-                    if(distance(line, group[j]) < 10){
+                    if(std::abs(ordered_distance(line, group[j])) < 2){
                         distance_group.push_back(i);
                         found = true;
                         break;
@@ -194,6 +302,20 @@ void sudoku_lines(const cv::Mat& source_image, cv::Mat& dest_image){
                 distance_groups.back().push_back(i);
             }
         }
+
+        if(distance_groups.size() < 10){
+            continue;
+        }
+
+        for(size_t i = 0 ; i < distance_groups.size(); ++i){
+            std::cout << "dgroup(" << i << "), size=" << distance_groups[i].size() << std::endl;
+        }
+
+        for(auto& line : distance_groups){
+            draw_line(dest_image, group[line[0]]);
+        }
+
+        continue;
 
         size_t ei = 0;
         size_t ej = 0;
@@ -239,11 +361,12 @@ void sudoku_lines(const cv::Mat& source_image, cv::Mat& dest_image){
                 if(max_i == 0){
                     distance_groups.erase(distance_groups.begin() + max_i);
                     continue;
-                }
-
-                if(max_i+1 == distance_groups.size() - 1){
+                } else if(max_i+1 == distance_groups.size() - 1){
                     distance_groups.erase(distance_groups.begin() + max_i + 1);
                     continue;
+                } else {
+                    std::cout << "here" << std::endl;
+                    //TODO
                 }
             }
 
@@ -265,11 +388,27 @@ void sudoku_lines(const cv::Mat& source_image, cv::Mat& dest_image){
                 if(min_i == 0){
                     distance_groups.erase(distance_groups.begin() + min_i);
                     continue;
-                }
-
-                if(min_i+1 == distance_groups.size() - 1){
+                } else if(min_i+1 == distance_groups.size() - 1){
                     distance_groups.erase(distance_groups.begin() + min_i + 1);
                     continue;
+                } else {
+                    auto d_to_prev = distance(group[distance_groups[min_i-1][0]], group[distance_groups[min_i][0]]);
+                    auto d_to_next_next = distance(group[distance_groups[min_i][0]], group[distance_groups[min_i+2][0]]);
+                    auto d_next_to_next = distance(group[distance_groups[min_i+1][0]], group[distance_groups[min_i+2][0]]);
+                    auto d_prev_to_next = distance(group[distance_groups[min_i-1][0]], group[distance_groups[min_i+1][0]]);
+
+                    auto delete_i = d_prev_to_next;
+                    auto delete_next = d_to_next_next;
+
+                    /*if(std::abs(delete_i - average) > std::abs(delete_next - average)){
+                        std::cout << "delete i " << std::endl;
+                        distance_groups.erase(distance_groups.begin() + min_i);
+                        continue;
+                    } else {
+                        std::cout << "delete next " << std::endl;
+                        distance_groups.erase(distance_groups.begin() + min_i + 1);
+                        continue;
+                    }*/
                 }
             }
 
@@ -390,7 +529,7 @@ int main(int argc, char** argv ){
         }
 
         cv::Mat dest_image;
-        probabilistic_hough(source_image, dest_image);
+        sudoku_lines(source_image, dest_image);
 
         cv::namedWindow("Sudoku Grid", cv::WINDOW_AUTOSIZE);
         cv::imshow("Sudoku Grid", dest_image);
