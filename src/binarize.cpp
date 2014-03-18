@@ -201,9 +201,9 @@ void draw_square(cv::Mat& dest_image, const cv::Point2f& p1, const cv::Point2f& 
     }
 }
 
-
-bool acceptLinePair(cv::Vec2f line1, cv::Vec2f line2, float minTheta){
-    float theta1 = line1[1], theta2 = line2[1];
+bool acceptLinePair(const cv::Vec2f& line1, const cv::Vec2f& line2, float minTheta){
+    auto theta1 = line1[1];
+    auto theta2 = line2[1];
 
     if(theta1 < minTheta){
         theta1 += CV_PI; // dealing with 0 and 180 ambiguities...
@@ -216,29 +216,16 @@ bool acceptLinePair(cv::Vec2f line1, cv::Vec2f line2, float minTheta){
     return abs(theta1 - theta2) > minTheta;
 }
 
-std::vector<cv::Point2f> lineToPointPair(cv::Vec2f line){
-    std::vector<cv::Point2f> points;
-
+std::pair<cv::Point2f, cv::Point2f> lineToPointPair(cv::Vec2f line){
     float r = line[0], t = line[1];
     double cos_t = cos(t), sin_t = sin(t);
     double x0 = r*cos_t, y0 = r*sin_t;
     double alpha = 1000;
 
-    points.push_back(cv::Point2f(x0 + alpha*(-sin_t), y0 + alpha*cos_t));
-    points.push_back(cv::Point2f(x0 - alpha*(-sin_t), y0 - alpha*cos_t));
-
-    return points;
-}
-
-cv::Point2f computeIntersect(cv::Vec2f line1, cv::Vec2f line2){
-    auto p1 = lineToPointPair(line1);
-    auto p2 = lineToPointPair(line2);
-
-    float denom = (p1[0].x - p1[1].x)*(p2[0].y - p2[1].y) - (p1[0].y - p1[1].y)*(p2[0].x - p2[1].x);
-    return cv::Point2f(((p1[0].x*p1[1].y - p1[0].y*p1[1].x)*(p2[0].x - p2[1].x) -
-                       (p1[0].x - p1[1].x)*(p2[0].x*p2[1].y - p2[0].y*p2[1].x)) / denom,
-                      ((p1[0].x*p1[1].y - p1[0].y*p1[1].x)*(p2[0].y - p2[1].y) -
-                       (p1[0].y - p1[1].y)*(p2[0].x*p2[1].y - p2[0].y*p2[1].x)) / denom);
+    return std::make_pair(
+        cv::Point2f(x0 + alpha*(-sin_t), y0 + alpha*cos_t),
+        cv::Point2f(x0 - alpha*(-sin_t), y0 - alpha*cos_t)
+    );
 }
 
 cv::Point2f gravity(std::vector<cv::Point2f>& vec){
@@ -304,13 +291,21 @@ void sudoku_lines(const cv::Mat& source_image, cv::Mat& dest_image){
     HoughLines(binary_image, lines, 1, CV_PI/180, 125, 0, 0);
 
     std::vector<cv::Point2f> intersections;
-    for( size_t i = 0; i < lines.size(); i++ ){
-        for(size_t j = 0; j < lines.size(); j++){
-            cv::Vec2f line1 = lines[i];
-            cv::Vec2f line2 = lines[j];
+    for( size_t i = 0; i < lines.size() - 1; i++ ){
+        for(size_t j = i + 1; j < lines.size(); j++){
+            auto& line1 = lines[i];
+            auto& line2 = lines[j];
+
             if(acceptLinePair(line1, line2, CV_PI / 32)){
-                cv::Point2f intersection = computeIntersect(line1, line2);
-                intersections.push_back(intersection);
+                auto p1 = lineToPointPair(line1);
+                auto p2 = lineToPointPair(line2);
+
+                float denom = (p1.first.x - p1.second.x)*(p2.first.y - p2.second.y) - (p1.first.y - p1.second.y)*(p2.first.x - p2.second.x);
+                intersections.emplace_back(
+                    ((p1.first.x*p1.second.y - p1.first.y*p1.second.x)*(p2.first.x - p2.second.x) -
+                        (p1.first.x - p1.second.x)*(p2.first.x*p2.second.y - p2.first.y*p2.second.x)) / denom,
+                    ((p1.first.x*p1.second.y - p1.first.y*p1.second.x)*(p2.first.y - p2.second.y) -
+                        (p1.first.y - p1.second.y)*(p2.first.x*p2.second.y - p2.first.y*p2.second.x)) / denom);
             }
         }
     }
