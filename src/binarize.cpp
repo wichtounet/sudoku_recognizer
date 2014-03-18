@@ -152,6 +152,56 @@ void draw_line(cv::Mat& dest_image, const cv::Vec2f& line){
     cv::line(dest_image, pt1, pt2, cv::Scalar(0,0,255), 2, CV_AA);
 }
 
+bool almost_better(float a, float b){
+    return a >= 0.90f * b && a <= 1.10f * b;
+}
+
+float sq_distance(const cv::Point2f& p1, const cv::Point2f& p2){
+    auto dx = p1.x - p2.x;
+    auto dy = p1.y - p2.y;
+    return dx * dx + dy * dy;
+}
+
+float distance(const cv::Point2f& p1, const cv::Point2f& p2){
+    return sqrt(sq_distance(p1, p2));
+}
+
+void draw_square(cv::Mat& dest_image, const cv::Point2f& p1, const cv::Point2f& p2, const cv::Point2f& p3, const cv::Point2f& p4){
+    auto d12 = sq_distance(p1, p2);
+    auto d13 = sq_distance(p1, p3);
+    auto d14 = sq_distance(p1, p4);
+    auto d23 = sq_distance(p2, p3);
+    auto d24 = sq_distance(p2, p4);
+    auto d34 = sq_distance(p3, p4);
+
+    auto s = std::min(d12, std::min(d13, std::min(d14, std::min(d23, std::min(d24, d34)))));
+
+    if(almost_better(d12, s)){
+        cv::line(dest_image, p1, p2, cv::Scalar(255, 0, 0), 3);
+    }
+
+    if(almost_better(d13, s)){
+        cv::line(dest_image, p1, p3, cv::Scalar(255, 0, 0), 3);
+    }
+
+    if(almost_better(d14, s)){
+        cv::line(dest_image, p1, p4, cv::Scalar(255, 0, 0), 3);
+    }
+
+    if(almost_better(d23, s)){
+        cv::line(dest_image, p2, p3, cv::Scalar(255, 0, 0), 3);
+    }
+
+    if(almost_better(d24, s)){
+        cv::line(dest_image, p2, p4, cv::Scalar(255, 0, 0), 3);
+    }
+
+    if(almost_better(d34, s)){
+        cv::line(dest_image, p3, p4, cv::Scalar(255, 0, 0), 3);
+    }
+}
+
+
 bool acceptLinePair(cv::Vec2f line1, cv::Vec2f line2, float minTheta){
     float theta1 = line1[1], theta2 = line2[1];
 
@@ -210,24 +260,8 @@ cv::Point2f gravity(std::vector<cv::Point2f>& vec){
     return cv::Point2f(x, y);
 }
 
-float distance(const cv::Point2f& p1, const cv::Point2f& p2){
-    auto dx = p1.x - p2.x;
-    auto dy = p1.y - p2.y;
-    return sqrt(dx * dx + dy * dy);
-}
-
-float sq_distance(const cv::Point2f& p1, const cv::Point2f& p2){
-    auto dx = p1.x - p2.x;
-    auto dy = p1.y - p2.y;
-    return dx * dx + dy * dy;
-}
-
 float distance_to_gravity(cv::Point2f& p, std::vector<cv::Point2f>& vec){
     return distance(p, gravity(vec));
-}
-
-bool almost_better(float a, float b){
-    return a >= 0.90f * b && a <= 1.10f * b;
 }
 
 float angle(const cv::Point2f& p1, const cv::Point2f& p2){
@@ -245,15 +279,9 @@ bool is_square(const cv::Point2f& p1, const cv::Point2f& p2, const cv::Point2f& 
     auto s = std::min(d12, std::min(d13, std::min(d14, std::min(d23, std::min(d24, d34)))));
     auto d = std::max(d12, std::max(d13, std::max(d14, std::max(d23, std::max(d24, d34)))));
 
-    //std::cout << "s=" << s << std::endl;
-    //std::cout << "d=" << d << std::endl;
-
     if(almost_better(d, 2.0f * s)){
         auto sc = almost_better(d12, s) + almost_better(d13, s) + almost_better(d14, s) + almost_better(d23, s) + almost_better(d24, s) + almost_better(d34, s);
         auto sd = almost_better(d12, d) + almost_better(d13, d) + almost_better(d14, d) + almost_better(d23, d) + almost_better(d24, d) + almost_better(d34, d);
-
-        //std::cout << sc << std::endl;
-        //std::cout << sd << std::endl;
 
         return sc == 4 && sd == 2;
     }
@@ -344,10 +372,7 @@ void sudoku_lines(const cv::Mat& source_image, cv::Mat& dest_image){
         }
     }
 
-    cv::line(dest_image, points[max_i], points[max_j], cv::Scalar(255, 0, 0), 3);
-    cv::line(dest_image, points[max_i], points[max_l], cv::Scalar(255, 0, 0), 3);
-    cv::line(dest_image, points[max_j], points[max_k], cv::Scalar(255, 0, 0), 3);
-    cv::line(dest_image, points[max_l], points[max_k], cv::Scalar(255, 0, 0), 3);
+    draw_square(dest_image, points[max_i], points[max_j], points[max_l], points[max_k]);
 
     return;
 
@@ -384,8 +409,6 @@ void sudoku_lines(const cv::Mat& source_image, cv::Mat& dest_image){
         if(g != 9){
             //continue;
         }
-
-        std::cout << "group(" << g << "), size=" << group.size() << std::endl;
 
         auto angle_first = g * PARALLEL_RESOLUTION;
         auto angle_last = angle_first + PARALLEL_RESOLUTION - 1;
