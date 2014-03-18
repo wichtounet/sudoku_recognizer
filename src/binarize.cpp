@@ -290,6 +290,11 @@ void sudoku_lines(const cv::Mat& source_image, cv::Mat& dest_image){
     std::vector<cv::Vec2f> lines;
     HoughLines(binary_image, lines, 1, CV_PI/180, 125, 0, 0);
 
+    if(lines.size() > 250){
+        std::cout << "Too many lines" << std::endl;
+        return;
+    }
+
     std::vector<cv::Point2f> intersections;
     for( size_t i = 0; i < lines.size() - 1; i++ ){
         for(size_t j = i + 1; j < lines.size(); j++){
