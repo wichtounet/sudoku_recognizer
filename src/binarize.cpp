@@ -179,16 +179,92 @@ std::vector<cv::Point2f> lineToPointPair(cv::Vec2f line){
 }
 
 cv::Point2f computeIntersect(cv::Vec2f line1, cv::Vec2f line2){
-    std::vector<cv::Point2f> p1 = lineToPointPair(line1);
-    std::vector<cv::Point2f> p2 = lineToPointPair(line2);
+    auto p1 = lineToPointPair(line1);
+    auto p2 = lineToPointPair(line2);
 
     float denom = (p1[0].x - p1[1].x)*(p2[0].y - p2[1].y) - (p1[0].y - p1[1].y)*(p2[0].x - p2[1].x);
-    cv::Point2f intersect(((p1[0].x*p1[1].y - p1[0].y*p1[1].x)*(p2[0].x - p2[1].x) -
+    return cv::Point2f(((p1[0].x*p1[1].y - p1[0].y*p1[1].x)*(p2[0].x - p2[1].x) -
                        (p1[0].x - p1[1].x)*(p2[0].x*p2[1].y - p2[0].y*p2[1].x)) / denom,
                       ((p1[0].x*p1[1].y - p1[0].y*p1[1].x)*(p2[0].y - p2[1].y) -
                        (p1[0].y - p1[1].y)*(p2[0].x*p2[1].y - p2[0].y*p2[1].x)) / denom);
+}
 
-    return intersect;
+cv::Point2f gravity(std::vector<cv::Point2f>& vec){
+    if(vec.size() == 1){
+        return vec[0];
+    }
+
+    float x = 0.0;
+    float y = 0.0;
+
+    for(auto& v : vec){
+        x += v.x;
+        y += v.y;
+    }
+
+    x /= vec.size();
+    y /= vec.size();
+
+    return cv::Point2f(x, y);
+}
+
+float distance(const cv::Point2f& p1, const cv::Point2f& p2){
+    auto dx = p1.x - p2.x;
+    auto dy = p1.y - p2.y;
+    return sqrt(dx * dx + dy * dy);
+}
+
+float sq_distance(const cv::Point2f& p1, const cv::Point2f& p2){
+    auto dx = p1.x - p2.x;
+    auto dy = p1.y - p2.y;
+    return dx * dx + dy * dy;
+}
+
+float distance_to_gravity(cv::Point2f& p, std::vector<cv::Point2f>& vec){
+    return distance(p, gravity(vec));
+}
+
+bool almost(float a, float b){
+    return abs(a - b) < 5.0;
+}
+
+bool almost_better(float a, float b){
+    return a >= 0.90f * b && a <= 1.10f * b;
+}
+
+bool almost_angle(float a, float b){
+    return abs(a - b) < 10.0;
+}
+
+float angle(const cv::Point2f& p1, const cv::Point2f& p2){
+    return atan(p1.cross(p2) / p1.dot(p2));
+}
+
+bool is_square(const cv::Point2f& p1, const cv::Point2f& p2, const cv::Point2f& p3, const cv::Point2f& p4){
+    auto d12 = sq_distance(p1, p2);
+    auto d13 = sq_distance(p1, p3);
+    auto d14 = sq_distance(p1, p4);
+    auto d23 = sq_distance(p2, p3);
+    auto d24 = sq_distance(p2, p4);
+    auto d34 = sq_distance(p3, p4);
+
+    auto s = std::min(d12, std::min(d13, std::min(d14, std::min(d23, std::min(d24, d34)))));
+    auto d = std::max(d12, std::max(d13, std::max(d14, std::max(d23, std::max(d24, d34)))));
+
+    //std::cout << "s=" << s << std::endl;
+    //std::cout << "d=" << d << std::endl;
+
+    if(almost_better(d, 2.0f * s)){
+        auto sc = almost_better(d12, s) + almost_better(d13, s) + almost_better(d14, s) + almost_better(d23, s) + almost_better(d24, s) + almost_better(d34, s);
+        auto sd = almost_better(d12, d) + almost_better(d13, d) + almost_better(d14, d) + almost_better(d23, d) + almost_better(d24, d) + almost_better(d34, d);
+
+        //std::cout << sc << std::endl;
+        //std::cout << sd << std::endl;
+
+        return sc == 4 && sd == 2;
+    }
+
+    return false;
 }
 
 void sudoku_lines(const cv::Mat& source_image, cv::Mat& dest_image){
@@ -215,10 +291,143 @@ void sudoku_lines(const cv::Mat& source_image, cv::Mat& dest_image){
         }
     }
 
+    std::vector<std::vector<cv::Point2f>> clusters;
     for(auto& i : intersections){
-        cv::circle(dest_image, i, 1, cv::Scalar(0, 255, 0), 3);
+        bool found = false;
+        for(auto& cluster : clusters){
+            if(distance_to_gravity(i, cluster) < 10.0){
+                cluster.push_back(i);
+                found = true;
+                break;
+            }
+        }
 
+        if(!found){
+            clusters.push_back({i});
+        }
     }
+
+    std::vector<cv::Point2f> points;
+    for(auto& cluster : clusters){
+        points.push_back(gravity(cluster));
+
+        cv::circle(dest_image, gravity(cluster), 1, cv::Scalar(0, 0, 255), 3);
+    }
+
+    float max = 0.0;
+
+    size_t max_i = 0;
+    size_t max_j = 0;
+    size_t max_k = 0;
+    size_t max_l = 0;
+
+    for(size_t i = 0; i < points.size(); ++i){
+        for(size_t j = 0; j < points.size(); ++j){
+            auto dij = distance(points[i], points[j]);
+
+            if(dij < max){
+                continue;
+            }
+
+            for(size_t k = 0; k < points.size(); ++k){
+                if(k != j && k != i){
+                    for(size_t l = 0; l < points.size(); ++l){
+                        if(l != k && l != j && l != i){
+
+/*                            auto dkl = distance(points[k], points[l]);
+                            auto dil = distance(points[i], points[l]);
+                            auto dik = distance(points[i], points[k]);
+                            auto djl = distance(points[j], points[l]);
+                            auto djk = distance(points[j], points[k]);*/
+
+                   /*         std::cout << std::endl;
+                            std::cout << points[i] << std::endl;
+                            std::cout << points[j] << std::endl;
+                            std::cout << points[k] << std::endl;
+                            std::cout << points[l] << std::endl;
+
+
+                            std::cout << dij << std::endl;
+                            std::cout << dkl << std::endl;
+                            std::cout << dil << std::endl;
+                            std::cout << dik << std::endl;
+                            std::cout << djl << std::endl;
+                            std::cout << djk << std::endl;*/
+
+                            if(is_square(points[i], points[j], points[k], points[l])){
+                                max = dij;
+
+                                max_i = i;
+                                max_j = j;
+                                max_k = k;
+                                max_l = l;
+                            }
+
+                            /*if(almost(dij, dil) && almost(dij, djk) && almost(dij, dkl)){
+                                cv::Point2f vec_il(points[i].x - points[l].x, points[i].y - points[l].y);
+                                cv::Point2f vec_jk(points[j].x - points[k].x, points[j].y - points[k].y);
+                                cv::Point2f vec_lk(points[l].x - points[k].x, points[l].y - points[k].y);
+
+                                auto angle_ijil = angle(vec_ij, vec_il) * (180 / CV_PI);
+                                auto angle_ijjk = angle(vec_ij, vec_jk) * (180 / CV_PI);
+                                auto angle_illk = angle(vec_il, vec_lk) * (180 / CV_PI);
+                                auto angle_jkkl = angle(vec_jk, vec_lk) * (180 / CV_PI);
+
+                                if(almost_angle(angle_ijil, 90.0f) && almost_angle(angle_ijjk, 90.0f) &&
+                                    almost_angle(angle_illk, 90.0f) && almost_angle(angle_jkkl, 90.0f)){
+
+                                    std::cout << "Found square" << std::endl;
+                                    ++squares;
+
+                                    max = dij;
+
+                                    std::cout << angle_ijil << std::endl;
+                                    std::cout << angle_ijjk << std::endl;
+                                    std::cout << angle_illk << std::endl;
+                                    std::cout << angle_jkkl << std::endl;
+
+                                    cv::line(dest_image, points[i], points[j], cv::Scalar(255, 0, 0), 3);
+                                    cv::line(dest_image, points[i], points[l], cv::Scalar(255, 0, 0), 3);
+                                    cv::line(dest_image, points[j], points[k], cv::Scalar(255, 0, 0), 3);
+                                    cv::line(dest_image, points[l], points[k], cv::Scalar(255, 0, 0), 3);
+                                }
+                            }*/
+
+                            /*if(almost(dij, dil) && almost(dij, djk) && almost(dij, dkl)){
+                                cv::Point2f vec_ik(points[i].x - points[k].x, points[i].y - points[k].y);
+                                cv::Point2f vec_jl(points[j].x - points[l].x, points[j].y - points[l].y);
+                                cv::Point2f vec_lk(points[l].x - points[k].x, points[l].y - points[k].y);
+
+                                auto angle_ijik = angle(vec_ij, vec_ik) * (180 / CV_PI);
+                                auto angle_ijjl = angle(vec_ij, vec_jl) * (180 / CV_PI);
+                                auto angle_iklk = angle(vec_ik, vec_lk) * (180 / CV_PI);
+                                auto angle_jlkl = angle(vec_jl, vec_lk) * (180 / CV_PI);
+
+                                if(almost_angle(angle_ijik, 90.0f) && almost_angle(angle_ijjl, 90.0f) &&
+                                    almost_angle(angle_iklk, 90.0f) && almost_angle(angle_jlkl, 90.0f)){
+
+                                    std::cout << "Found square" << std::endl;
+                                    ++squares;
+
+                                    max = dij;
+
+                                    cv::line(dest_image, points[i], points[j], cv::Scalar(255, 0, 0), 3);
+                                    cv::line(dest_image, points[i], points[l], cv::Scalar(255, 0, 0), 3);
+                                    cv::line(dest_image, points[j], points[k], cv::Scalar(255, 0, 0), 3);
+                                    cv::line(dest_image, points[l], points[k], cv::Scalar(255, 0, 0), 3);
+                                }
+                            }*/
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    cv::line(dest_image, points[max_i], points[max_j], cv::Scalar(255, 0, 0), 3);
+    cv::line(dest_image, points[max_i], points[max_l], cv::Scalar(255, 0, 0), 3);
+    cv::line(dest_image, points[max_j], points[max_k], cv::Scalar(255, 0, 0), 3);
+    cv::line(dest_image, points[max_l], points[max_k], cv::Scalar(255, 0, 0), 3);
 
     return;
 
