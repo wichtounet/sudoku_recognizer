@@ -2,10 +2,17 @@ default: bin/binarize
 
 .PHONY: default
 
+C_FLAGS=-std=c++1y -Ofast -g -Wextra -Wall
+LD_FLAGS=$(C_FLAGS) -lopencv_core -lopencv_imgproc -lopencv_highgui
+
 #TODO Add flags from dbn
 src/binarize.cpp.o: src/binarize.cpp
-	clang++ -std=c++1y -o src/binarize.cpp.o -Ofast -g -c src/binarize.cpp
+	clang++ $(C_FLAGS) -o src/binarize.cpp.o -c src/binarize.cpp
 
 bin/binarize: src/binarize.cpp.o
 	mkdir -p bin/
-	clang++ -o bin/binarize -lopencv_core -lopencv_imgproc -lopencv_highgui src/binarize.cpp.o
+	clang++ $(LD_FLAGS) -o bin/binarize src/binarize.cpp.o
+
+clean:
+	rm -rf src/*.cpp.o
+	rm -rf bin
