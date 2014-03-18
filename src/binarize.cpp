@@ -2,6 +2,8 @@
 
 #include <iostream>
 
+#include "stop_watch.hpp"
+
 namespace {
 
 void method_1(const cv::Mat& source_image, cv::Mat& dest_image){
@@ -224,16 +226,8 @@ float distance_to_gravity(cv::Point2f& p, std::vector<cv::Point2f>& vec){
     return distance(p, gravity(vec));
 }
 
-bool almost(float a, float b){
-    return abs(a - b) < 5.0;
-}
-
 bool almost_better(float a, float b){
     return a >= 0.90f * b && a <= 1.10f * b;
-}
-
-bool almost_angle(float a, float b){
-    return abs(a - b) < 10.0;
 }
 
 float angle(const cv::Point2f& p1, const cv::Point2f& p2){
@@ -268,6 +262,8 @@ bool is_square(const cv::Point2f& p1, const cv::Point2f& p2, const cv::Point2f& 
 }
 
 void sudoku_lines(const cv::Mat& source_image, cv::Mat& dest_image){
+    auto_stop_watch<std::chrono::microseconds> watch("sudoku_lines");
+
     dest_image = source_image.clone();
 
     cv::Mat binary_image;
@@ -321,8 +317,8 @@ void sudoku_lines(const cv::Mat& source_image, cv::Mat& dest_image){
     size_t max_k = 0;
     size_t max_l = 0;
 
-    for(size_t i = 0; i < points.size(); ++i){
-        for(size_t j = 0; j < points.size(); ++j){
+    for(size_t i = 0; i < points.size() - 1; ++i){
+        for(size_t j = i + 1; j < points.size(); ++j){
             auto dij = distance(points[i], points[j]);
 
             if(dij < max){
@@ -331,29 +327,8 @@ void sudoku_lines(const cv::Mat& source_image, cv::Mat& dest_image){
 
             for(size_t k = 0; k < points.size(); ++k){
                 if(k != j && k != i){
-                    for(size_t l = 0; l < points.size(); ++l){
-                        if(l != k && l != j && l != i){
-
-/*                            auto dkl = distance(points[k], points[l]);
-                            auto dil = distance(points[i], points[l]);
-                            auto dik = distance(points[i], points[k]);
-                            auto djl = distance(points[j], points[l]);
-                            auto djk = distance(points[j], points[k]);*/
-
-                   /*         std::cout << std::endl;
-                            std::cout << points[i] << std::endl;
-                            std::cout << points[j] << std::endl;
-                            std::cout << points[k] << std::endl;
-                            std::cout << points[l] << std::endl;
-
-
-                            std::cout << dij << std::endl;
-                            std::cout << dkl << std::endl;
-                            std::cout << dil << std::endl;
-                            std::cout << dik << std::endl;
-                            std::cout << djl << std::endl;
-                            std::cout << djk << std::endl;*/
-
+                    for(size_t l = k + 1; l < points.size(); ++l){
+                        if(l != j && l != i){
                             if(is_square(points[i], points[j], points[k], points[l])){
                                 max = dij;
 
@@ -362,61 +337,6 @@ void sudoku_lines(const cv::Mat& source_image, cv::Mat& dest_image){
                                 max_k = k;
                                 max_l = l;
                             }
-
-                            /*if(almost(dij, dil) && almost(dij, djk) && almost(dij, dkl)){
-                                cv::Point2f vec_il(points[i].x - points[l].x, points[i].y - points[l].y);
-                                cv::Point2f vec_jk(points[j].x - points[k].x, points[j].y - points[k].y);
-                                cv::Point2f vec_lk(points[l].x - points[k].x, points[l].y - points[k].y);
-
-                                auto angle_ijil = angle(vec_ij, vec_il) * (180 / CV_PI);
-                                auto angle_ijjk = angle(vec_ij, vec_jk) * (180 / CV_PI);
-                                auto angle_illk = angle(vec_il, vec_lk) * (180 / CV_PI);
-                                auto angle_jkkl = angle(vec_jk, vec_lk) * (180 / CV_PI);
-
-                                if(almost_angle(angle_ijil, 90.0f) && almost_angle(angle_ijjk, 90.0f) &&
-                                    almost_angle(angle_illk, 90.0f) && almost_angle(angle_jkkl, 90.0f)){
-
-                                    std::cout << "Found square" << std::endl;
-                                    ++squares;
-
-                                    max = dij;
-
-                                    std::cout << angle_ijil << std::endl;
-                                    std::cout << angle_ijjk << std::endl;
-                                    std::cout << angle_illk << std::endl;
-                                    std::cout << angle_jkkl << std::endl;
-
-                                    cv::line(dest_image, points[i], points[j], cv::Scalar(255, 0, 0), 3);
-                                    cv::line(dest_image, points[i], points[l], cv::Scalar(255, 0, 0), 3);
-                                    cv::line(dest_image, points[j], points[k], cv::Scalar(255, 0, 0), 3);
-                                    cv::line(dest_image, points[l], points[k], cv::Scalar(255, 0, 0), 3);
-                                }
-                            }*/
-
-                            /*if(almost(dij, dil) && almost(dij, djk) && almost(dij, dkl)){
-                                cv::Point2f vec_ik(points[i].x - points[k].x, points[i].y - points[k].y);
-                                cv::Point2f vec_jl(points[j].x - points[l].x, points[j].y - points[l].y);
-                                cv::Point2f vec_lk(points[l].x - points[k].x, points[l].y - points[k].y);
-
-                                auto angle_ijik = angle(vec_ij, vec_ik) * (180 / CV_PI);
-                                auto angle_ijjl = angle(vec_ij, vec_jl) * (180 / CV_PI);
-                                auto angle_iklk = angle(vec_ik, vec_lk) * (180 / CV_PI);
-                                auto angle_jlkl = angle(vec_jl, vec_lk) * (180 / CV_PI);
-
-                                if(almost_angle(angle_ijik, 90.0f) && almost_angle(angle_ijjl, 90.0f) &&
-                                    almost_angle(angle_iklk, 90.0f) && almost_angle(angle_jlkl, 90.0f)){
-
-                                    std::cout << "Found square" << std::endl;
-                                    ++squares;
-
-                                    max = dij;
-
-                                    cv::line(dest_image, points[i], points[j], cv::Scalar(255, 0, 0), 3);
-                                    cv::line(dest_image, points[i], points[l], cv::Scalar(255, 0, 0), 3);
-                                    cv::line(dest_image, points[j], points[k], cv::Scalar(255, 0, 0), 3);
-                                    cv::line(dest_image, points[l], points[k], cv::Scalar(255, 0, 0), 3);
-                                }
-                            }*/
                         }
                     }
                 }
@@ -431,23 +351,7 @@ void sudoku_lines(const cv::Mat& source_image, cv::Mat& dest_image){
 
     return;
 
-    /*if(lines.size() > 1000000){
-        cv::Mat gray_image;
-        cv::cvtColor(source_image, gray_image, CV_RGB2GRAY);
-
-        cv::Canny(gray_image, gray_image, CANNY_THRESHOLD, CANNY_THRESHOLD * 3, 3);
-
-        lines.clear();
-        HoughLines(gray_image, lines, 1, CV_PI/180, 100, 0, 0);
-    }*/
-
     std::cout << lines.size() << std::endl;
-
-    /*for(auto& line : lines){
-        draw_line(dest_image, line);
-    }
-
-    return;*/
 
     constexpr const size_t PARALLEL_RESOLUTION = 10;
     constexpr const size_t BUCKETS = 180 / PARALLEL_RESOLUTION;
@@ -601,15 +505,13 @@ void sudoku_lines(const cv::Mat& source_image, cv::Mat& dest_image){
                     distance_groups.erase(distance_groups.begin() + min_i + 1);
                     continue;
                 } else {
-                    auto d_to_prev = distance(group[distance_groups[min_i-1][0]], group[distance_groups[min_i][0]]);
                     auto d_to_next_next = distance(group[distance_groups[min_i][0]], group[distance_groups[min_i+2][0]]);
-                    auto d_next_to_next = distance(group[distance_groups[min_i+1][0]], group[distance_groups[min_i+2][0]]);
                     auto d_prev_to_next = distance(group[distance_groups[min_i-1][0]], group[distance_groups[min_i+1][0]]);
 
                     auto delete_i = d_prev_to_next;
                     auto delete_next = d_to_next_next;
 
-                    /*if(std::abs(delete_i - average) > std::abs(delete_next - average)){
+                    if(std::abs(delete_i - average) > std::abs(delete_next - average)){
                         std::cout << "delete i " << std::endl;
                         distance_groups.erase(distance_groups.begin() + min_i);
                         continue;
@@ -617,7 +519,7 @@ void sudoku_lines(const cv::Mat& source_image, cv::Mat& dest_image){
                         std::cout << "delete next " << std::endl;
                         distance_groups.erase(distance_groups.begin() + min_i + 1);
                         continue;
-                    }*/
+                    }
                 }
             }
 
@@ -745,7 +647,7 @@ int main(int argc, char** argv ){
 
         cv::waitKey(0);
     } else {
-        for(size_t i = 1; i < argc; ++i){
+        for(size_t i = 1; i < static_cast<size_t>(argc); ++i){
             std::string source_path(argv[i]);
 
             cv::Mat source_image;
