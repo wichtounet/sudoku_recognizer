@@ -153,7 +153,7 @@ void draw_line(cv::Mat& dest_image, const cv::Vec2f& line){
 }
 
 bool almost_better(float a, float b){
-    return a >= 0.90f * b && a <= 1.10f * b;
+    return a >= 0.87f * b && a <= 1.13f * b;
 }
 
 float sq_distance(const cv::Point2f& p1, const cv::Point2f& p2){
