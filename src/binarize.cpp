@@ -334,8 +334,23 @@ void sudoku_lines(const cv::Mat& source_image, cv::Mat& dest_image){
     std::vector<cv::Point2f> points;
     for(auto& cluster : clusters){
         points.push_back(gravity(cluster));
+    }
 
-        cv::circle(dest_image, gravity(cluster), 1, cv::Scalar(0, 0, 255), 3);
+    auto it = points.begin();
+    auto end = points.end();
+    while(it != end){
+        auto& i = *it;
+
+        if(i.x <= 2.0 || i.y <= 2.0 || i.x >= 0.99 * dest_image.cols || i.y >= 0.99 * dest_image.rows){
+            it = points.erase(it);
+            end = points.end();
+        } else {
+            ++it;
+        }
+    }
+
+    for(auto& point : points){
+        cv::circle(dest_image, point, 1, cv::Scalar(0, 0, 255), 3);
     }
 
     float max = 0.0;
