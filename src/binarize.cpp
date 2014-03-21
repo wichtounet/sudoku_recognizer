@@ -75,13 +75,14 @@ void method_5(const cv::Mat& source_image, cv::Mat& dest_image){
 
     for(int j = 0; j < cols; ++j){
         sI(0,j) = g.at<char>(0,j);
-        sIs(0,j) = static_cast<size_t>(g.at<char>(0, j)) * g.at<char>(0, j);
+        sIs(0,j) = sI(0,j) * sI(0, j);
     }
 
     for(int i = 1; i < rows; i++){
         for(int j = 0; j < cols; j++){
-            sI(i,j) = sI(i-1,j) + g.at<char>(i,j);
-            sIs(i,j) = sIs(i-1,j) + static_cast<size_t>(g.at<char>(i, j)) * g.at<char>(i, j);
+            size_t value = g.at<char>(i,j);
+            sI(i,j) = sI(i-1,j) + value;
+            sIs(i,j) = sIs(i-1,j) + value * value;
         }
     }
 
@@ -98,7 +99,7 @@ void method_5(const cv::Mat& source_image, cv::Mat& dest_image){
     }
 
     double k = 0.2;
-    int w = 12;
+    int w = 22;
     size_t R = 128;
 
     dest_image = g.clone();
@@ -394,22 +395,39 @@ bool is_square(const cv::Point2f& p1, const cv::Point2f& p2, const cv::Point2f& 
     return false;
 }
 
-void sudoku_lines(const cv::Mat& source_image, cv::Mat& dest_image){
-    auto_stop_watch<std::chrono::microseconds> watch("sudoku_lines");
-
-    dest_image = source_image.clone();
-
+bool detect_lines(std::vector<cv::Vec2f>& lines, const cv::Mat& source_image){
     cv::Mat binary_image;
     method_4(source_image, binary_image);
 
     constexpr const size_t CANNY_THRESHOLD = 50;
     cv::Canny(binary_image, binary_image, CANNY_THRESHOLD, CANNY_THRESHOLD * 3, 3);
 
-    std::vector<cv::Vec2f> lines;
     HoughLines(binary_image, lines, 1, CV_PI/180, 125, 0, 0);
 
     if(lines.size() > 250){
         std::cout << "Too many lines" << std::endl;
+
+        lines.clear();
+
+        method_5(source_image, binary_image);
+
+        cv::Canny(binary_image, binary_image, CANNY_THRESHOLD, CANNY_THRESHOLD * 3, 3);
+
+        HoughLines(binary_image, lines, 1, CV_PI/180, 125, 0, 0);
+
+        return lines.size() < 250;
+    }
+
+    return true;
+}
+
+void sudoku_lines(const cv::Mat& source_image, cv::Mat& dest_image){
+    auto_stop_watch<std::chrono::microseconds> watch("sudoku_lines");
+
+    dest_image = source_image.clone();
+
+    std::vector<cv::Vec2f> lines;
+    if(!detect_lines(lines, source_image)){
         return;
     }
 
@@ -454,7 +472,7 @@ void sudoku_lines(const cv::Mat& source_image, cv::Mat& dest_image){
         points.push_back(gravity(cluster));
     }
 
-    auto it = points.begin();
+    /*auto it = points.begin();
     auto end = points.end();
     while(it != end){
         auto& i = *it;
@@ -465,7 +483,7 @@ void sudoku_lines(const cv::Mat& source_image, cv::Mat& dest_image){
         } else {
             ++it;
         }
-    }
+    }*/
 
     for(auto& point : points){
         cv::circle(dest_image, point, 1, cv::Scalar(0, 0, 255), 3);
@@ -796,7 +814,7 @@ int main(int argc, char** argv ){
         }
 
         cv::Mat dest_image;
-        method_5(source_image, dest_image);
+        sudoku_lines(source_image, dest_image);
 
         cv::namedWindow("Sudoku Grid", cv::WINDOW_AUTOSIZE);
         cv::imshow("Sudoku Grid", dest_image);
