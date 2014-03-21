@@ -332,6 +332,17 @@ void enlarge(cv::Rect_<float>& rect){
     rect = cv::Rect_<float>(tl, br);
 }
 
+float square_edge(const cv::Point2f& p1, const cv::Point2f& p2, const cv::Point2f& p3, const cv::Point2f& p4){
+    auto d12 = distance(p1, p2);
+    auto d13 = distance(p1, p3);
+    auto d14 = distance(p1, p4);
+    auto d23 = distance(p2, p3);
+    auto d24 = distance(p2, p4);
+    auto d34 = distance(p3, p4);
+
+    return std::min(d12, std::min(d13, std::min(d14, std::min(d23, std::min(d24, d34)))));
+}
+
 void draw_square(cv::Mat& dest_image, const cv::Point2f& p1, const cv::Point2f& p2, const cv::Point2f& p3, const cv::Point2f& p4){
     auto d12 = sq_distance(p1, p2);
     auto d13 = sq_distance(p1, p3);
@@ -342,29 +353,29 @@ void draw_square(cv::Mat& dest_image, const cv::Point2f& p1, const cv::Point2f& 
 
     auto s = std::min(d12, std::min(d13, std::min(d14, std::min(d23, std::min(d24, d34)))));
 
-    if(almost_better(d12, s)){
+    //if(almost_better(d12, s)){
         cv::line(dest_image, p1, p2, cv::Scalar(255, 0, 0), 3);
-    }
+    //}
 
-    if(almost_better(d13, s)){
+    //if(almost_better(d13, s)){
         cv::line(dest_image, p1, p3, cv::Scalar(255, 0, 0), 3);
-    }
+    //}
 
-    if(almost_better(d14, s)){
+    //if(almost_better(d14, s)){
         cv::line(dest_image, p1, p4, cv::Scalar(255, 0, 0), 3);
-    }
+    //}
 
-    if(almost_better(d23, s)){
+    //if(almost_better(d23, s)){
         cv::line(dest_image, p2, p3, cv::Scalar(255, 0, 0), 3);
-    }
+    //}
 
-    if(almost_better(d24, s)){
+    //if(almost_better(d24, s)){
         cv::line(dest_image, p2, p4, cv::Scalar(255, 0, 0), 3);
-    }
+    //}
 
-    if(almost_better(d34, s)){
+    //if(almost_better(d34, s)){
         cv::line(dest_image, p3, p4, cv::Scalar(255, 0, 0), 3);
-    }
+    //}
 }
 
 bool acceptLinePair(const cv::Vec2f& line1, const cv::Vec2f& line2, float minTheta){
@@ -394,7 +405,7 @@ std::pair<cv::Point2f, cv::Point2f> lineToPointPair(cv::Vec2f line){
     );
 }
 
-cv::Point2f gravity(std::vector<cv::Point2f>& vec){
+cv::Point2f gravity(const std::vector<cv::Point2f>& vec){
     if(vec.size() == 1){
         return vec[0];
     }
@@ -413,7 +424,7 @@ cv::Point2f gravity(std::vector<cv::Point2f>& vec){
     return cv::Point2f(x, y);
 }
 
-float distance_to_gravity(cv::Point2f& p, std::vector<cv::Point2f>& vec){
+float distance_to_gravity(const cv::Point2f& p, const std::vector<cv::Point2f>& vec){
     return distance(p, gravity(vec));
 }
 
@@ -421,7 +432,7 @@ float angle(const cv::Point2f& p1, const cv::Point2f& p2){
     return atan(p1.cross(p2) / p1.dot(p2));
 }
 
-bool is_square(const cv::Point2f& p1, const cv::Point2f& p2, const cv::Point2f& p3, const cv::Point2f& p4){
+bool is_square_1(const cv::Point2f& p1, const cv::Point2f& p2, const cv::Point2f& p3, const cv::Point2f& p4){
     auto d12 = sq_distance(p1, p2);
     auto d13 = sq_distance(p1, p3);
     auto d14 = sq_distance(p1, p4);
@@ -437,6 +448,81 @@ bool is_square(const cv::Point2f& p1, const cv::Point2f& p2, const cv::Point2f& 
         auto sd = almost_better(d12, d) + almost_better(d13, d) + almost_better(d14, d) + almost_better(d23, d) + almost_better(d24, d) + almost_better(d34, d);
 
         return sc == 4 && sd == 2;
+    }
+
+    return false;
+}
+bool almost_better_sq(float a, float b){
+    /*std::cout << "sq" << std::endl;
+    std::cout << "a=" << a << std::endl;
+    std::cout << "b=" << b << std::endl;
+    std::cout << "[]" << 0.75f * b << std::endl;
+    std::cout << "[]" << 1.25f * b << std::endl;*/
+    return a >= 0.8f * b && a <= 1.2f * b;
+}
+
+bool almost_better_sq_h(float a, float b){
+    /*std::cout << "sq_h" << std::endl;
+    std::cout << "a=" << a << std::endl;
+    std::cout << "b=" << b << std::endl;
+    std::cout << "[]" << 0.75f * b << std::endl;
+    std::cout << "[]" << 1.25f * b << std::endl;*/
+    return a >= 0.5f * b && a <= 1.5f * b;
+}
+
+bool is_square_2(const cv::Point2f& p1, const cv::Point2f& p2, const cv::Point2f& p3, const cv::Point2f& p4){
+    auto d12 = sq_distance(p1, p2);
+    auto d13 = sq_distance(p1, p3);
+    auto d14 = sq_distance(p1, p4);
+    auto d23 = sq_distance(p2, p3);
+    auto d24 = sq_distance(p2, p4);
+    auto d34 = sq_distance(p3, p4);
+
+    auto s = std::min(d12, std::min(d13, std::min(d14, std::min(d23, std::min(d24, d34)))));
+    auto d = std::max(d12, std::max(d13, std::max(d14, std::max(d23, std::max(d24, d34)))));
+
+    if(almost_better_sq_h(d, 2.0f * s)){
+        cv::Point2f g((p1.x + p2.x + p3.x + p4.x) / 4.0f, (p1.y + p2.y + p3.y + p4.y) / 4.0f);
+
+        auto d1 = sq_distance(p1, g);
+        auto d2 = sq_distance(p2, g);
+        auto d3 = sq_distance(p3, g);
+        auto d4 = sq_distance(p4, g);
+
+        return
+            almost_better_sq_h(d1, d2) && almost_better_sq_h(d1, d3) && almost_better_sq_h(d1, d4) &&
+            almost_better_sq_h(d2, d3) && almost_better_sq_h(d2, d4) && almost_better_sq_h(d3, d4);
+    }
+
+    return false;
+}
+
+//Do not work at all
+bool is_square_3(const cv::Point2f& p1, const cv::Point2f& p2, const cv::Point2f& p3, const cv::Point2f& p4){
+    auto d12 = sq_distance(p1, p2);
+    auto d13 = sq_distance(p1, p3);
+    auto d14 = sq_distance(p1, p4);
+    auto d23 = sq_distance(p2, p3);
+    auto d24 = sq_distance(p2, p4);
+    auto d34 = sq_distance(p3, p4);
+
+    auto s = std::min(d12, std::min(d13, std::min(d14, std::min(d23, std::min(d24, d34)))));
+    auto d = std::max(d12, std::max(d13, std::max(d14, std::max(d23, std::max(d24, d34)))));
+
+    if(almost_better_sq_h(d, 2.0f * s)){
+        auto ms = (fabs(d12 - s) < fabs(d12 -d) ? d12 : 0.0f) + (fabs(d13 - s) < fabs(d13 -d) ? d13 : 0.0f) + (fabs(d14 - s) < fabs(d14 -d) ? d14 : 0.0f) + (fabs(d23 - s) < fabs(d23 -d) ? d23 : 0.0f) + (fabs(d24 - s) < fabs(d24 -d) ? d24 : 0.0f) + (fabs(d34 - s) < fabs(d34 - d) ? d34 : 0.0f);
+        auto md = (fabs(d12 - s) > fabs(d12 -d) ? d12 : 0.0f) + (fabs(d13 - s) > fabs(d13 -d) ? d13 : 0.0f) > (fabs(d14 - s) > fabs(d14 -d) ? d14 : 0.0f) + (fabs(d23 - s) > fabs(d23 -d) ? d23 : 0.0f) + (fabs(d24 - s) > fabs(d24 -d) ? d24 : 0.0f) + (fabs(d34 - s) > fabs(d34 - d) ? d34 : 0.0f);
+
+        ms /= 4.0f ;
+        md /= 2.0f;
+
+        auto sc = almost_better_sq_h(d12, ms) + almost_better_sq_h(d13, ms) + almost_better_sq_h(d14, ms) + almost_better_sq_h(d23, ms) + almost_better_sq_h(d24, ms) + almost_better_sq_h(d34, ms);
+        auto sd = almost_better_sq_h(d12, md) + almost_better_sq_h(d13, md) + almost_better_sq_h(d14, md) + almost_better_sq_h(d23, md) + almost_better_sq_h(d24, md) + almost_better_sq_h(d34, md);
+
+        std::cout << sc << std::endl;
+        std::cout << sd << std::endl;
+
+        return sc >= 4 && sd >= 2;
     }
 
     return false;
@@ -479,16 +565,7 @@ void draw_lines(const cv::Mat& source_image, cv::Mat& dest_image){
     }
 }
 
-void sudoku_lines(const cv::Mat& source_image, cv::Mat& dest_image){
-    auto_stop_watch<std::chrono::microseconds> watch("sudoku_lines");
-
-    dest_image = source_image.clone();
-
-    std::vector<cv::Vec2f> lines;
-    if(!detect_lines(lines, source_image)){
-        return;
-    }
-
+std::vector<cv::Point2f> find_intersections(const std::vector<cv::Vec2f>& lines){
     std::vector<cv::Point2f> intersections;
     for( size_t i = 0; i < lines.size() - 1; i++ ){
         for(size_t j = i + 1; j < lines.size(); j++){
@@ -508,7 +585,10 @@ void sudoku_lines(const cv::Mat& source_image, cv::Mat& dest_image){
             }
         }
     }
+    return intersections;
+}
 
+std::vector<std::vector<cv::Point2f>> cluster(const std::vector<cv::Point2f>& intersections){
     std::vector<std::vector<cv::Point2f>> clusters;
     for(auto& i : intersections){
         bool found = false;
@@ -524,28 +604,60 @@ void sudoku_lines(const cv::Mat& source_image, cv::Mat& dest_image){
             clusters.push_back({i});
         }
     }
+    return clusters;
+}
 
+std::vector<cv::Point2f> gravity_points(const std::vector<std::vector<cv::Point2f>>& clusters){
     std::vector<cv::Point2f> points;
     for(auto& cluster : clusters){
         points.push_back(gravity(cluster));
     }
+    return points;
 
-    /*auto it = points.begin();
+}
+
+void filter_outer_points(std::vector<cv::Point2f>& points, const cv::Mat& image){
+    auto it = points.begin();
     auto end = points.end();
     while(it != end){
         auto& i = *it;
 
-        if(i.x <= 2.0 || i.y <= 2.0 || i.x >= 0.99 * dest_image.cols || i.y >= 0.99 * dest_image.rows){
+        if(i.x <= 2.0 || i.y <= 2.0 || i.x >= 0.99 * image.cols || i.y >= 0.99 * image.rows){
             it = points.erase(it);
             end = points.end();
         } else {
             ++it;
         }
-    }*/
+    }
+}
 
+void draw_points(cv::Mat& dest_image, const std::vector<cv::Point2f>& points){
     for(auto& point : points){
         cv::circle(dest_image, point, 1, cv::Scalar(0, 0, 255), 3);
     }
+}
+
+void sudoku_lines(const cv::Mat& source_image, cv::Mat& dest_image){
+    auto_stop_watch<std::chrono::microseconds> watch("sudoku_lines");
+
+    dest_image = source_image.clone();
+
+    std::vector<cv::Vec2f> lines;
+    if(!detect_lines(lines, source_image)){
+        return;
+    }
+
+    auto intersections = find_intersections(lines);
+
+    auto clusters = cluster(intersections);
+
+    auto points = gravity_points(clusters);
+
+    //filter_outer_points(points, dest_image);
+
+    draw_points(dest_image, points);
+
+    std::cout << points.size() << std::endl;
 
     float max = 0.0;
 
@@ -557,24 +669,31 @@ void sudoku_lines(const cv::Mat& source_image, cv::Mat& dest_image){
     typedef std::tuple<std::size_t,std::size_t,std::size_t,std::size_t> square_t;
     std::vector<square_t> squares;
 
-    for(size_t i = 0; i < points.size() - 1; ++i){
-        for(size_t j = i + 1; j < points.size(); ++j){
+    for(size_t i = 0; i < points.size(); ++i){
+        for(size_t j = 0; j < points.size(); ++j){
+            if(i == j){
+                continue;
+            }
             auto dij = distance(points[i], points[j]);
 
-            if(dij < 0.3 * source_image.cols || dij < 0.3 * source_image.rows){
+            if(dij > 100){
+                continue;
+            }
+
+            /*if(dij < 0.3 * source_image.cols || dij < 0.3 * source_image.rows){
                 continue;
             }
 
             if(dij < 0.7 * max){
                 continue;
-            }
+            }*/
 
             for(size_t k = 0; k < points.size(); ++k){
                 if(k != j && k != i){
-                    for(size_t l = k + 1; l < points.size(); ++l){
-                        if(l != j && l != i){
-                            if(is_square(points[i], points[j], points[k], points[l])){
-                                max = std::max(max, dij);
+                    for(size_t l = 0; l < points.size(); ++l){
+                        if(l != k && l != j && l != i){
+                            if(is_square_2(points[i], points[j], points[k], points[l])){
+             //                   max = std::max(max, dij);
 
                                 /*max = dij;
 
@@ -590,6 +709,32 @@ void sudoku_lines(const cv::Mat& source_image, cv::Mat& dest_image){
             }
         }
     }
+
+    std::cout << squares.size() << std::endl;
+
+    for(auto& square : squares){
+        auto d = square_edge(
+                points[std::get<0>(square)], points[std::get<1>(square)],
+                points[std::get<2>(square)], points[std::get<3>(square)]);
+
+        //std::cout << d << std::endl;
+
+        if(d < 75.0f ){
+            std::cout << std::endl;
+            std::cout <<points[std::get<0>(square)] << std::endl;
+            std::cout <<points[std::get<1>(square)] << std::endl;
+            std::cout <<points[std::get<2>(square)] << std::endl;
+            std::cout <<points[std::get<3>(square)] << std::endl;
+            std::cout << std::endl;
+
+            draw_square(dest_image,
+                points[std::get<0>(square)], points[std::get<1>(square)],
+                points[std::get<2>(square)], points[std::get<3>(square)]
+               );
+        }
+    }
+
+    return;
 
     std::size_t max_inside = 0;
     square_t max_square;
@@ -902,6 +1047,16 @@ int main(int argc, char** argv ){
         std::cout << "Usage: binarize <image>..." << std::endl;
         return -1;
     }
+
+    cv::Point2f p1(1.0f, 1.05f);
+    cv::Point2f p2(2.0f, 2.05f);
+    cv::Point2f p3(1.05f, 2.0f);
+    cv::Point2f p4(2.05f, 1.05f);
+
+/*    std::cout << is_square_3(p1, p2, p3, p4) << std::endl;
+    std::cout << square_edge(p1, p2, p3, p4) << std::endl;
+
+    return 0;*/
 
     if(argc == 2){
         std::string source_path(argv[1]);
