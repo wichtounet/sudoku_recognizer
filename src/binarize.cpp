@@ -1046,17 +1046,17 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
         }
     }
 
+    std::cout << "Found " << squares.size() << " squares" << std::endl;
+
     for(auto& square : squares){
         auto d = square_edge(
                 points[std::get<0>(square)], points[std::get<1>(square)],
                 points[std::get<2>(square)], points[std::get<3>(square)]);
 
-        if(d < 75.0f ){
-            draw_square(dest_image,
-                points[std::get<0>(square)], points[std::get<1>(square)],
-                points[std::get<2>(square)], points[std::get<3>(square)]
-               );
-        }
+        draw_square(dest_image,
+            points[std::get<0>(square)], points[std::get<1>(square)],
+            points[std::get<2>(square)], points[std::get<3>(square)]
+            );
     }
 
     return;
