@@ -319,6 +319,19 @@ cv::Rect_<float> to_rect(const cv::Point2f& p1, const cv::Point2f& p2, const cv:
     return {p3, p4};
 }
 
+void enlarge(cv::Rect_<float>& rect){
+    auto tl = rect.tl();
+    auto br = rect.br();
+
+    tl.x = std::max(.0f, tl.x * 0.975f);
+    tl.y = std::max(.0f, tl.y * 0.975f);
+
+    br.x *= 1.025;
+    br.y *= 1.025;
+
+    rect = cv::Rect_<float>(tl, br);
+}
+
 void draw_square(cv::Mat& dest_image, const cv::Point2f& p1, const cv::Point2f& p2, const cv::Point2f& p3, const cv::Point2f& p4){
     auto d12 = sq_distance(p1, p2);
     auto d13 = sq_distance(p1, p3);
@@ -434,7 +447,7 @@ bool detect_lines(std::vector<cv::Vec2f>& lines, const cv::Mat& source_image){
     method_4(source_image, binary_image);
 
     constexpr const size_t CANNY_THRESHOLD = 50;
-    cv::Canny(binary_image, binary_image, CANNY_THRESHOLD, CANNY_THRESHOLD * 3, 3);
+    cv::Canny(binary_image, binary_image, CANNY_THRESHOLD, CANNY_THRESHOLD * 3, 5);
 
     HoughLines(binary_image, lines, 1, CV_PI/180, 125, 0, 0);
 
@@ -453,6 +466,17 @@ bool detect_lines(std::vector<cv::Vec2f>& lines, const cv::Mat& source_image){
     }
 
     return true;
+}
+
+void draw_lines(const cv::Mat& source_image, cv::Mat& dest_image){
+    std::vector<cv::Vec2f> lines;
+    detect_lines(lines, source_image);
+
+    dest_image = source_image.clone();
+
+    for(auto& line : lines){
+        draw_line(dest_image, line);
+    }
 }
 
 void sudoku_lines(const cv::Mat& source_image, cv::Mat& dest_image){
@@ -575,6 +599,8 @@ void sudoku_lines(const cv::Mat& source_image, cv::Mat& dest_image){
             auto rect = to_rect(
                 points[std::get<0>(square)], points[std::get<1>(square)],
                 points[std::get<2>(square)], points[std::get<3>(square)]);
+
+            enlarge(rect);
 
             std::size_t inside = 0;
             for(auto& p : points){
@@ -889,6 +915,7 @@ int main(int argc, char** argv ){
         }
 
         cv::Mat dest_image;
+        //draw_lines(source_image, dest_image);
         sudoku_lines(source_image, dest_image);
 
         cv::namedWindow("Sudoku Grid", cv::WINDOW_AUTOSIZE);
