@@ -285,6 +285,40 @@ float distance(const cv::Point2f& p1, const cv::Point2f& p2){
     return sqrt(sq_distance(p1, p2));
 }
 
+cv::Rect_<float> to_rect(const cv::Point2f& p1, const cv::Point2f& p2, const cv::Point2f& p3, const cv::Point2f& p4){
+    auto d12 = sq_distance(p1, p2);
+    auto d13 = sq_distance(p1, p3);
+    auto d14 = sq_distance(p1, p4);
+    auto d23 = sq_distance(p2, p3);
+    auto d24 = sq_distance(p2, p4);
+    auto d34 = sq_distance(p3, p4);
+
+    auto s = std::min(d12, std::min(d13, std::min(d14, std::min(d23, std::min(d24, d34)))));
+    auto d = 2.0 * s;
+
+    if(almost_better(d12, d)){
+        return {p1, p2};
+    }
+
+    if(almost_better(d13, d)){
+        return {p1, p3};
+    }
+
+    if(almost_better(d14, d)){
+        return {p1, p4};
+    }
+
+    if(almost_better(d23, d)){
+        return {p2, p3};
+    }
+
+    if(almost_better(d24, d)){
+        return {p2, p4};
+    }
+
+    return {p3, p4};
+}
+
 void draw_square(cv::Mat& dest_image, const cv::Point2f& p1, const cv::Point2f& p2, const cv::Point2f& p3, const cv::Point2f& p4){
     auto d12 = sq_distance(p1, p2);
     auto d13 = sq_distance(p1, p3);
@@ -415,7 +449,7 @@ bool detect_lines(std::vector<cv::Vec2f>& lines, const cv::Mat& source_image){
 
         HoughLines(binary_image, lines, 1, CV_PI/180, 125, 0, 0);
 
-        return lines.size() < 250;
+        return lines.size() < 500;
     }
 
     return true;
@@ -496,11 +530,18 @@ void sudoku_lines(const cv::Mat& source_image, cv::Mat& dest_image){
     size_t max_k = 0;
     size_t max_l = 0;
 
+    typedef std::tuple<std::size_t,std::size_t,std::size_t,std::size_t> square_t;
+    std::vector<square_t> squares;
+
     for(size_t i = 0; i < points.size() - 1; ++i){
         for(size_t j = i + 1; j < points.size(); ++j){
             auto dij = distance(points[i], points[j]);
 
-            if(dij < max){
+            if(dij < 0.3 * source_image.cols || dij < 0.3 * source_image.rows){
+                continue;
+            }
+
+            if(dij < 0.7 * max){
                 continue;
             }
 
@@ -509,12 +550,15 @@ void sudoku_lines(const cv::Mat& source_image, cv::Mat& dest_image){
                     for(size_t l = k + 1; l < points.size(); ++l){
                         if(l != j && l != i){
                             if(is_square(points[i], points[j], points[k], points[l])){
-                                max = dij;
+                                max = std::max(max, dij);
+
+                                /*max = dij;
 
                                 max_i = i;
                                 max_j = j;
                                 max_k = k;
-                                max_l = l;
+                                max_l = l;*/
+                                squares.emplace_back(i,j,k,l);
                             }
                         }
                     }
@@ -523,7 +567,38 @@ void sudoku_lines(const cv::Mat& source_image, cv::Mat& dest_image){
         }
     }
 
-    draw_square(dest_image, points[max_i], points[max_j], points[max_l], points[max_k]);
+    std::size_t max_inside = 0;
+    square_t max_square;
+
+    for(auto& square : squares){
+        if(distance(points[std::get<0>(square)], points[std::get<1>(square)]) > 0.8 * max){
+            auto rect = to_rect(
+                points[std::get<0>(square)], points[std::get<1>(square)],
+                points[std::get<2>(square)], points[std::get<3>(square)]);
+
+            std::size_t inside = 0;
+            for(auto& p : points){
+                if(p.inside(rect)){
+                    ++inside;
+                }
+            }
+
+            if(inside > max_inside){
+                max_square = square;
+                max_inside = inside;
+            }
+
+    /*        draw_square(dest_image,
+                points[std::get<0>(square)], points[std::get<1>(square)],
+                points[std::get<2>(square)], points[std::get<3>(square)]
+                );*/
+        }
+    }
+
+    draw_square(dest_image,
+        points[std::get<0>(max_square)], points[std::get<1>(max_square)],
+        points[std::get<2>(max_square)], points[std::get<3>(max_square)]
+    );
 
     return;
 
