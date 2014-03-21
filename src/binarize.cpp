@@ -580,158 +580,6 @@ void draw_points(cv::Mat& dest_image, const std::vector<cv::Point2f>& points){
     }
 }
 
-//MAX square with enough inside points
-void sudoku_lines_3(const cv::Mat& source_image, cv::Mat& dest_image){
-    auto_stop_watch<std::chrono::microseconds> watch("sudoku_lines");
-
-    dest_image = source_image.clone();
-
-    std::vector<cv::Vec2f> lines;
-    if(!detect_lines(lines, source_image)){
-        return;
-    }
-
-    auto intersections = find_intersections(lines);
-
-    auto clusters = cluster(intersections);
-
-    auto points = gravity_points(clusters);
-
-    draw_points(dest_image, points);
-
-    float max = 0.0;
-
-    typedef std::tuple<std::size_t,std::size_t,std::size_t,std::size_t> square_t;
-    std::vector<square_t> squares;
-
-    for(size_t i = 0; i < points.size(); ++i){
-        for(size_t j = i + 1; j < points.size(); ++j){
-            auto dij = distance(points[i], points[j]);
-
-            if(dij < 0.3 * source_image.cols || dij < 0.3 * source_image.rows){
-                continue;
-            }
-
-            if(dij < 0.7 * max){
-                continue;
-            }
-
-            for(size_t k = 0; k < points.size(); ++k){
-                if(k != j && k != i){
-                    for(size_t l = 0; l < points.size(); ++l){
-                        if(l != k && l != j && l != i){
-                            if(is_square_1(points[i], points[j], points[k], points[l])){
-                                max = std::max(max, dij);
-
-                                squares.emplace_back(i,j,k,l);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    std::size_t max_inside = 0;
-    square_t max_square;
-
-    for(auto& square : squares){
-        if(distance(points[std::get<0>(square)], points[std::get<1>(square)]) > 0.8 * max){
-            auto rect = to_rect(
-                points[std::get<0>(square)], points[std::get<1>(square)],
-                points[std::get<2>(square)], points[std::get<3>(square)]);
-
-            enlarge(rect);
-
-            std::size_t inside = 0;
-            for(auto& p : points){
-                if(p.inside(rect)){
-                    ++inside;
-                }
-            }
-
-            if(inside > max_inside){
-                max_square = square;
-                max_inside = inside;
-            }
-        }
-    }
-
-    draw_square(dest_image,
-        points[std::get<0>(max_square)], points[std::get<1>(max_square)],
-        points[std::get<2>(max_square)], points[std::get<3>(max_square)]
-    );
-}
-
-//MAX Square
-void sudoku_lines_2(const cv::Mat& source_image, cv::Mat& dest_image){
-    auto_stop_watch<std::chrono::microseconds> watch("sudoku_lines");
-
-    dest_image = source_image.clone();
-
-    std::vector<cv::Vec2f> lines;
-    if(!detect_lines(lines, source_image)){
-        return;
-    }
-
-    auto intersections = find_intersections(lines);
-
-    auto clusters = cluster(intersections);
-
-    auto points = gravity_points(clusters);
-
-    filter_outer_points(points, dest_image);
-
-    draw_points(dest_image, points);
-
-    std::cout << points.size() << std::endl;
-
-    float max = 0.0;
-
-    size_t max_i = 0;
-    size_t max_j = 0;
-    size_t max_k = 0;
-    size_t max_l = 0;
-
-    typedef std::tuple<std::size_t,std::size_t,std::size_t,std::size_t> square_t;
-    std::vector<square_t> squares;
-
-    for(size_t i = 0; i < points.size(); ++i){
-        for(size_t j = i + 1; j < points.size(); ++j){
-            auto dij = distance(points[i], points[j]);
-
-            if(dij < max){
-                continue;
-            }
-
-            for(size_t k = 0; k < points.size(); ++k){
-                if(k != j && k != i){
-                    for(size_t l = 0; l < points.size(); ++l){
-                        if(l != k && l != j && l != i){
-                            if(is_square_1(points[i], points[j], points[k], points[l])){
-                                max = dij;
-
-                                max_i = i;
-                                max_j = j;
-                                max_k = k;
-                                max_l = l;
-                                squares.emplace_back(i,j,k,l);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    draw_square(dest_image,
-        points[max_i], points[max_j],
-        points[max_k], points[max_l]
-    );
-
-    return;
-}
-
 void sudoku_lines_0(const cv::Mat& source_image, cv::Mat& dest_image){
     auto_stop_watch<std::chrono::microseconds> watch("sudoku_lines");
 
@@ -1002,68 +850,158 @@ void sudoku_lines_1(const cv::Mat& source_image, cv::Mat& dest_image){
             draw_line(dest_image, group[distance_group[0]]);
         }
     }
+}
 
-    /*for(size_t i = 0; i < groups.size(); ++i){
-        auto& group = groups[i];
+//MAX Square
+void sudoku_lines_2(const cv::Mat& source_image, cv::Mat& dest_image){
+    auto_stop_watch<std::chrono::microseconds> watch("sudoku_lines");
 
-        if(group.size() < 9){
-            continue;
-        }
+    dest_image = source_image.clone();
 
-        auto angle_first = i * PARALLEL_RESOLUTION;
-        auto angle_last = angle_first + PARALLEL_RESOLUTION - 1;
+    std::vector<cv::Vec2f> lines;
+    if(!detect_lines(lines, source_image)){
+        return;
+    }
 
-        //TODO TEMPORARY
-        if(angle_first < 90){
-            continue;
-        }
+    auto intersections = find_intersections(lines);
 
-        std::cout << "size[" << angle_first << "," << angle_last << "]=" << group.size() << std::endl;
+    auto clusters = cluster(intersections);
 
-        double max_d = 0;
-        for(size_t i = 0 ; i < group.size() - 1; ++i){
-            for(size_t j = i + 1; j < group.size(); ++j){
-                max_d = std::max(distance(group[i],group[j]), max_d);
-            }
-        }
+    auto points = gravity_points(clusters);
 
-        auto buckets = static_cast<size_t>(max_d) / DISTANCE_RESOLUTION + 1;
-        std::vector<std::vector<std::pair<size_t, size_t>>> pairs(buckets);
+    filter_outer_points(points, dest_image);
 
-        for(size_t i = 0 ; i < group.size() - 1; ++i){
-            for(size_t j = i + 1; j < group.size(); ++j){
-                auto d = distance(group[i], group[j]);
+    draw_points(dest_image, points);
 
-                pairs[d / DISTANCE_RESOLUTION].emplace_back(i, j);
-            }
-        }
+    std::cout << points.size() << std::endl;
 
-        auto min_tot = std::min(source_image.rows, source_image.cols);
+    float max = 0.0;
 
-        for(size_t i = 0 ; i < pairs.size() - 1; ++i){
-            auto& pair_group = pairs[i];
+    size_t max_i = 0;
+    size_t max_j = 0;
+    size_t max_k = 0;
+    size_t max_l = 0;
 
-            auto d_first = i * DISTANCE_RESOLUTION;
-            auto d_last = d_first + DISTANCE_RESOLUTION - 1;
+    typedef std::tuple<std::size_t,std::size_t,std::size_t,std::size_t> square_t;
+    std::vector<square_t> squares;
 
-            if(pair_group.size() < 9){
+    for(size_t i = 0; i < points.size(); ++i){
+        for(size_t j = i + 1; j < points.size(); ++j){
+            auto dij = distance(points[i], points[j]);
+
+            if(dij < max){
                 continue;
             }
 
-            if(d_last < min_tot / 25){
+            for(size_t k = 0; k < points.size(); ++k){
+                if(k != j && k != i){
+                    for(size_t l = 0; l < points.size(); ++l){
+                        if(l != k && l != j && l != i){
+                            if(is_square_1(points[i], points[j], points[k], points[l])){
+                                max = dij;
+
+                                max_i = i;
+                                max_j = j;
+                                max_k = k;
+                                max_l = l;
+                                squares.emplace_back(i,j,k,l);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    draw_square(dest_image,
+        points[max_i], points[max_j],
+        points[max_k], points[max_l]
+    );
+
+    return;
+}
+
+//MAX square with enough inside points
+void sudoku_lines_3(const cv::Mat& source_image, cv::Mat& dest_image){
+    auto_stop_watch<std::chrono::microseconds> watch("sudoku_lines");
+
+    dest_image = source_image.clone();
+
+    std::vector<cv::Vec2f> lines;
+    if(!detect_lines(lines, source_image)){
+        return;
+    }
+
+    auto intersections = find_intersections(lines);
+
+    auto clusters = cluster(intersections);
+
+    auto points = gravity_points(clusters);
+
+    draw_points(dest_image, points);
+
+    float max = 0.0;
+
+    typedef std::tuple<std::size_t,std::size_t,std::size_t,std::size_t> square_t;
+    std::vector<square_t> squares;
+
+    for(size_t i = 0; i < points.size(); ++i){
+        for(size_t j = i + 1; j < points.size(); ++j){
+            auto dij = distance(points[i], points[j]);
+
+            if(dij < 0.3 * source_image.cols || dij < 0.3 * source_image.rows){
                 continue;
             }
 
-            std::cout << i << std::endl;
+            if(dij < 0.7 * max){
+                continue;
+            }
 
-            std::cout << "pair_group[" << d_first << ", " << d_last << "].size()=" << pair_group.size() << std::endl;
+            for(size_t k = 0; k < points.size(); ++k){
+                if(k != j && k != i){
+                    for(size_t l = 0; l < points.size(); ++l){
+                        if(l != k && l != j && l != i){
+                            if(is_square_1(points[i], points[j], points[k], points[l])){
+                                max = std::max(max, dij);
 
-            for(auto& pair : pair_group){
-                draw_line(dest_image, group[pair.first]);
-                draw_line(dest_image, group[pair.second]);
+                                squares.emplace_back(i,j,k,l);
+                            }
+                        }
+                    }
+                }
             }
         }
-    }*/
+    }
+
+    std::size_t max_inside = 0;
+    square_t max_square;
+
+    for(auto& square : squares){
+        if(distance(points[std::get<0>(square)], points[std::get<1>(square)]) > 0.8 * max){
+            auto rect = to_rect(
+                points[std::get<0>(square)], points[std::get<1>(square)],
+                points[std::get<2>(square)], points[std::get<3>(square)]);
+
+            enlarge(rect);
+
+            std::size_t inside = 0;
+            for(auto& p : points){
+                if(p.inside(rect)){
+                    ++inside;
+                }
+            }
+
+            if(inside > max_inside){
+                max_square = square;
+                max_inside = inside;
+            }
+        }
+    }
+
+    draw_square(dest_image,
+        points[std::get<0>(max_square)], points[std::get<1>(max_square)],
+        points[std::get<2>(max_square)], points[std::get<3>(max_square)]
+    );
 }
 
 //LEGO Algorithm
