@@ -1026,7 +1026,7 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
     typedef std::tuple<std::size_t,std::size_t,std::size_t,std::size_t> square_t;
     std::vector<square_t> squares;
 
-    auto limit = std::min(source_image.rows, source_image.cols) / 9.0f;
+    auto limit = std::max(source_image.rows, source_image.cols) / 9.0f;
 
     for(size_t i = 0; i < points.size() - 3; ++i){
         for(size_t j = i + 1; j < points.size() - 2; ++j){
