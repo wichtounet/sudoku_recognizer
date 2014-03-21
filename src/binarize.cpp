@@ -1028,25 +1028,18 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
 
     auto limit = std::min(source_image.rows, source_image.cols) / 9.0f;
 
-    for(size_t i = 0; i < points.size(); ++i){
-        for(size_t j = 0; j < points.size(); ++j){
-            if(i == j){
-                continue;
-            }
+    for(size_t i = 0; i < points.size() - 3; ++i){
+        for(size_t j = i + 1; j < points.size() - 2; ++j){
             auto dij = distance(points[i], points[j]);
 
             if(dij > limit){
                 continue;
             }
 
-            for(size_t k = 0; k < points.size(); ++k){
-                if(k != j && k != i){
-                    for(size_t l = 0; l < points.size(); ++l){
-                        if(l != k && l != j && l != i){
-                            if(is_square_2(points[i], points[j], points[k], points[l])){
-                                squares.emplace_back(i,j,k,l);
-                            }
-                        }
+            for(size_t k = j + 1; k < points.size() - 1; ++k){
+                for(size_t l = k + 1; l < points.size(); ++l){
+                    if(is_square_2(points[i], points[j], points[k], points[l])){
+                        squares.emplace_back(i,j,k,l);
                     }
                 }
             }
