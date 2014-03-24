@@ -1004,6 +1004,66 @@ void sudoku_lines_3(const cv::Mat& source_image, cv::Mat& dest_image){
     );
 }
 
+/*struct square_ty {
+    cv::Point2f tl;
+    cv::Point2f bl;
+    cv::Point2f tr;
+    cv::Point2f br;
+
+    square_ty(cv::Point2f tl, cv::Point2f bl, cv::Point2f tr, cv::Point2f br) : tl(tl), bl(bl), tr(tr), br(br) {
+        //Nothing to init
+    }
+};
+
+square_ty make_square(const cv::Point2f& a, const cv::Point2f& b, const cv::Point2f& x, const cv::Point2f& d){
+    cv::Point2f tl;
+    cv::Point2f bl;
+    cv::Point2f tr;
+    cv::Point2f br;
+
+    if(a.x + a.y > b.x + b.y && a.x + a.y > c.x + c.y  && a.x + a.y > d.x + d.y){
+        tl = a;
+    } else if(b.x + b.y > c.x + c.y && b.x + b.y > d.x + d.y){
+        tl = b;
+    } else if(c.x + c.y > d.x + d.y){
+        tl = c;
+    } else {
+        tl = d;
+    }
+
+    if(distance(a,tl) > distance(b,tl) && distance(a,tl) > distance(c,tl) && distance(a,tl) > distance(d,tl)){
+        br = a;
+    } else if(distance(b,tl) > distance(c,tl) && distance(b,tl) > distance(d,tl)){
+        br = b;
+    } else if(distance(cb,tl) > distance(d,tl)){
+        br = c;
+    } else {
+        br = d;
+    }
+}*/
+
+typedef std::tuple<std::size_t,std::size_t,std::size_t,std::size_t> square_t;
+bool equals_one_of(std::size_t a, square_t& other){
+    return a == std::get<0>(other) || a == std::get<1>(other) || a == std::get<2>(other) || a == std::get<3>(other);
+}
+
+double mse(std::vector<square_t>& squares, std::vector<cv::Point2f>& points){
+    if(squares.empty()){
+        return 0.0;
+    }
+
+    double acc = 0.0;
+
+    //TODO Take the different possible edges into account
+    for(auto& s : squares){
+        acc += square_edge(
+            points[std::get<0>(s)], points[std::get<1>(s)],
+            points[std::get<2>(s)], points[std::get<3>(s)]);
+    }
+
+    return acc / squares.size();
+}
+
 //LEGO Algorithm
 void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
     auto_stop_watch<std::chrono::microseconds> watch("sudoku_lines");
@@ -1023,7 +1083,6 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
 
     draw_points(dest_image, points);
 
-    typedef std::tuple<std::size_t,std::size_t,std::size_t,std::size_t> square_t;
     std::vector<square_t> squares;
 
     auto limit = std::max(source_image.rows, source_image.cols) / 9.0f;
@@ -1048,7 +1107,94 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
 
     std::cout << "Found " << squares.size() << " squares" << std::endl;
 
-    for(auto& square : squares){
+    std::vector<std::vector<square_t>> square_set;
+    square_set.reserve(squares.size());
+
+    for(auto& s1 : squares){
+        square_set.push_back({s1});
+    }
+
+    bool merged;
+    do {
+        merged = false;
+
+        for(size_t i = 0; i < square_set.size(); ++i){
+            if(square_set[i].empty()){
+                continue;
+            }
+
+            auto d1 = mse(square_set[i], points);
+
+            for(size_t j = i + i; j < square_set.size(); ++j){
+                if(square_set[j].empty()){
+                    continue;
+                }
+
+                auto d2 = mse(square_set[j], points);
+
+                //TODO Use an even small ratio
+
+                if(!almost_better(d1, d2)){
+                    continue;
+                }
+
+                //TODO Filter general orientation
+
+                bool found = false;
+
+                for(auto& s1 : square_set[i]){
+                    for(auto& s2 : square_set[j]){
+                        if(equals_one_of(std::get<0>(s1), s2) && equals_one_of(std::get<1>(s1), s2)){
+                            found = true;
+                            break;
+                        }
+
+                        if(equals_one_of(std::get<0>(s1), s2) && equals_one_of(std::get<2>(s1), s2)){
+                            found = true;
+                            break;
+                        }
+
+                        if(equals_one_of(std::get<0>(s1), s2) && equals_one_of(std::get<3>(s1), s2)){
+                            found = true;
+                            break;
+                        }
+
+                        if(equals_one_of(std::get<1>(s1), s2) && equals_one_of(std::get<2>(s1), s2)){
+                            found = true;
+                            break;
+                        }
+
+                        if(equals_one_of(std::get<1>(s1), s2) && equals_one_of(std::get<3>(s1), s2)){
+                            found = true;
+                            break;
+                        }
+
+                        if(equals_one_of(std::get<2>(s1), s2) && equals_one_of(std::get<3>(s1), s2)){
+                            found = true;
+                            break;
+                        }
+                    }
+
+                    if(found){
+                        break;
+                    }
+                }
+
+                if(found){
+                    std::copy(square_set[j].begin(), square_set[j].end(), std::back_inserter(square_set[i]));
+                    square_set[j].clear();
+
+                    merged = true;
+                }
+            }
+        }
+    } while(merged);
+
+    auto& max_square = *std::max_element(square_set.begin(), square_set.end(), [](auto& lhs, auto& rhs){return lhs.size() < rhs.size();});
+
+    std::cout << "Biggest square set size: " << max_square.size() << std::endl;
+
+    for(auto& square : max_square){
         auto d = square_edge(
                 points[std::get<0>(square)], points[std::get<1>(square)],
                 points[std::get<2>(square)], points[std::get<3>(square)]);
