@@ -1275,11 +1275,13 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
     std::vector<cv::Point2f> hull;
     cv::convexHull(max_square_points, hull, false);
 
-    for(std::size_t i = 0; i < hull.size() - 1; ++i){
-        cv::line(dest_image, hull[i], hull[i+1], cv::Scalar(0,255,0), 2, CV_AA);
-    }
+    auto bounding = cv::minAreaRect(hull);
+    cv::Point2f bounding_v[4];
+    bounding.points(bounding_v);
 
-    cv::line(dest_image, hull.back(), hull.front(), cv::Scalar(0,255,0), 2, CV_AA);
+    for(std::size_t i = 0; i < 4; ++i){
+        cv::line(dest_image, bounding_v[i], bounding_v[(i+1)%4], cv::Scalar(0,0,255), 2, CV_AA);
+    }
 
     std::cout << "hull size(): " << hull.size() << std::endl;
 }
