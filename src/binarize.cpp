@@ -1052,16 +1052,72 @@ double mse(std::vector<square_t>& squares, std::vector<cv::Point2f>& points){
         return 0.0;
     }
 
-    double acc = 0.0;
+    float acc = 0.0;
+    std::size_t tot = 0;
 
     //TODO Take the different possible edges into account
     for(auto& s : squares){
-        acc += square_edge(
+        auto& p1 = points[std::get<0>(s)];
+        auto& p2 = points[std::get<1>(s)];
+        auto& p3 = points[std::get<2>(s)];
+        auto& p4 = points[std::get<3>(s)];
+
+        auto d12 = distance(p1, p2);
+        auto d13 = distance(p1, p3);
+        auto d14 = distance(p1, p4);
+        auto d23 = distance(p2, p3);
+        auto d24 = distance(p2, p4);
+        auto d34 = distance(p3, p4);
+
+        acc += d12;
+        acc += d13;
+        acc += d14;
+        acc += d23;
+        acc += d24;
+        acc += d34;
+        tot += 6;
+
+        /*auto e = std::min(d12, std::min(d13, std::min(d14, std::min(d23, std::min(d24, d34)))));
+        auto d = std::max(d12, std::max(d13, std::max(d14, std::max(d23, std::max(d24, d34)))));
+
+        if(std::fabs(d12 - e) < std::fabs(d12 - d)){
+            acc += d12;
+            ++tot;
+        }
+        if(std::fabs(d13 - e) < std::fabs(d13 - d)){
+            acc += d13;
+            ++tot;
+        }
+        if(std::fabs(d14 - e) < std::fabs(d14 - d)){
+            acc += d14;
+            ++tot;
+        }
+        if(std::fabs(d23 - e) < std::fabs(d23 - d)){
+            acc += d23;
+            ++tot;
+        }
+        if(std::fabs(d24 - e) < std::fabs(d24 - d)){
+            acc += d24;
+            ++tot;
+        }
+        if(std::fabs(d34 - e) < std::fabs(d34 - d)){
+            acc += d34;
+            ++tot;
+        }*/
+
+        /*acc += square_edge(
             points[std::get<0>(s)], points[std::get<1>(s)],
             points[std::get<2>(s)], points[std::get<3>(s)]);
+        tot += 1;
+
+            */
     }
 
-    return acc / squares.size();
+    return acc / tot;
+}
+
+bool almost_hard(float a, float b){
+    return a >= 0.93f * b && a <= 1.07f * b;
 }
 
 //LEGO Algorithm
@@ -1132,9 +1188,9 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
 
                 auto d2 = mse(square_set[j], points);
 
-                //TODO Use an even small ratio
+                //TODO Use an even smaller ratio
 
-                if(!almost_better(d1, d2)){
+                if(!almost_hard(d1, d2)){
                     continue;
                 }
 
@@ -1194,18 +1250,38 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
 
     std::cout << "Biggest square set size: " << max_square.size() << std::endl;
 
-    for(auto& square : max_square){
-        auto d = square_edge(
-                points[std::get<0>(square)], points[std::get<1>(square)],
-                points[std::get<2>(square)], points[std::get<3>(square)]);
+    /*for(auto& square : squares){
+        draw_square(dest_image,
+            points[std::get<0>(square)], points[std::get<1>(square)],
+            points[std::get<2>(square)], points[std::get<3>(square)]
+            );
+    }*/
 
+    for(auto& square : max_square){
         draw_square(dest_image,
             points[std::get<0>(square)], points[std::get<1>(square)],
             points[std::get<2>(square)], points[std::get<3>(square)]
             );
     }
 
-    return;
+    std::vector<cv::Point2f> max_square_points;
+    for(auto& square : max_square){
+        max_square_points.push_back(points[std::get<0>(square)]);
+        max_square_points.push_back(points[std::get<1>(square)]);
+        max_square_points.push_back(points[std::get<2>(square)]);
+        max_square_points.push_back(points[std::get<3>(square)]);
+    }
+
+    std::vector<cv::Point2f> hull;
+    cv::convexHull(max_square_points, hull, false);
+
+    for(std::size_t i = 0; i < hull.size() - 1; ++i){
+        cv::line(dest_image, hull[i], hull[i+1], cv::Scalar(0,255,0), 2, CV_AA);
+    }
+
+    cv::line(dest_image, hull.back(), hull.front(), cv::Scalar(0,255,0), 2, CV_AA);
+
+    std::cout << "hull size(): " << hull.size() << std::endl;
 }
 
 } //end of anonymous namespace
