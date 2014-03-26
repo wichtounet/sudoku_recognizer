@@ -688,7 +688,7 @@ bool detect_lines(std::vector<cv::Vec2f>& lines, const cv::Mat& source_image){
     constexpr const size_t CANNY_THRESHOLD = 60;
     cv::Canny(binary_image, binary_image, CANNY_THRESHOLD, CANNY_THRESHOLD * 3, 5);
 
-    HoughLines(binary_image, lines, 1, CV_PI/180, 125, 0, 0);
+    HoughLines(binary_image, lines, 1, CV_PI/270, 125, 0, 0);
 
     if(lines.size() > 250){
         std::cout << "Too many lines" << std::endl;
