@@ -34,10 +34,45 @@ void method_4(const cv::Mat& source_image, cv::Mat& dest_image){
     cv::Mat gray_image;
     cv::cvtColor(source_image, gray_image, CV_RGB2GRAY);
 
-    cv::Mat blurred_image;
+    cv::Mat blurred_image = gray_image.clone();
     cv::medianBlur(gray_image, blurred_image, 3);
 
     cv::adaptiveThreshold(blurred_image, dest_image, 255, CV_ADAPTIVE_THRESH_GAUSSIAN_C, CV_THRESH_BINARY, 11, 2);
+}
+
+void method_41(const cv::Mat& source_image, cv::Mat& dest_image){
+    cv::Mat gray_image;
+    cv::cvtColor(source_image, gray_image, CV_RGB2GRAY);
+
+    cv::Mat blurred_image = gray_image.clone();
+    cv::medianBlur(gray_image, blurred_image, 5);
+
+    cv::Mat temp_image;
+    cv::adaptiveThreshold(blurred_image, temp_image, 255, CV_ADAPTIVE_THRESH_MEAN_C, CV_THRESH_BINARY, 11, 2);
+
+    cv::medianBlur(temp_image, dest_image, 5);
+
+    auto structure_elem = cv::getStructuringElement(cv::MORPH_CROSS, cv::Size(3, 3));
+    cv::morphologyEx(dest_image, dest_image, cv::MORPH_DILATE, structure_elem);
+    //cv::morphologyEx(dest_image, dest_image, cv::MORPH_ERODE, structure_elem);
+
+    //cv::medianBlur(dest_image, dest_image, 3);
+
+    //cv::Mat blurred_image
+    //cv::GaussianBlur(temp_image, blurred_image, cv::Size(5,5), 0, 0);
+
+    //cv::adaptiveThreshold(blurred_image, dest_image, 255, CV_ADAPTIVE_THRESH_MEAN_C, CV_THRESH_BINARY, 9, 2);
+
+    //method_2(temp_image, dest_image);
+    //cv::threshold(blurred_image, dest_image, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
+
+    /*int erosion_size = 6;
+    cv::Mat element = cv::getStructuringElement(cv::MORPH_CROSS,
+        cv::Size(2 * erosion_size + 1, 2 * erosion_size + 1),
+        cv::Point(erosion_size, erosion_size));
+
+    //cv::erode(dest_image, dest_image, element);
+    cv::dilate(dest_image, dest_image, element);*/
 }
 
 struct integral_image {
@@ -104,15 +139,6 @@ void method_5(const cv::Mat& source_image, cv::Mat& dest_image){
 
     dest_image = g.clone();
 
-    auto m = [&I,w](size_t x, size_t y) -> double {
-        return (I(x+w/2, y + w/2) + I(x - w/2,y - w/2) - I(x + w/2,y - w/2) - I(x - w/2, y + w/2)) / (w * w);
-    };
-
-    auto s = [&Is,w,g,&m](size_t x, size_t y) -> double {
-        auto s0 = (Is(x+w/2, y + w/2) + Is(x - w/2,y - w/2) - Is(x + w/2,y - w/2) - Is(x - w/2, y + w/2)) / (w * w);
-        return s0 - m(x, y) * m(x, y);
-    };
-
     for(int i = 0; i < rows; ++i){
         for(int j = 0; j < cols; j++){
             auto i1 = std::max(0, i - w/2);
@@ -120,8 +146,6 @@ void method_5(const cv::Mat& source_image, cv::Mat& dest_image){
             auto i2 = std::min(rows-1,i + w/2);
             auto j2 = std::min(cols-1,j + w/2);
             double area = (i2-i1+1)*(j2-j1+1);
-
-            //double t = m(i,j) * (1 + k * (s(i,j) / R - 1));
 
             double diff = 0;
             double sqdiff = 0;
@@ -151,12 +175,198 @@ void method_5(const cv::Mat& source_image, cv::Mat& dest_image){
             //std::cout << t << std::endl;
 
             if(g.at<char>(i,j) < t){
-                dest_image.at<char>(i,j) = 0;
-            } else {
                 dest_image.at<char>(i,j) = 255;
+            } else {
+                dest_image.at<char>(i,j) = 0;
             }
         }
     }
+}
+
+#define uget(x,y)    at<unsigned char>(y,x)
+#define uset(x,y,v)  at<unsigned char>(y,x)=v;
+#define fget(x,y)    at<float>(y,x)
+#define fset(x,y,v)  at<float>(y,x)=v;
+
+double calcLocalStats (cv::Mat &im, cv::Mat &map_m, cv::Mat &map_s, int win_x, int win_y) {
+    double m,s,max_s, sum, sum_sq, foo;
+    int wxh = win_x / 2;
+    int wyh = win_y / 2;
+    int x_firstth = wxh;
+    int y_lastth = im.rows-wyh-1;
+    int y_firstth= wyh;
+    double winarea = win_x*win_y;
+
+    max_s = 0;
+    for (int j = y_firstth ; j<=y_lastth; j++) {
+        // Calculate the initial window at the beginning of the line
+        sum = sum_sq = 0;
+        for (int wy=0 ; wy<win_y; wy++){
+            for (int wx=0 ; wx<win_x; wx++) {
+                foo = im.uget(wx,j-wyh+wy);
+                sum    += foo;
+                sum_sq += foo*foo;
+            }
+        }
+
+        m  = sum / winarea;
+        s  = sqrt ((sum_sq - (sum*sum)/winarea)/winarea);
+        if (s > max_s)
+            max_s = s;
+        map_m.fset(x_firstth, j, m);
+        map_s.fset(x_firstth, j, s);
+
+        // Shift the window, add and remove new/old values to the histogram
+        for (int i=1 ; i <= im.cols  -win_x; i++) {
+
+            // Remove the left old column and add the right new column
+            for (int wy=0; wy<win_y; ++wy) {
+                foo = im.uget(i-1,j-wyh+wy);
+                sum    -= foo;
+                sum_sq -= foo*foo;
+                foo = im.uget(i+win_x-1,j-wyh+wy);
+                sum    += foo;
+                sum_sq += foo*foo;
+            }
+            m  = sum / winarea;
+            s  = sqrt ((sum_sq - (sum*sum)/winarea)/winarea);
+            if (s > max_s)
+                max_s = s;
+            map_m.fset(i+wxh, j, m);
+            map_s.fset(i+wxh, j, s);
+        }
+    }
+
+    return max_s;
+}
+
+void method_51(const cv::Mat& source_image, cv::Mat& dst){
+    int winx = 20;
+    int winy = 20;
+    double k = 0.20;
+    double dR = 128;
+
+    cv::Mat src;
+    cv::cvtColor(source_image, src, CV_RGB2GRAY);
+
+    dst = src.clone();
+
+    double m, s, max_s;
+    double th=0;
+    double min_I, max_I;
+    int wxh = winx/2;
+    int wyh = winy/2;
+    int x_firstth= wxh;
+    int x_lastth = src.cols-wxh-1;
+    int y_lastth = src.rows-wyh-1;
+    int y_firstth= wyh;
+    int mx, my;
+
+    std::cout << src.size() << std::endl;
+
+    // Create local statistics and store them in a double matrices
+    cv::Mat map_m = cv::Mat::zeros (source_image.size(), CV_32FC1);
+    cv::Mat map_s = cv::Mat::zeros (source_image.size(), CV_32FC1);
+    max_s = calcLocalStats (src, map_m, map_s, winx, winy);
+
+    minMaxLoc(src, &min_I, &max_I);
+
+    cv::Mat thsurf (src.size(), CV_32FC1);
+
+    for (int j = y_firstth ; j<=y_lastth; j++) {
+        // NORMAL, NON-BORDER AREA IN THE MIDDLE OF THE WINDOW:
+        for (int i=0 ; i <= src.cols-winx; i++) {
+            m  = map_m.fget(i+wxh, j);
+            s  = map_s.fget(i+wxh, j);
+
+            /*// Calculate the threshold
+            switch (version) {
+
+            case BhThresholdMethod::NIBLACK:
+                    th = m + k*s;
+                    break;
+
+            case BhThresholdMethod::SAUVOLA:
+                    th = m * (1 + k*(s/dR-1));
+                    break;
+
+            case BhThresholdMethod::WOLFJOLION:
+                    th = m + k * (s/max_s-1) * (m-min_I);
+                    break;
+
+                default:
+                    cerr << "Unknown threshold type in ImageThresholder::surfaceNiblackImproved()\n";
+                    exit (1);
+            }*/
+
+            th = m * (1 + k*(s/dR-1));
+
+            thsurf.fset(i+wxh,j,th);
+
+            if (i==0) {
+                // LEFT BORDER
+                for (int i=0; i<=x_firstth; ++i)
+                    thsurf.fset(i,j,th);
+
+                // LEFT-UPPER CORNER
+                if (j==y_firstth)
+                    for (int u=0; u<y_firstth; ++u)
+                    for (int i=0; i<=x_firstth; ++i)
+                        thsurf.fset(i,u,th);
+
+                // LEFT-LOWER CORNER
+                if (j==y_lastth)
+                    for (int u=y_lastth+1; u<src.rows; ++u)
+                    for (int i=0; i<=x_firstth; ++i)
+                        thsurf.fset(i,u,th);
+            }
+
+            // UPPER BORDER
+            if (j==y_firstth)
+                for (int u=0; u<y_firstth; ++u)
+                    thsurf.fset(i+wxh,u,th);
+
+            // LOWER BORDER
+            if (j==y_lastth)
+                for (int u=y_lastth+1; u<src.rows; ++u)
+                    thsurf.fset(i+wxh,u,th);
+        }
+
+        // RIGHT BORDER
+        for (int i=x_lastth; i<src.cols; ++i)
+            thsurf.fset(i,j,th);
+
+        // RIGHT-UPPER CORNER
+        if (j==y_firstth)
+            for (int u=0; u<y_firstth; ++u)
+            for (int i=x_lastth; i<src.cols; ++i)
+                thsurf.fset(i,u,th);
+
+        // RIGHT-LOWER CORNER
+        if (j==y_lastth)
+            for (int u=y_lastth+1; u<src.rows; ++u)
+            for (int i=x_lastth; i<src.cols; ++i)
+                thsurf.fset(i,u,th);
+    }
+
+    std::cout << "surface created" << std::endl;
+
+    for (int y=0; y<source_image.rows; ++y)
+    {
+        for (int x=0; x<source_image.cols; ++x)
+        {
+            if (src.uget(x,y) >= thsurf.fget(x,y))
+            {
+                dst.uset(x,y,255);
+            }
+            else
+            {
+                dst.uset(x,y,0);
+            }
+        }
+    }
+
+    cv::bitwise_not(dst, dst);
 }
 
 void hough(const cv::Mat& source_image, cv::Mat& dest_image){
@@ -473,9 +683,9 @@ bool is_square_2(const cv::Point2f& p1, const cv::Point2f& p2, const cv::Point2f
 
 bool detect_lines(std::vector<cv::Vec2f>& lines, const cv::Mat& source_image){
     cv::Mat binary_image;
-    method_4(source_image, binary_image);
+    method_41(source_image, binary_image);
 
-    constexpr const size_t CANNY_THRESHOLD = 50;
+    constexpr const size_t CANNY_THRESHOLD = 60;
     cv::Canny(binary_image, binary_image, CANNY_THRESHOLD, CANNY_THRESHOLD * 3, 5);
 
     HoughLines(binary_image, lines, 1, CV_PI/180, 125, 0, 0);
@@ -1332,9 +1542,10 @@ int main(int argc, char** argv ){
             return -1;
         }
 
-        cv::Mat dest_image;
-        //draw_lines(source_image, dest_image);
-        sudoku_lines_4(source_image, dest_image);
+        cv::Mat dest_image = source_image.clone();
+        draw_lines(source_image, dest_image);
+        //method_41(source_image, dest_image);
+        //sudoku_lines_4(source_image, dest_image);
 
         cv::namedWindow("Sudoku Grid", cv::WINDOW_AUTOSIZE);
         cv::imshow("Sudoku Grid", dest_image);
