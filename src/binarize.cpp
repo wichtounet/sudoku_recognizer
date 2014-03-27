@@ -1288,20 +1288,80 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
             );
     }
 
-    std::vector<cv::Point2f> max_square_points;
+    std::vector<std::size_t> max_square_i;
     for(auto& square : max_square){
-        max_square_points.push_back(points[std::get<0>(square)]);
-        max_square_points.push_back(points[std::get<1>(square)]);
-        max_square_points.push_back(points[std::get<2>(square)]);
-        max_square_points.push_back(points[std::get<3>(square)]);
+        max_square_i.push_back(std::get<0>(square));
+        max_square_i.push_back(std::get<1>(square));
+        max_square_i.push_back(std::get<2>(square));
+        max_square_i.push_back(std::get<3>(square));
+    }
+
+    std::cout << max_square_i.size() << std::endl;
+
+
+    std::sort(max_square_i.begin(), max_square_i.end());
+    max_square_i.erase(std::unique(max_square_i.begin(), max_square_i.end()), max_square_i.end());
+
+    std::cout << max_square_i.size() << std::endl;
+
+    std::vector<cv::Point2f> max_square_points;
+    for(auto& i : max_square_i){
+        max_square_points.push_back(points[i]);
     }
 
     std::vector<cv::Point2f> hull;
-    cv::convexHull(max_square_points, hull, false);
-
-    auto bounding = cv::minAreaRect(hull);
     cv::Point2f bounding_v[4];
-    bounding.points(bounding_v);
+    cv::RotatedRect bounding;
+
+    bool pruned;
+    do {
+        pruned = false;
+
+        cv::convexHull(max_square_points, hull, false);
+
+        bounding = cv::minAreaRect(hull);
+        bounding.points(bounding_v);
+
+        if(hull.size() > 3){
+            for(std::size_t i = 0; i < 4; ++i){
+                auto& p1 = bounding_v[i];
+                auto& p2 = bounding_v[i+1%4];
+
+                cv::Vec2f line(p2.x - p1.x, p2.y - p1.y);
+                line *= (1.0 / norm(line));
+                auto a = p1;
+
+                std::size_t n = 0;
+                cv::Point2f p;
+
+                for(auto& hull_p : max_square_points){
+                    cv::Vec2f ap = a - hull_p;
+                    cv::Vec2f dist_v = ap - (ap.dot(line)) * line;
+                    auto dist = norm(dist_v);
+
+                    if(dist < 5.0f){
+                        ++n;
+                        p = hull_p;
+                    }
+                }
+
+                if(n == 1){
+                    max_square_points.erase(
+                        std::remove_if(max_square_points.begin(), max_square_points.end(),
+                            [&p](auto& x) -> bool {return x == p; }),
+                        max_square_points.end());
+
+                    std::cout << "Remove point " << p << std::endl;
+                    pruned = true;
+                    break;
+                }
+            }
+        }
+    } while(pruned);
+
+    for(std::size_t i = 0; i < hull.size(); ++i){
+        cv::line(dest_image, hull[i], hull[(i+1)%hull.size()], cv::Scalar(128,128,128), 2, CV_AA);
+    }
 
     for(std::size_t i = 0; i < 4; ++i){
         cv::line(dest_image, bounding_v[i], bounding_v[(i+1)%4], cv::Scalar(0,0,255), 2, CV_AA);
@@ -1340,11 +1400,6 @@ int main(int argc, char** argv ){
         return -1;
     }
 
-    cv::Point2f p1(1.0f, 1.05f);
-    cv::Point2f p2(2.0f, 2.05f);
-    cv::Point2f p3(1.05f, 2.0f);
-    cv::Point2f p4(2.05f, 1.05f);
-
     if(argc == 2){
         std::string source_path(argv[1]);
 
@@ -1357,9 +1412,9 @@ int main(int argc, char** argv ){
         }
 
         cv::Mat dest_image = source_image.clone();
-        draw_lines(source_image, dest_image);
+        //draw_lines(source_image, dest_image);
         //method_41(source_image, dest_image);
-        //sudoku_lines_4(source_image, dest_image);
+        sudoku_lines_4(source_image, dest_image);
 
         cv::namedWindow("Sudoku Grid", cv::WINDOW_AUTOSIZE);
         cv::imshow("Sudoku Grid", dest_image);
