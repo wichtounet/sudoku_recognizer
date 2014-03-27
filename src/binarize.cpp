@@ -1332,7 +1332,7 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
                 auto a = p1;
 
                 std::size_t n = 0;
-                cv::Point2f p;
+                std::vector<cv::Point2f> close;
 
                 for(auto& hull_p : max_square_points){
                     cv::Vec2f ap = a - hull_p;
@@ -1341,17 +1341,26 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
 
                     if(dist < 5.0f){
                         ++n;
-                        p = hull_p;
+                        close.push_back(hull_p);
                     }
                 }
 
-                if(n == 1){
-                    max_square_points.erase(
-                        std::remove_if(max_square_points.begin(), max_square_points.end(),
-                            [&p](auto& x) -> bool {return x == p; }),
-                        max_square_points.end());
+                //std::cout << close.size() << std::endl;
 
-                    std::cout << "Remove point " << p << std::endl;
+                if(!close.empty() && close.size() <= 2){
+                    for(auto& p : close){
+                        std::cout << "Remove point " << p << std::endl;
+                        std::cout << max_square_points.size() << std::endl;
+
+                        max_square_points.erase(
+                            std::remove_if(max_square_points.begin(), max_square_points.end(),
+                                [&p](auto& x) -> bool {return x == p; }),
+                            max_square_points.end());
+
+                        std::cout << "Removed point " << p << std::endl;
+                        std::cout << max_square_points.size() << std::endl;
+                    }
+
                     pruned = true;
                     break;
                 }
