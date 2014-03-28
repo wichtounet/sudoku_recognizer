@@ -1274,13 +1274,6 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
 
     std::cout << "Biggest square set size: " << max_square.size() << std::endl;
 
-    /*for(auto& square : squares){
-        draw_square(dest_image,
-            points[std::get<0>(square)], points[std::get<1>(square)],
-            points[std::get<2>(square)], points[std::get<3>(square)]
-            );
-    }*/
-
     for(auto& square : max_square){
         draw_square(dest_image,
             points[std::get<0>(square)], points[std::get<1>(square)],
@@ -1295,9 +1288,6 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
         max_square_i.push_back(std::get<2>(square));
         max_square_i.push_back(std::get<3>(square));
     }
-
-    std::cout << max_square_i.size() << std::endl;
-
 
     std::sort(max_square_i.begin(), max_square_i.end());
     max_square_i.erase(std::unique(max_square_i.begin(), max_square_i.end()), max_square_i.end());
@@ -1345,9 +1335,7 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
                     }
                 }
 
-                //std::cout << close.size() << std::endl;
-
-                if(!close.empty() && close.size() <= 2){
+                if(!close.empty() && close.size() <= 1){
                     for(auto& p : close){
                         std::cout << "Remove point " << p << std::endl;
                         std::cout << max_square_points.size() << std::endl;
