@@ -1335,16 +1335,10 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
 
                 if(!close.empty() && close.size() <= 1){
                     for(auto& p : close){
-                        std::cout << "Remove point " << p << std::endl;
-                        std::cout << max_square_points.size() << std::endl;
-
                         max_square_points.erase(
                             std::remove_if(max_square_points.begin(), max_square_points.end(),
                                 [&p](auto& x) -> bool {return x == p; }),
                             max_square_points.end());
-
-                        std::cout << "Removed point " << p << std::endl;
-                        std::cout << max_square_points.size() << std::endl;
                     }
 
                     pruned = true;
