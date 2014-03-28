@@ -3,6 +3,7 @@
 #include <iostream>
 
 #include "stop_watch.hpp"
+#include "algo.hpp"
 
 namespace {
 
@@ -456,15 +457,6 @@ void draw_lines(const cv::Mat& source_image, cv::Mat& dest_image){
     }
 }
 
-template<typename Iterator, typename Functor>
-void pairwise_foreach(Iterator it, Iterator end, Functor&& fun){
-    for(; it != end; ++it){
-        for(Iterator next = std::next(it); next != end; ++next){
-            fun(*it, *next);
-        }
-    }
-}
-
 std::vector<cv::Point2f> find_intersections(const std::vector<cv::Vec2f>& lines){
     std::vector<cv::Point2f> intersections;
 
@@ -487,6 +479,7 @@ std::vector<cv::Point2f> find_intersections(const std::vector<cv::Vec2f>& lines)
 
 std::vector<std::vector<cv::Point2f>> cluster(const std::vector<cv::Point2f>& intersections){
     std::vector<std::vector<cv::Point2f>> clusters;
+
     for(auto& i : intersections){
         bool found = false;
         for(auto& cluster : clusters){
@@ -501,16 +494,12 @@ std::vector<std::vector<cv::Point2f>> cluster(const std::vector<cv::Point2f>& in
             clusters.push_back({i});
         }
     }
+
     return clusters;
 }
 
 std::vector<cv::Point2f> gravity_points(const std::vector<std::vector<cv::Point2f>>& clusters){
-    std::vector<cv::Point2f> points;
-    for(auto& cluster : clusters){
-        points.push_back(gravity(cluster));
-    }
-    return points;
-
+    return vector_transform(begin(clusters), end(clusters), [](auto& cluster) -> cv::Point2f {return gravity(cluster);});
 }
 
 void filter_outer_points(std::vector<cv::Point2f>& points, const cv::Mat& image){
@@ -970,7 +959,7 @@ double mse(const square_t& s, const std::vector<cv::Point2f>& points){
     return (d12 + d13 + d14 + d23 + d24 + d34) / 6.0f;
 }
 
-double mse(std::vector<square_t>& squares, std::vector<cv::Point2f>& points){
+double mse(const std::vector<square_t>& squares, const std::vector<cv::Point2f>& points){
     if(squares.empty()){
         return 0.0;
     }
@@ -982,25 +971,7 @@ double mse(std::vector<square_t>& squares, std::vector<cv::Point2f>& points){
     return mse_sum / squares.size();
 }
 
-//LEGO Algorithm
-void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
-    auto_stop_watch<std::chrono::microseconds> watch("sudoku_lines");
-
-    dest_image = source_image.clone();
-
-    std::vector<cv::Vec2f> lines;
-    if(!detect_lines(lines, source_image)){
-        return;
-    }
-
-    auto intersections = find_intersections(lines);
-
-    auto clusters = cluster(intersections);
-
-    auto points = gravity_points(clusters);
-
-    draw_points(dest_image, points);
-
+std::vector<square_t> detect_squares(const cv::Mat& source_image, const std::vector<cv::Point2f>& points){
     std::vector<square_t> squares;
 
     auto limit = std::max(source_image.rows, source_image.cols) / 9.0f;
@@ -1025,6 +996,10 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
 
     std::cout << "Found " << squares.size() << " squares" << std::endl;
 
+    return squares;
+}
+
+std::vector<square_t> find_max_square(const std::vector<square_t>& squares, const std::vector<cv::Point2f>& points){
     std::vector<std::vector<square_t>> square_set;
     square_set.reserve(squares.size());
 
@@ -1036,80 +1011,49 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
     do {
         merged = false;
 
-        for(size_t i = 0; i < square_set.size(); ++i){
-            if(square_set[i].empty()){
-                continue;
-            }
+        pairwise_foreach(begin(square_set), end(square_set), [&points,&merged](auto& ss1, auto& ss2){
+            auto d1 = mse(ss1, points);
+            auto d2 = mse(ss2, points);
 
-            auto d1 = mse(square_set[i], points);
-
-            for(size_t j = i + i; j < square_set.size(); ++j){
-                if(square_set[j].empty()){
-                    continue;
-                }
-
-                auto d2 = mse(square_set[j], points);
-
-                if(!almost_equals(d1, d2, 0.07f)){
-                    continue;
-                }
-
+            if(almost_equals(d1, d2, 0.07f)){
                 //TODO Filter general orientation
-
                 bool found = false;
 
-                for(auto& s1 : square_set[i]){
-                    for(auto& s2 : square_set[j]){
-                        if(equals_one_of(std::get<0>(s1), s2) && equals_one_of(std::get<1>(s1), s2)){
-                            found = true;
-                            break;
-                        }
+                for(auto& s1 : ss1){
+                    auto result = std::find_if(begin(ss2), end(ss2), [&s1](auto& s2) -> bool {
+                        return
+                                (equals_one_of(std::get<0>(s1), s2) && equals_one_of(std::get<1>(s1), s2))
+                            ||  (equals_one_of(std::get<0>(s1), s2) && equals_one_of(std::get<2>(s1), s2))
+                            ||  (equals_one_of(std::get<0>(s1), s2) && equals_one_of(std::get<3>(s1), s2))
+                            ||  (equals_one_of(std::get<1>(s1), s2) && equals_one_of(std::get<2>(s1), s2))
+                            ||  (equals_one_of(std::get<1>(s1), s2) && equals_one_of(std::get<3>(s1), s2))
+                            ||  (equals_one_of(std::get<2>(s1), s2) && equals_one_of(std::get<3>(s1), s2));
+                    });
 
-                        if(equals_one_of(std::get<0>(s1), s2) && equals_one_of(std::get<2>(s1), s2)){
-                            found = true;
-                            break;
-                        }
-
-                        if(equals_one_of(std::get<0>(s1), s2) && equals_one_of(std::get<3>(s1), s2)){
-                            found = true;
-                            break;
-                        }
-
-                        if(equals_one_of(std::get<1>(s1), s2) && equals_one_of(std::get<2>(s1), s2)){
-                            found = true;
-                            break;
-                        }
-
-                        if(equals_one_of(std::get<1>(s1), s2) && equals_one_of(std::get<3>(s1), s2)){
-                            found = true;
-                            break;
-                        }
-
-                        if(equals_one_of(std::get<2>(s1), s2) && equals_one_of(std::get<3>(s1), s2)){
-                            found = true;
-                            break;
-                        }
-                    }
-
-                    if(found){
+                    if(result != end(ss2)){
+                        found = true;
                         break;
                     }
                 }
 
                 if(found){
-                    std::copy(square_set[j].begin(), square_set[j].end(), std::back_inserter(square_set[i]));
-                    square_set[j].clear();
+                    std::copy(ss2.begin(), ss2.end(), std::back_inserter(ss1));
+                    ss2.clear();
 
                     merged = true;
                 }
             }
-        }
+        });
     } while(merged);
 
-    auto& max_square = *std::max_element(square_set.begin(), square_set.end(), [](auto& lhs, auto& rhs){return lhs.size() < rhs.size();});
+    auto max_square = *std::max_element(square_set.begin(), square_set.end(), [](auto& lhs, auto& rhs){return lhs.size() < rhs.size();});
 
     std::cout << "Biggest square set size: " << max_square.size() << std::endl;
 
+    return max_square;
+}
+
+void remove_unsquare(std::vector<square_t>& max_square, const std::vector<cv::Point2f>& points){
     auto it = max_square.begin();
     auto end = max_square.end();
 
@@ -1140,6 +1084,32 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
             ++it;
         }
     }
+}
+
+//LEGO Algorithm
+void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
+    auto_stop_watch<std::chrono::microseconds> watch("sudoku_lines");
+
+    dest_image = source_image.clone();
+
+    std::vector<cv::Vec2f> lines;
+    if(!detect_lines(lines, source_image)){
+        return;
+    }
+
+    auto intersections = find_intersections(lines);
+
+    auto clusters = cluster(intersections);
+
+    auto points = gravity_points(clusters);
+
+    draw_points(dest_image, points);
+
+    auto squares = detect_squares(source_image, points);
+
+    auto max_square = find_max_square(squares, points);
+
+    remove_unsquare(max_square, points);
 
     for(auto& square : max_square){
         draw_square(dest_image,
@@ -1158,8 +1128,6 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
 
     std::sort(max_square_i.begin(), max_square_i.end());
     max_square_i.erase(std::unique(max_square_i.begin(), max_square_i.end()), max_square_i.end());
-
-    std::cout << max_square_i.size() << std::endl;
 
     std::vector<cv::Point2f> max_square_points;
     for(auto& i : max_square_i){
