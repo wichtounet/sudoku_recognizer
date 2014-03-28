@@ -54,25 +54,6 @@ void method_41(const cv::Mat& source_image, cv::Mat& dest_image){
 
     auto structure_elem = cv::getStructuringElement(cv::MORPH_CROSS, cv::Size(3, 3));
     cv::morphologyEx(dest_image, dest_image, cv::MORPH_DILATE, structure_elem);
-    //cv::morphologyEx(dest_image, dest_image, cv::MORPH_ERODE, structure_elem);
-
-    //cv::medianBlur(dest_image, dest_image, 3);
-
-    //cv::Mat blurred_image
-    //cv::GaussianBlur(temp_image, blurred_image, cv::Size(5,5), 0, 0);
-
-    //cv::adaptiveThreshold(blurred_image, dest_image, 255, CV_ADAPTIVE_THRESH_MEAN_C, CV_THRESH_BINARY, 9, 2);
-
-    //method_2(temp_image, dest_image);
-    //cv::threshold(blurred_image, dest_image, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
-
-    /*int erosion_size = 6;
-    cv::Mat element = cv::getStructuringElement(cv::MORPH_CROSS,
-        cv::Size(2 * erosion_size + 1, 2 * erosion_size + 1),
-        cv::Point(erosion_size, erosion_size));
-
-    //cv::erode(dest_image, dest_image, element);
-    cv::dilate(dest_image, dest_image, element);*/
 }
 
 struct integral_image {
@@ -352,21 +333,21 @@ bool acceptLinePair(const cv::Vec2f& line1, const cv::Vec2f& line2, float minThe
     return abs(theta1 - theta2) > minTheta;
 }
 
-std::pair<cv::Point2f, cv::Point2f> lineToPointPair(cv::Vec2f line){
-    float r = line[0], t = line[1];
-    double cos_t = cos(t), sin_t = sin(t);
-    double x0 = r*cos_t, y0 = r*sin_t;
-    double alpha = 1000;
+std::pair<cv::Point2f, cv::Point2f> lineToPointPair(const cv::Vec2f& line){
+    auto cos_t = cos(line[1]);
+    auto sin_t = sin(line[1]);
+    auto x0 = line[0] * cos_t;
+    auto y0 = line[0] * sin_t;
 
     return std::make_pair(
-        cv::Point2f(x0 + alpha*(-sin_t), y0 + alpha*cos_t),
-        cv::Point2f(x0 - alpha*(-sin_t), y0 - alpha*cos_t)
+        cv::Point2f(x0 + 1000.0f * (-sin_t), y0 + 1000.0f * cos_t),
+        cv::Point2f(x0 - 1000.0f * (-sin_t), y0 - 1000.0f * cos_t)
     );
 }
 
 cv::Point2f gravity(const std::vector<cv::Point2f>& vec){
     if(vec.size() == 1){
-        return vec[0];
+        return vec.front();
     }
 
     float x = 0.0;
@@ -475,26 +456,32 @@ void draw_lines(const cv::Mat& source_image, cv::Mat& dest_image){
     }
 }
 
-std::vector<cv::Point2f> find_intersections(const std::vector<cv::Vec2f>& lines){
-    std::vector<cv::Point2f> intersections;
-    for( size_t i = 0; i < lines.size() - 1; i++ ){
-        for(size_t j = i + 1; j < lines.size(); j++){
-            auto& line1 = lines[i];
-            auto& line2 = lines[j];
-
-            if(acceptLinePair(line1, line2, CV_PI / 32)){
-                auto p1 = lineToPointPair(line1);
-                auto p2 = lineToPointPair(line2);
-
-                float denom = (p1.first.x - p1.second.x)*(p2.first.y - p2.second.y) - (p1.first.y - p1.second.y)*(p2.first.x - p2.second.x);
-                intersections.emplace_back(
-                    ((p1.first.x*p1.second.y - p1.first.y*p1.second.x)*(p2.first.x - p2.second.x) -
-                        (p1.first.x - p1.second.x)*(p2.first.x*p2.second.y - p2.first.y*p2.second.x)) / denom,
-                    ((p1.first.x*p1.second.y - p1.first.y*p1.second.x)*(p2.first.y - p2.second.y) -
-                        (p1.first.y - p1.second.y)*(p2.first.x*p2.second.y - p2.first.y*p2.second.x)) / denom);
-            }
+template<typename Iterator, typename Functor>
+void pairwise_foreach(Iterator it, Iterator end, Functor&& fun){
+    for(; it != end; ++it){
+        for(Iterator next = std::next(it); next != end; ++next){
+            fun(*it, *next);
         }
     }
+}
+
+std::vector<cv::Point2f> find_intersections(const std::vector<cv::Vec2f>& lines){
+    std::vector<cv::Point2f> intersections;
+
+    pairwise_foreach(lines.begin(), lines.end(), [&intersections](auto& line1, auto& line2){
+        if(acceptLinePair(line1, line2, CV_PI / 32)){
+            auto p1 = lineToPointPair(line1);
+            auto p2 = lineToPointPair(line2);
+
+            float denom = (p1.first.x - p1.second.x)*(p2.first.y - p2.second.y) - (p1.first.y - p1.second.y)*(p2.first.x - p2.second.x);
+            intersections.emplace_back(
+                ((p1.first.x*p1.second.y - p1.first.y*p1.second.x)*(p2.first.x - p2.second.x) -
+                    (p1.first.x - p1.second.x)*(p2.first.x*p2.second.y - p2.first.y*p2.second.x)) / denom,
+                ((p1.first.x*p1.second.y - p1.first.y*p1.second.x)*(p2.first.y - p2.second.y) -
+                    (p1.first.y - p1.second.y)*(p2.first.x*p2.second.y - p2.first.y*p2.second.x)) / denom);
+        }
+    });
+
     return intersections;
 }
 
@@ -527,18 +514,9 @@ std::vector<cv::Point2f> gravity_points(const std::vector<std::vector<cv::Point2
 }
 
 void filter_outer_points(std::vector<cv::Point2f>& points, const cv::Mat& image){
-    auto it = points.begin();
-    auto end = points.end();
-    while(it != end){
-        auto& i = *it;
-
-        if(i.x <= 2.0 || i.y <= 2.0 || i.x >= 0.99 * image.cols || i.y >= 0.99 * image.rows){
-            it = points.erase(it);
-            end = points.end();
-        } else {
-            ++it;
-        }
-    }
+    points.erase(std::remove_if(points.begin(), points.end(), [&image](auto& i) -> bool {
+        return i.x <= 2.0 || i.y <= 2.0 || i.x >= 0.99 * image.cols || i.y >= 0.99 * image.rows;
+    }), points.end());
 }
 
 void draw_points(cv::Mat& dest_image, const std::vector<cv::Point2f>& points){
