@@ -1071,77 +1071,42 @@ bool equals_one_of(std::size_t a, square_t& other){
     return a == std::get<0>(other) || a == std::get<1>(other) || a == std::get<2>(other) || a == std::get<3>(other);
 }
 
+double mse(const square_t& s, const std::vector<cv::Point2f>& points){
+    auto& p1 = points[std::get<0>(s)];
+    auto& p2 = points[std::get<1>(s)];
+    auto& p3 = points[std::get<2>(s)];
+    auto& p4 = points[std::get<3>(s)];
+
+    auto d12 = distance(p1, p2);
+    auto d13 = distance(p1, p3);
+    auto d14 = distance(p1, p4);
+    auto d23 = distance(p2, p3);
+    auto d24 = distance(p2, p4);
+    auto d34 = distance(p3, p4);
+
+    return (d12 + d14 + d14 + d23 + d24 + d34) / 6.0f;
+}
+
 double mse(std::vector<square_t>& squares, std::vector<cv::Point2f>& points){
     if(squares.empty()){
         return 0.0;
     }
 
     float acc = 0.0;
-    std::size_t tot = 0;
 
-    //TODO Take the different possible edges into account
     for(auto& s : squares){
-        auto& p1 = points[std::get<0>(s)];
-        auto& p2 = points[std::get<1>(s)];
-        auto& p3 = points[std::get<2>(s)];
-        auto& p4 = points[std::get<3>(s)];
-
-        auto d12 = distance(p1, p2);
-        auto d13 = distance(p1, p3);
-        auto d14 = distance(p1, p4);
-        auto d23 = distance(p2, p3);
-        auto d24 = distance(p2, p4);
-        auto d34 = distance(p3, p4);
-
-        acc += d12;
-        acc += d13;
-        acc += d14;
-        acc += d23;
-        acc += d24;
-        acc += d34;
-        tot += 6;
-
-        /*auto e = std::min(d12, std::min(d13, std::min(d14, std::min(d23, std::min(d24, d34)))));
-        auto d = std::max(d12, std::max(d13, std::max(d14, std::max(d23, std::max(d24, d34)))));
-
-        if(std::fabs(d12 - e) < std::fabs(d12 - d)){
-            acc += d12;
-            ++tot;
-        }
-        if(std::fabs(d13 - e) < std::fabs(d13 - d)){
-            acc += d13;
-            ++tot;
-        }
-        if(std::fabs(d14 - e) < std::fabs(d14 - d)){
-            acc += d14;
-            ++tot;
-        }
-        if(std::fabs(d23 - e) < std::fabs(d23 - d)){
-            acc += d23;
-            ++tot;
-        }
-        if(std::fabs(d24 - e) < std::fabs(d24 - d)){
-            acc += d24;
-            ++tot;
-        }
-        if(std::fabs(d34 - e) < std::fabs(d34 - d)){
-            acc += d34;
-            ++tot;
-        }*/
-
-        /*acc += square_edge(
-            points[std::get<0>(s)], points[std::get<1>(s)],
-            points[std::get<2>(s)], points[std::get<3>(s)]);
-        tot += 1;
-
-            */
+        acc += mse(s, points);
     }
 
-    return acc / tot;
+    return acc / squares.size();
+}
+
+constexpr bool almost_equals(float a, float b, float epsilon){
+    return a >= (1.0f - epsilon) * b && a <= (1.0f + epsilon) * b;
 }
 
 bool almost_hard(float a, float b){
-    return a >= 0.93f * b && a <= 1.07f * b;
+    return almost_equals(a, b, 0.07);
 }
 
 //LEGO Algorithm
@@ -1273,6 +1238,39 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
     auto& max_square = *std::max_element(square_set.begin(), square_set.end(), [](auto& lhs, auto& rhs){return lhs.size() < rhs.size();});
 
     std::cout << "Biggest square set size: " << max_square.size() << std::endl;
+
+    auto it = max_square.begin();
+    auto end = max_square.end();
+
+    while(it != end){
+        auto& square = *it;
+
+        auto& p1 = points[std::get<0>(square)];
+        auto& p2 = points[std::get<1>(square)];
+        auto& p3 = points[std::get<2>(square)];
+        auto& p4 = points[std::get<3>(square)];
+
+        cv::Point2f g((p1.x + p2.x + p3.x + p4.x) / 4.0f, (p1.y + p2.y + p3.y + p4.y) / 4.0f);
+
+        auto d1 = sq_distance(p1, g);
+        auto d2 = sq_distance(p2, g);
+        auto d3 = sq_distance(p3, g);
+        auto d4 = sq_distance(p4, g);
+
+        auto diffs = std::fabs(d1 - d2) + std::fabs(d1 - d3) + std::fabs(d1 - d4) + std::fabs(d2 - d3) + std::fabs(d2 - d4) + std::fabs(d3 - d4);
+        auto norm = d1 + d2 + d3 + d4;
+
+        auto squareness = diffs / norm;
+
+        if(squareness > 0.33){
+            it = max_square.erase(it);
+            end = max_square.end();
+
+            std::cout << "Remove " << squareness << std::endl;
+        } else {
+            ++it;
+        }
+    }
 
     for(auto& square : max_square){
         draw_square(dest_image,
