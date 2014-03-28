@@ -295,8 +295,8 @@ void draw_line(cv::Mat& dest_image, const cv::Vec2f& line){
     cv::line(dest_image, pt1, pt2, cv::Scalar(0,0,255), 2, CV_AA);
 }
 
-bool almost_better(float a, float b){
-    return a >= 0.87f * b && a <= 1.13f * b;
+constexpr bool almost_equals(float a, float b, float epsilon){
+    return a >= (1.0f - epsilon) * b && a <= (1.0f + epsilon) * b;
 }
 
 float sq_distance(const cv::Point2f& p1, const cv::Point2f& p2){
@@ -320,23 +320,23 @@ cv::Rect_<float> to_rect(const cv::Point2f& p1, const cv::Point2f& p2, const cv:
     auto s = std::min(d12, std::min(d13, std::min(d14, std::min(d23, std::min(d24, d34)))));
     auto d = 2.0 * s;
 
-    if(almost_better(d12, d)){
+    if(almost_equals(d12, d, 0.13f)){
         return {p1, p2};
     }
 
-    if(almost_better(d13, d)){
+    if(almost_equals(d13, d, 0.13f)){
         return {p1, p3};
     }
 
-    if(almost_better(d14, d)){
+    if(almost_equals(d14, d, 0.13f)){
         return {p1, p4};
     }
 
-    if(almost_better(d23, d)){
+    if(almost_equals(d23, d, 0.13f)){
         return {p2, p3};
     }
 
-    if(almost_better(d24, d)){
+    if(almost_equals(d24, d, 0.13f)){
         return {p2, p4};
     }
 
@@ -441,33 +441,15 @@ bool is_square_1(const cv::Point2f& p1, const cv::Point2f& p2, const cv::Point2f
     auto s = std::min(d12, std::min(d13, std::min(d14, std::min(d23, std::min(d24, d34)))));
     auto d = std::max(d12, std::max(d13, std::max(d14, std::max(d23, std::max(d24, d34)))));
 
-    if(almost_better(d, 2.0f * s)){
-        auto sc = almost_better(d12, s) + almost_better(d13, s) + almost_better(d14, s) + almost_better(d23, s) + almost_better(d24, s) + almost_better(d34, s);
-        auto sd = almost_better(d12, d) + almost_better(d13, d) + almost_better(d14, d) + almost_better(d23, d) + almost_better(d24, d) + almost_better(d34, d);
+    if(almost_equals(d, 2.0f * s, 0.13f)){
+        auto sc = almost_equals(d12, s, 0.13f) + almost_equals(d13, s, 0.13f) + almost_equals(d14, s, 0.13f) + almost_equals(d23, s, 0.13f) + almost_equals(d24, s, 0.13f) + almost_equals(d34, s, 0.13f);
+        auto sd = almost_equals(d12, d, 0.13f) + almost_equals(d13, d, 0.13f) + almost_equals(d14, d, 0.13f) + almost_equals(d23, d, 0.13f) + almost_equals(d24, d, 0.13f) + almost_equals(d34, d, 0.13f);
 
         return sc == 4 && sd == 2;
     }
 
     return false;
 }
-bool almost_better_sq(float a, float b){
-    /*std::cout << "sq" << std::endl;
-    std::cout << "a=" << a << std::endl;
-    std::cout << "b=" << b << std::endl;
-    std::cout << "[]" << 0.75f * b << std::endl;
-    std::cout << "[]" << 1.25f * b << std::endl;*/
-    return a >= 0.8f * b && a <= 1.2f * b;
-}
-
-bool almost_better_sq_h(float a, float b){
-    /*std::cout << "sq_h" << std::endl;
-    std::cout << "a=" << a << std::endl;
-    std::cout << "b=" << b << std::endl;
-    std::cout << "[]" << 0.75f * b << std::endl;
-    std::cout << "[]" << 1.25f * b << std::endl;*/
-    return a >= 0.5f * b && a <= 1.5f * b;
-}
-
 bool is_square_2(const cv::Point2f& p1, const cv::Point2f& p2, const cv::Point2f& p3, const cv::Point2f& p4){
     auto d12 = sq_distance(p1, p2);
     auto d13 = sq_distance(p1, p3);
@@ -479,7 +461,7 @@ bool is_square_2(const cv::Point2f& p1, const cv::Point2f& p2, const cv::Point2f
     auto s = std::min(d12, std::min(d13, std::min(d14, std::min(d23, std::min(d24, d34)))));
     auto d = std::max(d12, std::max(d13, std::max(d14, std::max(d23, std::max(d24, d34)))));
 
-    if(almost_better_sq_h(d, 2.0f * s)){
+    if(almost_equals(d, 2.0f * s, 0.5f)){
         cv::Point2f g((p1.x + p2.x + p3.x + p4.x) / 4.0f, (p1.y + p2.y + p3.y + p4.y) / 4.0f);
 
         auto d1 = sq_distance(p1, g);
@@ -488,8 +470,8 @@ bool is_square_2(const cv::Point2f& p1, const cv::Point2f& p2, const cv::Point2f
         auto d4 = sq_distance(p4, g);
 
         return
-            almost_better_sq_h(d1, d2) && almost_better_sq_h(d1, d3) && almost_better_sq_h(d1, d4) &&
-            almost_better_sq_h(d2, d3) && almost_better_sq_h(d2, d4) && almost_better_sq_h(d3, d4);
+            almost_equals(d1, d2, 0.5f) && almost_equals(d1, d3, 0.5f) && almost_equals(d1, d4, 0.5f) &&
+            almost_equals(d2, d3, 0.5f) && almost_equals(d2, d4, 0.5f) && almost_equals(d3, d4, 0.5f);
     }
 
     return false;
@@ -1101,14 +1083,6 @@ double mse(std::vector<square_t>& squares, std::vector<cv::Point2f>& points){
     return acc / squares.size();
 }
 
-constexpr bool almost_equals(float a, float b, float epsilon){
-    return a >= (1.0f - epsilon) * b && a <= (1.0f + epsilon) * b;
-}
-
-bool almost_hard(float a, float b){
-    return almost_equals(a, b, 0.07);
-}
-
 //LEGO Algorithm
 void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
     auto_stop_watch<std::chrono::microseconds> watch("sudoku_lines");
@@ -1179,7 +1153,7 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
 
                 //TODO Use an even smaller ratio
 
-                if(!almost_hard(d1, d2)){
+                if(!almost_equals(d1, d2, 0.07f)){
                     continue;
                 }
 
@@ -1265,8 +1239,6 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
         if(squareness > 0.33){
             it = max_square.erase(it);
             end = max_square.end();
-
-            std::cout << "Remove " << squareness << std::endl;
         } else {
             ++it;
         }
