@@ -183,33 +183,6 @@ void method_5(const cv::Mat& source_image, cv::Mat& dest_image){
     }
 }
 
-void hough(const cv::Mat& source_image, cv::Mat& dest_image){
-    cv::Mat binary_image;
-    method_4(source_image, binary_image);
-
-    cv::Mat lines_image;
-    cv::Canny(binary_image, lines_image, 50, 200, 3);
-
-    std::vector<cv::Vec2f> lines;
-    HoughLines(lines_image, lines, 1, CV_PI/180, 125, 0, 0 );
-
-    dest_image = source_image.clone();
-
-    for(size_t i = 0; i < lines.size(); i++){
-        auto rho = lines[i][0];
-        auto theta = lines[i][1];
-        double a = cos(theta);
-        double b = sin(theta);
-        double x0 = a*rho;
-        double y0 = b*rho;
-
-        cv::Point pt1(cvRound(x0 + 1000 * -b), cvRound(y0 + 1000 * a));
-        cv::Point pt2(cvRound(x0 - 1000 * -b), cvRound(y0 - 1000 * a));
-
-        cv::line(dest_image, pt1, pt2, cv::Scalar(0,0,255), 3, CV_AA);
-    }
-}
-
 void probabilistic_hough(const cv::Mat& source_image, cv::Mat& dest_image){
     cv::Mat binary_image;
     method_4(source_image, binary_image);
@@ -260,18 +233,6 @@ double average_distance(std::vector<cv::Vec2f>& group, std::vector<std::vector<s
     double average = 0;
     for(size_t i = 0 ; i < distance_groups.size() - 1; ++i){
         auto d = distance(group[distance_groups[i][0]], group[distance_groups[i+1][0]]);
-
-        average += d;
-    }
-
-    average /= distance_groups.size();
-    return average;
-}
-
-double ordered_average_distance(std::vector<cv::Vec2f>& group, std::vector<std::vector<size_t>>& distance_groups){
-    double average = 0;
-    for(size_t i = 0 ; i < distance_groups.size() - 1; ++i){
-        auto d = ordered_distance(group[distance_groups[i][0]], group[distance_groups[i+1][0]]);
 
         average += d;
     }
@@ -1010,44 +971,6 @@ void sudoku_lines_3(const cv::Mat& source_image, cv::Mat& dest_image){
     );
 }
 
-/*struct square_ty {
-    cv::Point2f tl;
-    cv::Point2f bl;
-    cv::Point2f tr;
-    cv::Point2f br;
-
-    square_ty(cv::Point2f tl, cv::Point2f bl, cv::Point2f tr, cv::Point2f br) : tl(tl), bl(bl), tr(tr), br(br) {
-        //Nothing to init
-    }
-};
-
-square_ty make_square(const cv::Point2f& a, const cv::Point2f& b, const cv::Point2f& x, const cv::Point2f& d){
-    cv::Point2f tl;
-    cv::Point2f bl;
-    cv::Point2f tr;
-    cv::Point2f br;
-
-    if(a.x + a.y > b.x + b.y && a.x + a.y > c.x + c.y  && a.x + a.y > d.x + d.y){
-        tl = a;
-    } else if(b.x + b.y > c.x + c.y && b.x + b.y > d.x + d.y){
-        tl = b;
-    } else if(c.x + c.y > d.x + d.y){
-        tl = c;
-    } else {
-        tl = d;
-    }
-
-    if(distance(a,tl) > distance(b,tl) && distance(a,tl) > distance(c,tl) && distance(a,tl) > distance(d,tl)){
-        br = a;
-    } else if(distance(b,tl) > distance(c,tl) && distance(b,tl) > distance(d,tl)){
-        br = b;
-    } else if(distance(cb,tl) > distance(d,tl)){
-        br = c;
-    } else {
-        br = d;
-    }
-}*/
-
 typedef std::tuple<std::size_t,std::size_t,std::size_t,std::size_t> square_t;
 bool equals_one_of(std::size_t a, square_t& other){
     return a == std::get<0>(other) || a == std::get<1>(other) || a == std::get<2>(other) || a == std::get<3>(other);
@@ -1066,7 +989,7 @@ double mse(const square_t& s, const std::vector<cv::Point2f>& points){
     auto d24 = distance(p2, p4);
     auto d34 = distance(p3, p4);
 
-    return (d12 + d14 + d14 + d23 + d24 + d34) / 6.0f;
+    return (d12 + d13 + d14 + d23 + d24 + d34) / 6.0f;
 }
 
 double mse(std::vector<square_t>& squares, std::vector<cv::Point2f>& points){
@@ -1074,13 +997,11 @@ double mse(std::vector<square_t>& squares, std::vector<cv::Point2f>& points){
         return 0.0;
     }
 
-    float acc = 0.0;
+    auto mse_sum = std::accumulate(squares.begin(), squares.end(), 0.0f, [&points](auto& lhs, auto& rhs) -> float {
+        return lhs + mse(rhs, points);
+    });
 
-    for(auto& s : squares){
-        acc += mse(s, points);
-    }
-
-    return acc / squares.size();
+    return mse_sum / squares.size();
 }
 
 //LEGO Algorithm
@@ -1150,8 +1071,6 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
                 }
 
                 auto d2 = mse(square_set[j], points);
-
-                //TODO Use an even smaller ratio
 
                 if(!almost_equals(d1, d2, 0.07f)){
                     continue;
