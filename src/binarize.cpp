@@ -165,23 +165,6 @@ void method_5(const cv::Mat& source_image, cv::Mat& dest_image){
     }
 }
 
-void probabilistic_hough(const cv::Mat& source_image, cv::Mat& dest_image){
-    cv::Mat binary_image;
-    method_4(source_image, binary_image);
-
-    cv::Mat lines_image;
-    cv::Canny(binary_image, lines_image, 50, 200, 3);
-
-    std::vector<cv::Vec4i> lines;
-    cv::HoughLinesP(lines_image, lines, 1, CV_PI/360, 50, 100, 10 );
-
-    dest_image = source_image.clone();
-
-    for(auto& l : lines){
-        cv::line( dest_image, cv::Point(l[0], l[1]), cv::Point(l[2], l[3]), cv::Scalar(0,0,255), 3, CV_AA);
-    }
-}
-
 double ordered_distance(const cv::Vec2f& line){
     auto rho = line[0];
     auto theta = line[1];
@@ -444,6 +427,202 @@ bool detect_lines(std::vector<cv::Vec2f>& lines, const cv::Mat& source_image){
     }
 
     return true;
+}
+
+bool on_same_line(cv::Vec4i& v1, cv::Vec4i& v2){
+    cv::Point2i a(v1[0] - v1[2], v1[1] - v1[3]);
+    cv::Point2i b(v2[0] - v2[2], v2[1] - v2[3]);
+
+    double angle = atan(a.cross(b) / a.dot(b));
+
+    if(std::abs(angle) < 0.001){
+        cv::Vec2f n(a.x, a.y);
+        n *= (1.0 / norm(a));
+
+        cv::Point2f p(v2[0], v2[1]);
+
+        cv::Vec2f ap = cv::Point2f(v1[0], v1[1]) - p;
+        cv::Vec2f dist_v = ap - (ap.dot(n)) * n;
+        auto distance = norm(dist_v);
+
+        if(distance < 5){
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool intersects(const cv::Vec4i& v1, const cv::Vec4i& v2){
+    auto x1 = v1[0], x2 = v1[2], y1 = v1[1], y2 = v1[3];
+    auto x3 = v2[0], x4 = v2[2], y3 = v2[1], y4 = v2[3];
+
+    if(x1 == x2){
+        //Parallel lines
+        if(x3 == x4){
+            return false;
+        }
+
+        auto a2 = (y4 - y3) / (x4 - x3);
+        auto b2 = y3 - a2 * x3;
+
+        auto x0 = x1;
+        auto y0 = a2 * x0 + b2;
+
+        return
+              std::min(y1, y2) < y0 && std::max(y1, y2) > y0
+            &&  std::min(y3, y4) < y0 && std::max(y3, y4) > y0;
+    } else if(x3 == x4){
+        auto a1 = (y2 - y1) / (x2 - x1);
+        auto b1 = y1 - a1 * x1;
+
+        auto x0 = x3;
+        auto y0 = a1 * x0 + b1;
+
+        return
+              std::min(y1, y2) < y0 && std::max(y1, y2) > y0
+            &&  std::min(y3, y4) < y0 && std::max(y3, y4) > y0;
+    }
+
+    auto a1 = (y2 - y1) / (x2 - x1);
+    auto b1 = y1 - a1 * x1;
+    auto a2 = (y4 - y3) / (x4 - x3);
+    auto b2 = y3 - a2 * x3;
+
+    //The lines are parallel, consider no intersection
+    if(a1 == a2){
+        return false;
+    }
+
+    auto x0 = -(b1 - b2) / (a1 - a2);
+    //auto y0 = ((a2 * b1) + (a1 * b2)) / (a1 - a2);
+
+    return
+        std::min(x1, x2) < x0 && std::max(x1, x2) > x0
+        &&  std::min(x3, x4) < x0 && std::max(x3, x4) > x0;
+}
+
+//TODO Pass vector of lines
+void detect_lines_2(const cv::Mat& source_image, cv::Mat& dest_image){
+    dest_image = source_image.clone();
+
+    cv::Mat binary_image;
+    method_41(source_image, binary_image);
+
+    cv::Mat lines_image;
+    constexpr const size_t CANNY_THRESHOLD = 60;
+    cv::Canny(binary_image, lines_image, CANNY_THRESHOLD, CANNY_THRESHOLD * 3, 5);
+
+    std::vector<cv::Vec4i> lines;
+    cv::HoughLinesP(lines_image, lines, 1, CV_PI/180, 50, 50, 10);
+
+    bool merged;
+    do {
+        merged = false;
+
+        auto it = lines.begin();
+        auto end = lines.end();
+
+        while(it != end){
+            auto& v1 = *it;
+
+            auto nit = std::next(it);
+            while(nit != end){
+                auto& v2 = *nit;
+
+                if(on_same_line(v1, v2)){
+                    std::cout << "Merge " << v1 << " and " << v2 << std::endl;
+
+                    cv::Point2f a(v1[0], v1[1]);
+                    cv::Point2f b(v1[2], v1[3]);
+                    cv::Point2f c(v2[0], v2[1]);
+                    cv::Point2f d(v2[2], v2[3]);
+
+                    auto dab = distance(a, b);
+                    auto dac = distance(a, c);
+                    auto dad = distance(a, d);
+                    auto dbc = distance(b, c);
+                    auto dbd = distance(b, d);
+                    auto dcd = distance(c, d);
+
+                    auto max = std::max(dab, std::max(dac, std::max(dad, std::max(dbc, std::max(dbd, dcd)))));
+
+                    if(dab  == max){
+                        //No change in v1
+                    } else if(dac == max){
+                        v1[2] = v2[0];
+                        v1[3] = v2[1];
+                    } else if(dad == max){
+                        v1[2] = v2[2];
+                        v1[3] = v2[3];
+                    } else if(dbc == max){
+                        v1[0] = v1[2];
+                        v1[1] = v1[3];
+                        v1[2] = v2[0];
+                        v1[3] = v2[1];
+                    } else if(dbd == max){
+                        v1[0] = v1[2];
+                        v1[1] = v1[3];
+                        v1[2] = v2[2];
+                        v1[3] = v2[3];
+                    } else if(dcd == max){
+                        v1 = v2;
+                    }
+
+                    merged = true;
+
+                    nit = lines.erase(nit);
+                    end = lines.end();
+                } else {
+                    ++nit;
+                }
+            }
+
+            if(merged){
+                break;
+            }
+
+            ++it;
+        }
+
+    } while(merged);
+
+
+    //2. Cluster lines
+
+    std::vector<std::vector<cv::Vec4i>> clusters;
+    clusters.reserve(lines.size());
+
+    for(auto& v1 : lines){
+        clusters.push_back({v1});
+    }
+
+    do {
+        merged = false;
+
+        pairwise_foreach(clusters.begin(), clusters.end(), [&merged](auto& c1, auto& c2){
+            for(auto& v1 : c1){
+                for(auto& v2 : c2){
+                    if(intersects(v1, v2)){
+                        std::copy(c2.begin(), c2.end(), std::back_inserter(c1));
+                        c2.clear();
+                        merged = true;
+                        return;
+                    }
+                }
+            }
+        });
+    } while(merged);
+
+    std::cout << "lines.size(): " << lines.size() << std::endl;
+
+    auto& max_cluster = *std::max_element(clusters.begin(), clusters.end(), [](auto& lhs, auto& rhs){return lhs.size() < rhs.size();});
+
+    std::cout << "max_cluster.size(): " << max_cluster.size() << std::endl;
+
+    for(auto& l : lines){
+        cv::line( dest_image, cv::Point(l[0], l[1]), cv::Point(l[2], l[3]), cv::Scalar(0,0,255), 3, CV_AA);
+    }
 }
 
 void draw_lines(const cv::Mat& source_image, cv::Mat& dest_image){
@@ -1240,9 +1419,10 @@ int main(int argc, char** argv ){
         }
 
         cv::Mat dest_image = source_image.clone();
+        detect_lines_2(source_image, dest_image);
         //draw_lines(source_image, dest_image);
         //method_41(source_image, dest_image);
-        sudoku_lines_4(source_image, dest_image);
+        //sudoku_lines_4(source_image, dest_image);
 
         cv::namedWindow("Sudoku Grid", cv::WINDOW_AUTOSIZE);
         cv::imshow("Sudoku Grid", dest_image);
@@ -1261,7 +1441,8 @@ int main(int argc, char** argv ){
             }
 
             cv::Mat dest_image;
-            sudoku_lines_4(source_image, dest_image);
+            //sudoku_lines_4(source_image, dest_image);
+            detect_lines_2(source_image, dest_image);
 
             source_path.insert(source_path.rfind('.'), ".lines");
             imwrite(source_path.c_str(), dest_image);
