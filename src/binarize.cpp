@@ -1111,6 +1111,8 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
 
     remove_unsquare(max_square, points);
 
+    std::cout << "Final max_square size: " << max_square.size() << std::endl;
+
     for(auto& square : max_square){
         draw_square(dest_image,
             points[std::get<0>(square)], points[std::get<1>(square)],
