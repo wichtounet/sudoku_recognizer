@@ -302,33 +302,6 @@ void draw_square(cv::Mat& dest_image, const cv::Point2f& p1, const cv::Point2f& 
     cv::line(dest_image, p3, p4, cv::Scalar(255, 0, 0), 3);
 }
 
-bool acceptLinePair(const cv::Vec2f& line1, const cv::Vec2f& line2, float minTheta){
-    auto theta1 = line1[1];
-    auto theta2 = line2[1];
-
-    if(theta1 < minTheta){
-        theta1 += CV_PI; // dealing with 0 and 180 ambiguities...
-    }
-
-    if(theta2 < minTheta){
-        theta2 += CV_PI; // dealing with 0 and 180 ambiguities...
-    }
-
-    return abs(theta1 - theta2) > minTheta;
-}
-
-std::pair<cv::Point2f, cv::Point2f> lineToPointPair(const cv::Vec2f& line){
-    auto cos_t = cos(line[1]);
-    auto sin_t = sin(line[1]);
-    auto x0 = line[0] * cos_t;
-    auto y0 = line[0] * sin_t;
-
-    return std::make_pair(
-        cv::Point2f(x0 + 1000.0f * (-sin_t), y0 + 1000.0f * cos_t),
-        cv::Point2f(x0 - 1000.0f * (-sin_t), y0 - 1000.0f * cos_t)
-    );
-}
-
 cv::Point2f gravity(const std::vector<cv::Point2f>& vec){
     if(vec.size() == 1){
         return vec.front();
@@ -663,6 +636,27 @@ void detect_lines_2(std::vector<std::pair<cv::Point2f, cv::Point2f>>& final_line
 
         final_lines.emplace_back(a, b);
     }
+
+    final_lines.erase(std::remove_if(final_lines.begin(), final_lines.end(), [&final_lines](const auto& l1) -> bool {
+        std::size_t similar = 0;
+
+        float rho_1 = std::fabs(atan((l1.second.y - l1.first.y) / (l1.second.x - l1.first.x)) * 180 / CV_PI);
+
+        std::cout << rho_1 << std::endl;
+
+        for(auto& l2 : final_lines){
+            float rho_2 = std::fabs(atan((l2.second.y - l2.first.y) / (l2.second.x - l2.first.x)) * 180 / CV_PI);
+
+            if(std::fabs(rho_2 - rho_1) <= 3.0f){
+                ++similar;
+            }
+        }
+
+        return similar < 3;
+
+    }), final_lines.end());
+
+    std::cout << "Final lines: " << final_lines.size() << std::endl;
 }
 
 void draw_lines(const cv::Mat& source_image, cv::Mat& dest_image){
@@ -674,6 +668,33 @@ void draw_lines(const cv::Mat& source_image, cv::Mat& dest_image){
     for(auto& line : lines){
         draw_line(dest_image, line);
     }
+}
+
+bool acceptLinePair(const cv::Vec2f& line1, const cv::Vec2f& line2, float minTheta){
+    auto theta1 = line1[1];
+    auto theta2 = line2[1];
+
+    if(theta1 < minTheta){
+        theta1 += CV_PI; // dealing with 0 and 180 ambiguities...
+    }
+
+    if(theta2 < minTheta){
+        theta2 += CV_PI; // dealing with 0 and 180 ambiguities...
+    }
+
+    return abs(theta1 - theta2) > minTheta;
+}
+
+std::pair<cv::Point2f, cv::Point2f> lineToPointPair(const cv::Vec2f& line){
+    auto cos_t = cos(line[1]);
+    auto sin_t = sin(line[1]);
+    auto x0 = line[0] * cos_t;
+    auto y0 = line[0] * sin_t;
+
+    return std::make_pair(
+        cv::Point2f(x0 + 1000.0f * (-sin_t), y0 + 1000.0f * cos_t),
+        cv::Point2f(x0 - 1000.0f * (-sin_t), y0 - 1000.0f * cos_t)
+    );
 }
 
 std::vector<cv::Point2f> find_intersections(const std::vector<cv::Vec2f>& lines){
@@ -700,15 +721,17 @@ std::vector<cv::Point2f> find_intersections_direct(const std::vector<std::pair<c
     std::vector<cv::Point2f> intersections;
 
     pairwise_foreach(lines.begin(), lines.end(), [&intersections](auto& p1, auto& p2){
-        //if(acceptLinePair(p1, p2, CV_PI / 32)){
-            float denom = (p1.first.x - p1.second.x)*(p2.first.y - p2.second.y) - (p1.first.y - p1.second.y)*(p2.first.x - p2.second.x);
-            intersections.emplace_back(
-                ((p1.first.x*p1.second.y - p1.first.y*p1.second.x)*(p2.first.x - p2.second.x) -
-                    (p1.first.x - p1.second.x)*(p2.first.x*p2.second.y - p2.first.y*p2.second.x)) / denom,
-                ((p1.first.x*p1.second.y - p1.first.y*p1.second.x)*(p2.first.y - p2.second.y) -
-                    (p1.first.y - p1.second.y)*(p2.first.x*p2.second.y - p2.first.y*p2.second.x)) / denom);
-        //}
+        float denom = (p1.first.x - p1.second.x)*(p2.first.y - p2.second.y) - (p1.first.y - p1.second.y)*(p2.first.x - p2.second.x);
+        intersections.emplace_back(
+            ((p1.first.x*p1.second.y - p1.first.y*p1.second.x)*(p2.first.x - p2.second.x) -
+                (p1.first.x - p1.second.x)*(p2.first.x*p2.second.y - p2.first.y*p2.second.x)) / denom,
+            ((p1.first.x*p1.second.y - p1.first.y*p1.second.x)*(p2.first.y - p2.second.y) -
+                (p1.first.y - p1.second.y)*(p2.first.x*p2.second.y - p2.first.y*p2.second.x)) / denom);
     });
+
+    intersections.erase(std::remove_if(intersections.begin(), intersections.end(), [](const auto& p) -> bool {
+        return std::isnan(p.x) || std::isnan(p.y) || std::isinf(p.x) || std::isinf(p.y) || p.x < 0 || p.y < 0;
+    }), intersections.end());
 
     return intersections;
 }
@@ -1212,15 +1235,15 @@ std::vector<square_t> detect_squares(const cv::Mat& source_image, const std::vec
 
     auto limit = std::max(source_image.rows, source_image.cols) / 9.0f;
 
-    for(size_t i = 0; i < points.size() - 3; ++i){
-        for(size_t j = i + 1; j < points.size() - 2; ++j){
+    for(size_t i = 0; i < points.size(); ++i){
+        for(size_t j = i + 1; j < points.size(); ++j){
             auto dij = distance(points[i], points[j]);
 
             if(dij > limit){
                 continue;
             }
 
-            for(size_t k = j + 1; k < points.size() - 1; ++k){
+            for(size_t k = j + 1; k < points.size(); ++k){
                 for(size_t l = k + 1; l < points.size(); ++l){
                     if(is_square_2(points[i], points[j], points[k], points[l])){
                         squares.emplace_back(i,j,k,l);
@@ -1333,11 +1356,10 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
     if(Proba){
         std::vector<std::pair<cv::Point2f, cv::Point2f>> lines;
         detect_lines_2(lines, source_image);
-
-        for(auto& line : lines){
-            cv::line(dest_image, line.first, line.second, cv::Scalar(0, 0, 255), 2, CV_AA);
+        /*for(auto& line : lines){
+            cv::line(dest_image, line.first, line.second, cv::Scalar(255, 255, 0), 4, CV_AA);
         }
-
+        return;*/
         intersections = find_intersections_direct(lines);
     } else {
         std::vector<cv::Vec2f> lines;
@@ -1351,9 +1373,11 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
 
     auto clusters = cluster(intersections);
 
+    std::cout << clusters.size() << " cluster of intersections found" << std::endl;
+
     auto points = gravity_points(clusters);
 
-    draw_points(dest_image, points);
+    draw_points(dest_image, intersections);
 
     auto squares = detect_squares(source_image, points);
 
