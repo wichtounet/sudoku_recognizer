@@ -435,17 +435,19 @@ bool on_same_line(cv::Vec4i& v1, cv::Vec4i& v2){
 
     double angle = atan(a.cross(b) / a.dot(b));
 
-    if(std::abs(angle) < 0.001){
-        cv::Vec2f n(a.x, a.y);
-        n *= (1.0 / norm(a));
+    if(std::abs(angle) < 0.05){
+        //Unit vector of line format by v1
+        cv::Vec2f na(a.x, a.y);
+        na *= (1.0 / norm(na));
 
+        //A point on line format by v2
         cv::Point2f p(v2[0], v2[1]);
 
         cv::Vec2f ap = cv::Point2f(v1[0], v1[1]) - p;
-        cv::Vec2f dist_v = ap - (ap.dot(n)) * n;
+        cv::Vec2f dist_v = ap - (ap.dot(na)) * na;
         auto distance = norm(dist_v);
 
-        if(distance < 5){
+        if(distance < 7.5f){
             return true;
         }
     }
@@ -470,8 +472,8 @@ bool intersects(const cv::Vec4i& v1, const cv::Vec4i& v2){
         auto y0 = a2 * x0 + b2;
 
         return
-              std::min(y1, y2) < y0 && std::max(y1, y2) > y0
-            &&  std::min(y3, y4) < y0 && std::max(y3, y4) > y0;
+                std::min(y1, y2) <= y0 && std::max(y1, y2) >= y0
+            &&  std::min(y3, y4) <= y0 && std::max(y3, y4) >= y0;
     } else if(x3 == x4){
         auto a1 = (y2 - y1) / (x2 - x1);
         auto b1 = y1 - a1 * x1;
@@ -480,8 +482,8 @@ bool intersects(const cv::Vec4i& v1, const cv::Vec4i& v2){
         auto y0 = a1 * x0 + b1;
 
         return
-              std::min(y1, y2) < y0 && std::max(y1, y2) > y0
-            &&  std::min(y3, y4) < y0 && std::max(y3, y4) > y0;
+                std::min(y1, y2) <= y0 && std::max(y1, y2) >= y0
+            &&  std::min(y3, y4) <= y0 && std::max(y3, y4) >= y0;
     }
 
     auto a1 = (y2 - y1) / (x2 - x1);
@@ -495,11 +497,13 @@ bool intersects(const cv::Vec4i& v1, const cv::Vec4i& v2){
     }
 
     auto x0 = -(b1 - b2) / (a1 - a2);
-    //auto y0 = ((a2 * b1) + (a1 * b2)) / (a1 - a2);
+    auto y0 = ((a2 * b1) - (a1 * b2)) / (a2 - a1);
 
     return
-        std::min(x1, x2) < x0 && std::max(x1, x2) > x0
-        &&  std::min(x3, x4) < x0 && std::max(x3, x4) > x0;
+                std::min(y1, y2) <= y0 && std::max(y1, y2) >= y0
+            &&  std::min(y3, y4) <= y0 && std::max(y3, y4) >= y0
+        &&    std::min(x1, x2) <= x0 && std::max(x1, x2) >= x0
+        &&  std::min(x3, x4) <= x0 && std::max(x3, x4) >= x0;
 }
 
 //TODO Pass vector of lines
@@ -512,7 +516,7 @@ void detect_lines_2(std::vector<std::pair<cv::Point2f, cv::Point2f>>& final_line
     cv::Canny(binary_image, lines_image, CANNY_THRESHOLD, CANNY_THRESHOLD * 3, 5);
 
     std::vector<cv::Vec4i> lines;
-    cv::HoughLinesP(lines_image, lines, 1, CV_PI/180, 50, 50, 10);
+    cv::HoughLinesP(lines_image, lines, 1, CV_PI/180, 50, 50, 12);
 
     bool merged;
     do {
@@ -529,8 +533,6 @@ void detect_lines_2(std::vector<std::pair<cv::Point2f, cv::Point2f>>& final_line
                 auto& v2 = *nit;
 
                 if(on_same_line(v1, v2)){
-                    std::cout << "Merge " << v1 << " and " << v2 << std::endl;
-
                     cv::Point2f a(v1[0], v1[1]);
                     cv::Point2f b(v1[2], v1[3]);
                     cv::Point2f c(v2[0], v2[1]);
@@ -585,8 +587,26 @@ void detect_lines_2(std::vector<std::pair<cv::Point2f, cv::Point2f>>& final_line
 
     } while(merged);
 
-
     //2. Cluster lines
+
+    for(auto& l : lines){
+        cv::Point2f a(l[0], l[1]);
+        cv::Point2f b(l[2], l[3]);
+
+        cv::Vec2f u(b.x - a.x, b.y - a.y);
+        u *= 0.01;
+
+        b.x += u[0];
+        b.y += u[1];
+
+        a.x -= u[0];
+        a.y -= u[1];
+
+        l[0] = a.x;
+        l[1] = a.y;
+        l[2] = b.x;
+        l[3] = b.y;
+    }
 
     std::vector<std::vector<cv::Vec4i>> clusters;
     clusters.reserve(lines.size());
@@ -616,12 +636,32 @@ void detect_lines_2(std::vector<std::pair<cv::Point2f, cv::Point2f>>& final_line
 
     auto& max_cluster = *std::max_element(clusters.begin(), clusters.end(), [](auto& lhs, auto& rhs){return lhs.size() < rhs.size();});
 
-    std::cout << "max_cluster.size(): " << max_cluster.size() << std::endl;
+    std::cout << "Cluster of " << max_cluster.size() << " lines found" << std::endl;
 
+    for(auto& l : max_cluster){
+        cv::Point2f a(l[0], l[1]);
+        cv::Point2f b(l[2], l[3]);
 
+        cv::Vec2f u(b.x - a.x, b.y - a.y);
+        u /= norm(u);
 
-    for(auto& l : lines){
-        final_lines.emplace_back(cv::Point2f(l[0], l[1]), cv::Point2f(l[2], l[3]));
+        while(b.x < source_image.cols && b.y < source_image.rows && b.x > 0 && b.y > 0){
+            b.x += u[0];
+            b.y += u[1];
+        }
+
+        b.x -= u[0];
+        b.y -= u[1];
+
+        while(a.x < source_image.cols && a.y < source_image.rows && a.x > 0 && a.y > 0){
+            a.x -= u[0];
+            a.y -= u[1];
+        }
+
+        a.x += u[0];
+        a.y += u[1];
+
+        final_lines.emplace_back(a, b);
     }
 }
 
@@ -1291,18 +1331,23 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
 
     std::vector<cv::Point2f> intersections;
     if(Proba){
+        std::vector<std::pair<cv::Point2f, cv::Point2f>> lines;
+        detect_lines_2(lines, source_image);
+
+        for(auto& line : lines){
+            cv::line(dest_image, line.first, line.second, cv::Scalar(0, 0, 255), 2, CV_AA);
+        }
+
+        intersections = find_intersections_direct(lines);
+    } else {
         std::vector<cv::Vec2f> lines;
         if(!detect_lines(lines, source_image)){
             return;
         }
-
         intersections = find_intersections(lines);
-    } else {
-        std::vector<std::pair<cv::Point2f, cv::Point2f>> lines;
-        detect_lines_2(lines, source_image);
-        intersections = find_intersections_direct(lines);
     }
 
+    std::cout << intersections.size() << " intersections found" << std::endl;
 
     auto clusters = cluster(intersections);
 
@@ -1311,6 +1356,11 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
     draw_points(dest_image, points);
 
     auto squares = detect_squares(source_image, points);
+
+    if(squares.empty()){
+        std::cout << "Faile to detect squares" << std::endl;
+        return;
+    }
 
     auto max_square = find_max_square(squares, points);
 
@@ -1456,6 +1506,8 @@ int main(int argc, char** argv ){
     } else {
         for(size_t i = 1; i < static_cast<size_t>(argc); ++i){
             std::string source_path(argv[i]);
+
+            std::cout << source_path << std::endl;
 
             cv::Mat source_image;
             source_image = cv::imread(source_path.c_str(), 1);
