@@ -5,6 +5,10 @@
 #include "stop_watch.hpp"
 #include "algo.hpp"
 
+//TODO Use more STL algorithms
+//TODO Remove unused stuff
+//TODO Improve constness handling
+
 namespace {
 
 void method_1(const cv::Mat& source_image, cv::Mat& dest_image){
@@ -1055,6 +1059,8 @@ void sudoku_lines_1(const cv::Mat& source_image, cv::Mat& dest_image){
     }
 }
 
+typedef std::tuple<std::size_t,std::size_t,std::size_t,std::size_t> square_t;
+
 //MAX Square
 void sudoku_lines_2(const cv::Mat& source_image, cv::Mat& dest_image){
     auto_stop_watch<std::chrono::microseconds> watch("sudoku_lines");
@@ -1085,7 +1091,6 @@ void sudoku_lines_2(const cv::Mat& source_image, cv::Mat& dest_image){
     size_t max_k = 0;
     size_t max_l = 0;
 
-    typedef std::tuple<std::size_t,std::size_t,std::size_t,std::size_t> square_t;
     std::vector<square_t> squares;
 
     for(size_t i = 0; i < points.size(); ++i){
@@ -1207,11 +1212,6 @@ void sudoku_lines_3(const cv::Mat& source_image, cv::Mat& dest_image){
     );
 }
 
-typedef std::tuple<std::size_t,std::size_t,std::size_t,std::size_t> square_t;
-bool equals_one_of(std::size_t a, square_t& other){
-    return a == std::get<0>(other) || a == std::get<1>(other) || a == std::get<2>(other) || a == std::get<3>(other);
-}
-
 double mse(const square_t& s, const std::vector<cv::Point2f>& points){
     auto& p1 = points[std::get<0>(s)];
     auto& p2 = points[std::get<1>(s)];
@@ -1268,6 +1268,11 @@ std::vector<square_t> detect_squares(const cv::Mat& source_image, const std::vec
     return squares;
 }
 
+typedef std::tuple<std::size_t,std::size_t,std::size_t,std::size_t> square_t;
+bool equals_one_of(std::size_t a, const square_t& other){
+    return a == std::get<0>(other) || a == std::get<1>(other) || a == std::get<2>(other) || a == std::get<3>(other);
+}
+
 std::vector<square_t> find_max_square(const std::vector<square_t>& squares, const std::vector<cv::Point2f>& points){
     std::vector<std::vector<square_t>> square_set;
     square_set.reserve(squares.size());
@@ -1284,12 +1289,13 @@ std::vector<square_t> find_max_square(const std::vector<square_t>& squares, cons
             auto d1 = mse(ss1, points);
             auto d2 = mse(ss2, points);
 
-            if(almost_equals(d1, d2, 0.07f)){
+            if(almost_equals(d1, d2, 0.10f)){
                 //TODO Filter general orientation
                 bool found = false;
 
                 for(auto& s1 : ss1){
                     auto result = std::find_if(begin(ss2), end(ss2), [&s1](auto& s2) -> bool {
+                    //TODO Perhaps here only one common point is enough ?
                         return
                                 (equals_one_of(std::get<0>(s1), s2) && equals_one_of(std::get<1>(s1), s2))
                             ||  (equals_one_of(std::get<0>(s1), s2) && equals_one_of(std::get<2>(s1), s2))
@@ -1355,6 +1361,88 @@ void remove_unsquare(std::vector<square_t>& max_square, const std::vector<cv::Po
     }
 }
 
+//TODO Rename in is_evil_twin
+
+bool is_evil(const square_t& s1, const square_t& s2, const std::vector<square_t>& squares, const std::vector<cv::Point2f>& points){
+    size_t a, b;
+    if(equals_one_of(std::get<0>(s1), s2) && equals_one_of(std::get<1>(s1), s2)){
+        a = std::get<2>(s1);
+        b = std::get<3>(s1);
+    } else if(equals_one_of(std::get<0>(s1), s2) && equals_one_of(std::get<2>(s1), s2)){
+        a = std::get<1>(s1);
+        b = std::get<3>(s1);
+    } else if(equals_one_of(std::get<0>(s1), s2) && equals_one_of(std::get<3>(s1), s2)){
+        a = std::get<1>(s1);
+        b = std::get<2>(s1);
+    } else if(equals_one_of(std::get<1>(s1), s2) && equals_one_of(std::get<2>(s1), s2)){
+        a = std::get<0>(s1);
+        b = std::get<3>(s1);
+    } else if(equals_one_of(std::get<1>(s1), s2) && equals_one_of(std::get<3>(s1), s2)){
+        a = std::get<0>(s1);
+        b = std::get<2>(s1);
+    } else if(equals_one_of(std::get<2>(s1), s2) && equals_one_of(std::get<3>(s1), s2)){
+        a = std::get<0>(s1);
+        b = std::get<1>(s1);
+    } else {
+        return false;
+    }
+
+    auto ss1 = mse(s1, points);
+    auto ss2 = mse(s2, points);
+
+    if(ss1 > ss2 * 1.033){
+        std::size_t ca = 0;
+        std::size_t cb = 0;
+
+        for(auto& s3 : squares){
+            if(equals_one_of(a, s3)){
+                ++ca;
+            }
+
+            if(equals_one_of(b, s3)){
+                ++cb;
+            }
+        }
+
+        --ca;
+        --cb;
+
+        if(ca == 0 && cb == 0){
+            std::cout << "Evil square found" << std::endl;
+            std::cout << ss1 << std::endl;
+            std::cout << ss2 << std::endl;
+
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void remove_evil_squares(std::vector<square_t>& squares, const std::vector<cv::Point2f>& points){
+    std::vector<square_t> evil_squares;
+
+    //TODO Maybe not interesting to do several passes
+
+    do {
+        evil_squares.clear();
+
+        pairwise_foreach(squares.begin(), squares.end(), [&points,&squares,&evil_squares](const auto& s1, const auto& s2){
+            if(is_evil(s1, s2, squares, points)){
+                evil_squares.push_back(s1);
+            } else if(is_evil(s2, s1, squares, points)){
+                evil_squares.push_back(s2);
+            }
+        });
+
+        std::cout << evil_squares.size() << " evil squares found" << std::endl;
+
+        squares.erase(std::remove_if(squares.begin(), squares.end(), [&evil_squares](auto& s1) -> bool {
+            return std::find(evil_squares.begin(), evil_squares.end(), s1) != evil_squares.end();
+        }), squares.end());
+    } while(!evil_squares.empty());
+}
+
 //LEGO Algorithm
 template<bool Proba>
 void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
@@ -1400,6 +1488,8 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
 
     remove_unsquare(max_square, points);
 
+    remove_evil_squares(max_square, points);
+
     std::cout << "Final max_square size: " << max_square.size() << std::endl;
 
     for(auto& square : max_square){
@@ -1409,6 +1499,7 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
             );
     }
 
+    //Get all the points of the squares
     std::vector<std::size_t> max_square_i;
     for(auto& square : max_square){
         max_square_i.push_back(std::get<0>(square));
@@ -1417,6 +1508,7 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
         max_square_i.push_back(std::get<3>(square));
     }
 
+    //Removes similar points
     std::sort(max_square_i.begin(), max_square_i.end());
     max_square_i.erase(std::unique(max_square_i.begin(), max_square_i.end()), max_square_i.end());
 
