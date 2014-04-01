@@ -503,9 +503,7 @@ bool intersects(const cv::Vec4i& v1, const cv::Vec4i& v2){
 }
 
 //TODO Pass vector of lines
-void detect_lines_2(const cv::Mat& source_image, cv::Mat& dest_image){
-    dest_image = source_image.clone();
-
+void detect_lines_2(std::vector<std::pair<cv::Point2f, cv::Point2f>>& final_lines, const cv::Mat& source_image){
     cv::Mat binary_image;
     method_41(source_image, binary_image);
 
@@ -620,8 +618,10 @@ void detect_lines_2(const cv::Mat& source_image, cv::Mat& dest_image){
 
     std::cout << "max_cluster.size(): " << max_cluster.size() << std::endl;
 
+
+
     for(auto& l : lines){
-        cv::line( dest_image, cv::Point(l[0], l[1]), cv::Point(l[2], l[3]), cv::Scalar(0,0,255), 3, CV_AA);
+        final_lines.emplace_back(cv::Point2f(l[0], l[1]), cv::Point2f(l[2], l[3]));
     }
 }
 
@@ -651,6 +651,23 @@ std::vector<cv::Point2f> find_intersections(const std::vector<cv::Vec2f>& lines)
                 ((p1.first.x*p1.second.y - p1.first.y*p1.second.x)*(p2.first.y - p2.second.y) -
                     (p1.first.y - p1.second.y)*(p2.first.x*p2.second.y - p2.first.y*p2.second.x)) / denom);
         }
+    });
+
+    return intersections;
+}
+
+std::vector<cv::Point2f> find_intersections_direct(const std::vector<std::pair<cv::Point2f, cv::Point2f>>& lines){
+    std::vector<cv::Point2f> intersections;
+
+    pairwise_foreach(lines.begin(), lines.end(), [&intersections](auto& p1, auto& p2){
+        //if(acceptLinePair(p1, p2, CV_PI / 32)){
+            float denom = (p1.first.x - p1.second.x)*(p2.first.y - p2.second.y) - (p1.first.y - p1.second.y)*(p2.first.x - p2.second.x);
+            intersections.emplace_back(
+                ((p1.first.x*p1.second.y - p1.first.y*p1.second.x)*(p2.first.x - p2.second.x) -
+                    (p1.first.x - p1.second.x)*(p2.first.x*p2.second.y - p2.first.y*p2.second.x)) / denom,
+                ((p1.first.x*p1.second.y - p1.first.y*p1.second.x)*(p2.first.y - p2.second.y) -
+                    (p1.first.y - p1.second.y)*(p2.first.x*p2.second.y - p2.first.y*p2.second.x)) / denom);
+        //}
     });
 
     return intersections;
@@ -1266,17 +1283,26 @@ void remove_unsquare(std::vector<square_t>& max_square, const std::vector<cv::Po
 }
 
 //LEGO Algorithm
+template<bool Proba>
 void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
     auto_stop_watch<std::chrono::microseconds> watch("sudoku_lines");
 
     dest_image = source_image.clone();
 
-    std::vector<cv::Vec2f> lines;
-    if(!detect_lines(lines, source_image)){
-        return;
+    std::vector<cv::Point2f> intersections;
+    if(Proba){
+        std::vector<cv::Vec2f> lines;
+        if(!detect_lines(lines, source_image)){
+            return;
+        }
+
+        intersections = find_intersections(lines);
+    } else {
+        std::vector<std::pair<cv::Point2f, cv::Point2f>> lines;
+        detect_lines_2(lines, source_image);
+        intersections = find_intersections_direct(lines);
     }
 
-    auto intersections = find_intersections(lines);
 
     auto clusters = cluster(intersections);
 
@@ -1419,10 +1445,9 @@ int main(int argc, char** argv ){
         }
 
         cv::Mat dest_image = source_image.clone();
-        detect_lines_2(source_image, dest_image);
         //draw_lines(source_image, dest_image);
         //method_41(source_image, dest_image);
-        //sudoku_lines_4(source_image, dest_image);
+        sudoku_lines_4<true>(source_image, dest_image);
 
         cv::namedWindow("Sudoku Grid", cv::WINDOW_AUTOSIZE);
         cv::imshow("Sudoku Grid", dest_image);
@@ -1441,8 +1466,8 @@ int main(int argc, char** argv ){
             }
 
             cv::Mat dest_image;
-            //sudoku_lines_4(source_image, dest_image);
-            detect_lines_2(source_image, dest_image);
+            sudoku_lines_4<true>(source_image, dest_image);
+            //detect_lines_2(source_image, dest_image);
 
             source_path.insert(source_path.rfind('.'), ".lines");
             imwrite(source_path.c_str(), dest_image);
