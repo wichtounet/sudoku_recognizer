@@ -729,8 +729,18 @@ std::vector<cv::Point2f> find_intersections_direct(const std::vector<std::pair<c
                 (p1.first.y - p1.second.y)*(p2.first.x*p2.second.y - p2.first.y*p2.second.x)) / denom);
     });
 
+    for(auto& i : intersections){
+        if(i.x >= -4.0f && i.x < 0.0f){
+            i.x = 0.1f;
+        }
+
+        if(i.y >= -4.0f && i.y < 0.0f){
+            i.y = 0.1f;
+        }
+    }
+
     intersections.erase(std::remove_if(intersections.begin(), intersections.end(), [](const auto& p) -> bool {
-        return std::isnan(p.x) || std::isnan(p.y) || std::isinf(p.x) || std::isinf(p.y) || p.x < 0 || p.y < 0;
+        return std::isnan(p.x) || std::isnan(p.y) || std::isinf(p.x) || std::isinf(p.y);
     }), intersections.end());
 
     return intersections;
@@ -1377,12 +1387,12 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
 
     auto points = gravity_points(clusters);
 
-    draw_points(dest_image, intersections);
+    draw_points(dest_image, points);
 
     auto squares = detect_squares(source_image, points);
 
     if(squares.empty()){
-        std::cout << "Faile to detect squares" << std::endl;
+        std::cout << "Failed to detect squares" << std::endl;
         return;
     }
 
