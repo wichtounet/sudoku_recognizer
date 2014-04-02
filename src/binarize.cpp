@@ -19,7 +19,8 @@ constexpr const bool SHOW_FINAL_LINES = false;
 constexpr const bool SHOW_INTERSECTIONS = false;
 constexpr const bool SHOW_CLUSTERED_INTERSECTIONS = true;
 constexpr const bool SHOW_SQUARES = false;
-constexpr const bool SHOW_MAX_SQUARES = true;
+constexpr const bool SHOW_MAX_SQUARES = false;
+constexpr const bool SHOW_FILTERED_MAX_SQUARES = true;
 
 void method_1(const cv::Mat& source_image, cv::Mat& dest_image){
     cv::Mat gray_image;
@@ -990,37 +991,18 @@ std::vector<square_t> find_max_square(const std::vector<square_t>& squares, cons
         merged = false;
 
         pairwise_foreach(begin(square_set), end(square_set), [&points,&merged](auto& ss1, auto& ss2){
+            if(ss1.empty() || ss2.empty()){
+                return;
+            }
+
             auto d1 = mse(ss1, points);
             auto d2 = mse(ss2, points);
 
             if(almost_equals(d1, d2, 0.10f)){
-                //TODO Filter general orientation
-                bool found = false;
+                std::copy(ss2.begin(), ss2.end(), std::back_inserter(ss1));
+                ss2.clear();
 
-                for(auto& s1 : ss1){
-                    auto result = std::find_if(begin(ss2), end(ss2), [&s1](auto& s2) -> bool {
-                    //TODO Perhaps here only one common point is enough ?
-                        return
-                                (equals_one_of(std::get<0>(s1), s2) && equals_one_of(std::get<1>(s1), s2))
-                            ||  (equals_one_of(std::get<0>(s1), s2) && equals_one_of(std::get<2>(s1), s2))
-                            ||  (equals_one_of(std::get<0>(s1), s2) && equals_one_of(std::get<3>(s1), s2))
-                            ||  (equals_one_of(std::get<1>(s1), s2) && equals_one_of(std::get<2>(s1), s2))
-                            ||  (equals_one_of(std::get<1>(s1), s2) && equals_one_of(std::get<3>(s1), s2))
-                            ||  (equals_one_of(std::get<2>(s1), s2) && equals_one_of(std::get<3>(s1), s2));
-                    });
-
-                    if(result != end(ss2)){
-                        found = true;
-                        break;
-                    }
-                }
-
-                if(found){
-                    std::copy(ss2.begin(), ss2.end(), std::back_inserter(ss1));
-                    ss2.clear();
-
-                    merged = true;
-                }
+                merged = true;
             }
         });
     } while(merged);
@@ -1032,9 +1014,9 @@ std::vector<square_t> find_max_square(const std::vector<square_t>& squares, cons
     return max_square;
 }
 
-void remove_unsquare(std::vector<square_t>& max_square, const std::vector<cv::Point2f>& points){
-    auto it = max_square.begin();
-    auto end = max_square.end();
+void remove_unsquare(std::vector<square_t>& squares, const std::vector<cv::Point2f>& points){
+    auto it = squares.begin();
+    auto end = squares.end();
 
     while(it != end){
         auto& square = *it;
@@ -1057,8 +1039,8 @@ void remove_unsquare(std::vector<square_t>& max_square, const std::vector<cv::Po
         auto squareness = diffs / norm;
 
         if(squareness > 0.33){
-            it = max_square.erase(it);
-            end = max_square.end();
+            it = squares.erase(it);
+            end = squares.end();
         } else {
             ++it;
         }
@@ -1213,7 +1195,6 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
 
     std::cout << squares.size() << " squares found" << std::endl;
 
-    //TODO There are very few cases when this is useful, this probably could be removed
     auto max_square = find_max_square(squares, points);
 
     if(SHOW_MAX_SQUARES){
@@ -1225,11 +1206,22 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
         }
     }
 
-    return;
-
-    std::cout << "cluster of " << squares.size() << " squares found" << std::endl;
+    std::cout << "cluster of " << max_square.size() << " squares found" << std::endl;
 
     remove_unsquare(max_square, points);
+
+    if(SHOW_FILTERED_MAX_SQUARES){
+        for(auto& square : max_square){
+            draw_square(dest_image,
+                points[std::get<0>(square)], points[std::get<1>(square)],
+                points[std::get<2>(square)], points[std::get<3>(square)]
+                );
+        }
+    }
+
+    std::cout << "cluster reduced to " << max_square.size() << " squares" << std::endl;
+
+    return;
 
     remove_evil_squares(max_square, points);
 
