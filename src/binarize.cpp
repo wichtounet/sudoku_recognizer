@@ -1139,6 +1139,9 @@ void remove_evil_squares(std::vector<square_t>& squares, const std::vector<cv::P
     } while(!evil_squares.empty());
 }
 
+constexpr const bool SHOW_INTERSECTIONS = true;
+constexpr const bool SHOW_CLUSTERED_INTERSECTIONS = true;
+
 //LEGO Algorithm
 void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
     auto_stop_watch<std::chrono::microseconds> watch("sudoku_lines");
@@ -1150,15 +1153,26 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
 
     auto intersections = find_intersections(lines);
 
+    if(SHOW_INTERSECTIONS){
+        for(auto& point : intersections){
+            cv::circle(dest_image, point, 1, cv::Scalar(0, 0, 255), 3);
+        }
+    }
+
     std::cout << intersections.size() << " intersections found" << std::endl;
 
     auto clusters = cluster(intersections);
-
-    std::cout << clusters.size() << " cluster of intersections found" << std::endl;
-
     auto points = gravity_points(clusters);
 
-    draw_points(dest_image, points);
+    if(SHOW_CLUSTERED_INTERSECTIONS){
+        for(auto& point : points){
+            cv::circle(dest_image, point, 1, cv::Scalar(255, 0, 0), 3);
+        }
+    }
+
+    std::cout << points.size() << " clustered intersections found" << std::endl;
+
+    return;
 
     auto squares = detect_squares(source_image, points);
 
