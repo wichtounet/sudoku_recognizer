@@ -683,53 +683,6 @@ void detect_lines_2(std::vector<std::pair<cv::Point2f, cv::Point2f>>& final_line
     }
 }
 
-bool acceptLinePair(const cv::Vec2f& line1, const cv::Vec2f& line2, float minTheta){
-    auto theta1 = line1[1];
-    auto theta2 = line2[1];
-
-    if(theta1 < minTheta){
-        theta1 += CV_PI; // dealing with 0 and 180 ambiguities...
-    }
-
-    if(theta2 < minTheta){
-        theta2 += CV_PI; // dealing with 0 and 180 ambiguities...
-    }
-
-    return abs(theta1 - theta2) > minTheta;
-}
-
-std::pair<cv::Point2f, cv::Point2f> lineToPointPair(const cv::Vec2f& line){
-    auto cos_t = cos(line[1]);
-    auto sin_t = sin(line[1]);
-    auto x0 = line[0] * cos_t;
-    auto y0 = line[0] * sin_t;
-
-    return std::make_pair(
-        cv::Point2f(x0 + 1000.0f * (-sin_t), y0 + 1000.0f * cos_t),
-        cv::Point2f(x0 - 1000.0f * (-sin_t), y0 - 1000.0f * cos_t)
-    );
-}
-
-std::vector<cv::Point2f> find_intersections(const std::vector<cv::Vec2f>& lines){
-    std::vector<cv::Point2f> intersections;
-
-    pairwise_foreach(lines.begin(), lines.end(), [&intersections](auto& line1, auto& line2){
-        if(acceptLinePair(line1, line2, CV_PI / 32)){
-            auto p1 = lineToPointPair(line1);
-            auto p2 = lineToPointPair(line2);
-
-            float denom = (p1.first.x - p1.second.x)*(p2.first.y - p2.second.y) - (p1.first.y - p1.second.y)*(p2.first.x - p2.second.x);
-            intersections.emplace_back(
-                ((p1.first.x*p1.second.y - p1.first.y*p1.second.x)*(p2.first.x - p2.second.x) -
-                    (p1.first.x - p1.second.x)*(p2.first.x*p2.second.y - p2.first.y*p2.second.x)) / denom,
-                ((p1.first.x*p1.second.y - p1.first.y*p1.second.x)*(p2.first.y - p2.second.y) -
-                    (p1.first.y - p1.second.y)*(p2.first.x*p2.second.y - p2.first.y*p2.second.x)) / denom);
-        }
-    });
-
-    return intersections;
-}
-
 std::vector<cv::Point2f> find_intersections_direct(const std::vector<std::pair<cv::Point2f, cv::Point2f>>& lines){
     std::vector<cv::Point2f> intersections;
 
