@@ -407,12 +407,12 @@ bool detect_lines(std::vector<cv::Vec2f>& lines, const cv::Mat& source_image){
 }
 
 bool on_same_line(cv::Vec4i& v1, cv::Vec4i& v2){
-    cv::Point2i a(v1[0] - v1[2], v1[1] - v1[3]);
-    cv::Point2i b(v2[0] - v2[2], v2[1] - v2[3]);
+    cv::Point2f a(v1[0] - v1[2], v1[1] - v1[3]);
+    cv::Point2f b(v2[0] - v2[2], v2[1] - v2[3]);
 
-    double angle = atan(a.cross(b) / a.dot(b));
+    float angle = atan(a.cross(b) / a.dot(b));
 
-    if(std::abs(angle) < 0.05){
+    if(std::fabs(angle) < 0.10f){
         //Unit vector of line format by v1
         cv::Vec2f na(a.x, a.y);
         na *= (1.0 / norm(na));
@@ -424,7 +424,7 @@ bool on_same_line(cv::Vec4i& v1, cv::Vec4i& v2){
         cv::Vec2f dist_v = ap - (ap.dot(na)) * na;
         auto distance = norm(dist_v);
 
-        if(distance < 7.5f){
+        if(distance < 10.0f){
             return true;
         }
     }
@@ -433,10 +433,13 @@ bool on_same_line(cv::Vec4i& v1, cv::Vec4i& v2){
 }
 
 bool intersects(const cv::Vec4i& v1, const cv::Vec4i& v2){
-    auto x1 = v1[0], x2 = v1[2], y1 = v1[1], y2 = v1[3];
-    auto x3 = v2[0], x4 = v2[2], y3 = v2[1], y4 = v2[3];
+    float x1 = v1[0], x2 = v1[2], y1 = v1[1], y2 = v1[3];
+    float x3 = v2[0], x4 = v2[2], y3 = v2[1], y4 = v2[3];
+
+    //std::cout << v1 << ";" << v2 << std::endl;
 
     if(x1 == x2){
+        //std::cout << "vertical 1" << std::endl;
         //Parallel lines
         if(x3 == x4){
             return false;
@@ -449,17 +452,25 @@ bool intersects(const cv::Vec4i& v1, const cv::Vec4i& v2){
         auto y0 = a2 * x0 + b2;
 
         return
-                std::min(y1, y2) <= y0 && std::max(y1, y2) >= y0
+                std::min(x1, x2) <= x0 && std::max(x1, x2) >= x0
+            &&  std::min(x3, x4) <= x0 && std::max(x3, x4) >= x0
+            &&  std::min(y1, y2) <= y0 && std::max(y1, y2) >= y0
             &&  std::min(y3, y4) <= y0 && std::max(y3, y4) >= y0;
     } else if(x3 == x4){
+        //std::cout << "vertical 2" << std::endl;
         auto a1 = (y2 - y1) / (x2 - x1);
         auto b1 = y1 - a1 * x1;
 
         auto x0 = x3;
         auto y0 = a1 * x0 + b1;
 
+        //std::cout << x0 << std::endl;
+        //std::cout << y0 << std::endl;
+
         return
-                std::min(y1, y2) <= y0 && std::max(y1, y2) >= y0
+                std::min(x1, x2) <= x0 && std::max(x1, x2) >= x0
+            &&  std::min(x3, x4) <= x0 && std::max(x3, x4) >= x0
+            &&  std::min(y1, y2) <= y0 && std::max(y1, y2) >= y0
             &&  std::min(y3, y4) <= y0 && std::max(y3, y4) >= y0;
     }
 
@@ -477,13 +488,11 @@ bool intersects(const cv::Vec4i& v1, const cv::Vec4i& v2){
     auto y0 = ((a2 * b1) - (a1 * b2)) / (a2 - a1);
 
     return
-                std::min(y1, y2) <= y0 && std::max(y1, y2) >= y0
-            &&  std::min(y3, y4) <= y0 && std::max(y3, y4) >= y0
-        &&    std::min(x1, x2) <= x0 && std::max(x1, x2) >= x0
-        &&  std::min(x3, x4) <= x0 && std::max(x3, x4) >= x0;
+            std::min(x1, x2) < x0 && std::max(x1, x2) > x0
+        &&  std::min(x3, x4) < x0 && std::max(x3, x4) > x0;
 }
 
-void detect_lines_2(std::vector<std::pair<cv::Point2f, cv::Point2f>>& final_lines, const cv::Mat& source_image){
+void detect_lines_2(std::vector<std::pair<cv::Point2f, cv::Point2f>>& final_lines, const cv::Mat& source_image, cv::Mat& dest_image){
     cv::Mat binary_image;
     method_41(source_image, binary_image);
 
@@ -494,12 +503,78 @@ void detect_lines_2(std::vector<std::pair<cv::Point2f, cv::Point2f>>& final_line
     std::vector<cv::Vec4i> lines;
     cv::HoughLinesP(lines_image, lines, 1, CV_PI/180, 50, 50, 12);
 
+
+    //2. Cluster lines
+
+    //Enlarge a bit the lines to enhance the clusters
+    for(auto& l : lines){
+        cv::Point2f a(l[0], l[1]);
+        cv::Point2f b(l[2], l[3]);
+
+        cv::Vec2f u(b.x - a.x, b.y - a.y);
+        u *= 0.02;
+
+        b.x += u[0];
+        b.y += u[1];
+
+        a.x -= u[0];
+        a.y -= u[1];
+
+        l[0] = a.x;
+        l[1] = a.y;
+        l[2] = b.x;
+        l[3] = b.y;
+    }
+
+    std::vector<std::vector<cv::Vec4i>> clusters;
+    clusters.reserve(lines.size());
+
+    for(auto& v1 : lines){
+        clusters.push_back({v1});
+    }
+
+    bool merged_cluster;
+    do {
+        merged_cluster = false;
+
+        pairwise_foreach(clusters.begin(), clusters.end(), [&merged_cluster](auto& c1, auto& c2){
+            for(auto& v1 : c1){
+                for(auto& v2 : c2){
+                    if(intersects(v1, v2)){
+                        std::copy(c2.begin(), c2.end(), std::back_inserter(c1));
+                        c2.clear();
+                        merged_cluster = true;
+                        return;
+                    }
+                }
+            }
+        });
+    } while(merged_cluster);
+
+    std::cout << "lines.size(): " << lines.size() << std::endl;
+
+    auto& max_cluster = *std::max_element(clusters.begin(), clusters.end(), [](auto& lhs, auto& rhs){return lhs.size() < rhs.size();});
+
+    std::cout << "Cluster of " << max_cluster.size() << " lines found" << std::endl;
+
+    constexpr const bool SHOW_LINE_SEGMENTS = false;
+
+    if(SHOW_LINE_SEGMENTS){
+        for(auto& l : lines){
+            cv::line(dest_image, cv::Point2f(l[0], l[1]), cv::Point2f(l[2], l[3]), cv::Scalar(0, 255, 255), 2, CV_AA);
+        }
+
+        for(auto& l : max_cluster){
+            cv::line(dest_image, cv::Point2f(l[0], l[1]), cv::Point2f(l[2], l[3]), cv::Scalar(0, 0, 255), 2, CV_AA);
+        }
+    }
+
     bool merged;
     do {
         merged = false;
 
-        auto it = lines.begin();
-        auto end = lines.end();
+        auto it = max_cluster.begin();
+        auto end = max_cluster.end();
 
         while(it != end){
             auto& v1 = *it;
@@ -547,8 +622,8 @@ void detect_lines_2(std::vector<std::pair<cv::Point2f, cv::Point2f>>& final_line
 
                     merged = true;
 
-                    nit = lines.erase(nit);
-                    end = lines.end();
+                    nit = max_cluster.erase(nit);
+                    end = max_cluster.end();
                 } else {
                     ++nit;
                 }
@@ -560,59 +635,15 @@ void detect_lines_2(std::vector<std::pair<cv::Point2f, cv::Point2f>>& final_line
 
             ++it;
         }
-
     } while(merged);
 
-    //2. Cluster lines
+    constexpr const bool SHOW_MERGED_LINE_SEGMENTS = false;
 
-    for(auto& l : lines){
-        cv::Point2f a(l[0], l[1]);
-        cv::Point2f b(l[2], l[3]);
-
-        cv::Vec2f u(b.x - a.x, b.y - a.y);
-        u *= 0.01;
-
-        b.x += u[0];
-        b.y += u[1];
-
-        a.x -= u[0];
-        a.y -= u[1];
-
-        l[0] = a.x;
-        l[1] = a.y;
-        l[2] = b.x;
-        l[3] = b.y;
+    if(SHOW_MERGED_LINE_SEGMENTS){
+        for(auto& l : max_cluster){
+            cv::line(dest_image, cv::Point2f(l[0], l[1]), cv::Point2f(l[2], l[3]), cv::Scalar(0, 0, 255), 2, CV_AA);
+        }
     }
-
-    std::vector<std::vector<cv::Vec4i>> clusters;
-    clusters.reserve(lines.size());
-
-    for(auto& v1 : lines){
-        clusters.push_back({v1});
-    }
-
-    do {
-        merged = false;
-
-        pairwise_foreach(clusters.begin(), clusters.end(), [&merged](auto& c1, auto& c2){
-            for(auto& v1 : c1){
-                for(auto& v2 : c2){
-                    if(intersects(v1, v2)){
-                        std::copy(c2.begin(), c2.end(), std::back_inserter(c1));
-                        c2.clear();
-                        merged = true;
-                        return;
-                    }
-                }
-            }
-        });
-    } while(merged);
-
-    std::cout << "lines.size(): " << lines.size() << std::endl;
-
-    auto& max_cluster = *std::max_element(clusters.begin(), clusters.end(), [](auto& lhs, auto& rhs){return lhs.size() < rhs.size();});
-
-    std::cout << "Cluster of " << max_cluster.size() << " lines found" << std::endl;
 
     std::vector<std::pair<cv::Point2f, cv::Point2f>> long_lines;
 
@@ -642,6 +673,14 @@ void detect_lines_2(std::vector<std::pair<cv::Point2f, cv::Point2f>>& final_line
         long_lines.emplace_back(a, b);
     }
 
+    constexpr const bool SHOW_LONG_LINES = true;
+
+    if(SHOW_LONG_LINES){
+        for(auto& l : long_lines){
+            cv::line(dest_image, l.first, l.second, cv::Scalar(255, 0, 0), 2, CV_AA);
+        }
+    }
+
     /*constexpr const size_t PARALLEL_RESOLUTION = 2;
     constexpr const size_t BUCKETS = 90 / PARALLEL_RESOLUTION;
 
@@ -665,7 +704,7 @@ void detect_lines_2(std::vector<std::pair<cv::Point2f, cv::Point2f>>& final_line
         printf("theta:%f theta_deg=%f group:%ld\n", theta, theta, group);
     }*/
 
-    long_lines.erase(std::remove_if(long_lines.begin(), long_lines.end(), [&long_lines](const auto& l1) -> bool {
+    for(auto& l1 : long_lines){
         std::size_t similar = 0;
 
         float rho_1 = std::fabs(atan((l1.second.y - l1.first.y) / (l1.second.x - l1.first.x)) * 180 / CV_PI);
@@ -678,7 +717,7 @@ void detect_lines_2(std::vector<std::pair<cv::Point2f, cv::Point2f>>& final_line
         for(auto& l2 : long_lines){
             float rho_2 = std::fabs(atan((l2.second.y - l2.first.y) / (l2.second.x - l2.first.x)) * 180 / CV_PI);
 
-            if(std::fabs(rho_2 - rho_1) <= 1.66f){
+            if(std::fabs(rho_2 - rho_1) <= 2.0f){
                 /*cv::Point2f a(l1.second.x - l1.first.x, l1.second.y - l1.first.y);
 
                 //Unit vector of line made  by v1
@@ -703,9 +742,9 @@ void detect_lines_2(std::vector<std::pair<cv::Point2f, cv::Point2f>>& final_line
                 auto distance = dist_1 < dist_2 ? dist_1 + dist_4 : dist_2 + dist_3;
 
                 //TODO The threshold should be related to the size of the window
-                if(distance < 250.0f){
+                //if(distance < 250.0f){
                     ++similar;
-                }
+                //}
 
                 /*if(debug){
                     std::cout << norm(dist_v1) << std::endl;
@@ -715,13 +754,20 @@ void detect_lines_2(std::vector<std::pair<cv::Point2f, cv::Point2f>>& final_line
             }
         }
 
-        return similar < 3;
-    }), long_lines.end());
-
-    //TODO Make it more efficient
-    std::copy(long_lines.begin(), long_lines.end(), std::back_inserter(final_lines));
+        if(similar >= 3){
+            final_lines.push_back(l1);
+        }
+    }
 
     std::cout << "Final lines: " << final_lines.size() << std::endl;
+
+    constexpr const bool SHOW_FINAL_LINES = true;
+
+    if(SHOW_FINAL_LINES){
+        for(auto& l : final_lines){
+            cv::line(dest_image, l.first, l.second, cv::Scalar(0, 255, 0), 2, CV_AA);
+        }
+    }
 }
 
 void draw_lines(const cv::Mat& source_image, cv::Mat& dest_image){
@@ -1532,10 +1578,10 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
     std::vector<cv::Point2f> intersections;
     if(Proba){
         std::vector<std::pair<cv::Point2f, cv::Point2f>> lines;
-        detect_lines_2(lines, source_image);
-        for(auto& line : lines){
+        detect_lines_2(lines, source_image, dest_image);
+        /*for(auto& line : lines){
             cv::line(dest_image, line.first, line.second, cv::Scalar(255, 255, 0), 4, CV_AA);
-        }
+        }*/
         return;
         intersections = find_intersections_direct(lines);
     } else {
@@ -1687,6 +1733,59 @@ int main(int argc, char** argv ){
         std::cout << "Usage: binarize <image>..." << std::endl;
         return -1;
     }
+
+    cv::Vec4i a;
+    cv::Vec4i b;
+
+    a[0] = 199; a[1] = 277; a[2] = 267; a[3] = 275;
+    b[0] = 0; b[1] = 318; b[2] = 0; b[3] = 197;
+    std::cout << "Returns: " << intersects(a, b) << std::endl;
+    std::cout << "Should:  " << 0 << std::endl;
+
+    a[0] = 0; a[1] = 318; a[2] = 0; a[3] = 197;
+    b[0] = 199; b[1] = 277; b[2] = 267; b[3] = 275;
+    std::cout << "Returns: " << intersects(a, b) << std::endl;
+    std::cout << "Should:  " << 0 << std::endl;
+
+    a[0] = 199; a[1] = 277; a[2] = 267; a[3] = 275;
+    b[0] = 200; b[1] = 318; b[2] = 200; b[3] = 197;
+    std::cout << "Returns: " << intersects(a, b) << std::endl;
+    std::cout << "Should:  " << 1 << std::endl;
+
+    a[0] = 100; a[1] = 100; a[2] = 300; a[3] = 300;
+    b[0] = 100; b[1] = 300; b[2] = 300; b[3] = 100;
+    std::cout << "Returns: " << intersects(a, b) << std::endl;
+    std::cout << "Should:  " << 1 << std::endl;
+
+    a[0] = 30; a[1] = 242; a[2] = 451; a[3] = 242;
+    b[0] = 440; b[1] = 346; b[2] = 440; b[3] = 5;
+    std::cout << "Returns: " << intersects(a, b) << std::endl;
+    std::cout << "Should:  " << 1 << std::endl;
+
+    a[0] = 440; a[1] = 346; a[2] = 440; a[3] = 5;
+    b[0] = 30; b[1] = 242; b[2] = 451; b[3] = 242;
+    std::cout << "Returns: " << intersects(a, b) << std::endl;
+    std::cout << "Should:  " << 1 << std::endl;
+
+    a[0] = 440; a[1] = 5; a[2] = 440; a[3] = 346;
+    b[0] = 30; b[1] = 242; b[2] = 451; b[3] = 242;
+    std::cout << "Returns: " << intersects(a, b) << std::endl;
+    std::cout << "Should:  " << 1 << std::endl;
+
+    a[0] = 440; a[1] = 346; a[2] = 440; a[3] = 5;
+    b[0] = 451; b[1] = 242; b[2] = 30; b[3] = 242;
+    std::cout << "Returns: " << intersects(a, b) << std::endl;
+    std::cout << "Should:  " << 1 << std::endl;
+
+    a[0] = 30; a[1] = 242; a[2] = 431; a[3] = 242;
+    b[0] = 440; b[1] = 346; b[2] = 440; b[3] = 5;
+    std::cout << "Returns: " << intersects(a, b) << std::endl;
+    std::cout << "Should:  " << 0 << std::endl;
+
+    a[0] = 100; a[1] = 200; a[2] = 500; a[3] = 200;
+    b[0] = 80; b[1] = 346; b[2] = 450; b[3] = 346;
+    std::cout << "Returns: " << intersects(a, b) << std::endl;
+    std::cout << "Should:  " << 0 << std::endl;
 
     if(argc == 2){
         std::string source_path(argv[1]);
