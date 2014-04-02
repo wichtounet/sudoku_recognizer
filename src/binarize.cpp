@@ -718,7 +718,7 @@ std::vector<std::vector<cv::Point2f>> cluster(const std::vector<cv::Point2f>& in
     for(auto& i : intersections){
         bool found = false;
         for(auto& cluster : clusters){
-            if(distance_to_gravity(i, cluster) < 10.0){
+            if(distance_to_gravity(i, cluster) < 10.0f){
                 cluster.push_back(i);
                 found = true;
                 break;
@@ -735,12 +735,6 @@ std::vector<std::vector<cv::Point2f>> cluster(const std::vector<cv::Point2f>& in
 
 std::vector<cv::Point2f> gravity_points(const std::vector<std::vector<cv::Point2f>>& clusters){
     return vector_transform(begin(clusters), end(clusters), [](auto& cluster) -> cv::Point2f {return gravity(cluster);});
-}
-
-void filter_outer_points(std::vector<cv::Point2f>& points, const cv::Mat& image){
-    points.erase(std::remove_if(points.begin(), points.end(), [&image](auto& i) -> bool {
-        return i.x <= 2.0 || i.y <= 2.0 || i.x >= 0.99 * image.cols || i.y >= 0.99 * image.rows;
-    }), points.end());
 }
 
 void draw_points(cv::Mat& dest_image, const std::vector<cv::Point2f>& points){
@@ -765,8 +759,6 @@ void sudoku_lines_2(const cv::Mat& source_image, cv::Mat& dest_image){
     auto clusters = cluster(intersections);
 
     auto points = gravity_points(clusters);
-
-    filter_outer_points(points, dest_image);
 
     draw_points(dest_image, points);
 
