@@ -683,7 +683,7 @@ void detect_lines_2(std::vector<std::pair<cv::Point2f, cv::Point2f>>& final_line
     }
 }
 
-std::vector<cv::Point2f> find_intersections_direct(const std::vector<std::pair<cv::Point2f, cv::Point2f>>& lines){
+std::vector<cv::Point2f> find_intersections(const std::vector<std::pair<cv::Point2f, cv::Point2f>>& lines){
     std::vector<cv::Point2f> intersections;
 
     pairwise_foreach(lines.begin(), lines.end(), [&intersections](auto& p1, auto& p2){
@@ -754,7 +754,7 @@ void sudoku_lines_2(const cv::Mat& source_image, cv::Mat& dest_image){
     std::vector<std::pair<cv::Point2f, cv::Point2f>> lines;
     detect_lines_2(lines, source_image, dest_image);
 
-    auto intersections = find_intersections_direct(lines);
+    auto intersections = find_intersections(lines);
 
     auto clusters = cluster(intersections);
 
@@ -818,7 +818,7 @@ void sudoku_lines_3(const cv::Mat& source_image, cv::Mat& dest_image){
     std::vector<std::pair<cv::Point2f, cv::Point2f>> lines;
     detect_lines_2(lines, source_image, dest_image);
 
-    auto intersections = find_intersections_direct(lines);
+    auto intersections = find_intersections(lines);
 
     auto clusters = cluster(intersections);
 
@@ -1148,7 +1148,7 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
     std::vector<std::pair<cv::Point2f, cv::Point2f>> lines;
     detect_lines_2(lines, source_image, dest_image);
 
-    auto intersections = find_intersections_direct(lines);
+    auto intersections = find_intersections(lines);
 
     std::cout << intersections.size() << " intersections found" << std::endl;
 
