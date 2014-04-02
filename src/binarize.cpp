@@ -353,6 +353,7 @@ bool is_square_1(const cv::Point2f& p1, const cv::Point2f& p2, const cv::Point2f
 
     return false;
 }
+
 bool is_square_2(const cv::Point2f& p1, const cv::Point2f& p2, const cv::Point2f& p3, const cv::Point2f& p4){
     auto d12 = sq_distance(p1, p2);
     auto d13 = sq_distance(p1, p3);
@@ -378,32 +379,6 @@ bool is_square_2(const cv::Point2f& p1, const cv::Point2f& p2, const cv::Point2f
     }
 
     return false;
-}
-
-bool detect_lines(std::vector<cv::Vec2f>& lines, const cv::Mat& source_image){
-    cv::Mat binary_image;
-    method_41(source_image, binary_image);
-
-    constexpr const size_t CANNY_THRESHOLD = 60;
-    cv::Canny(binary_image, binary_image, CANNY_THRESHOLD, CANNY_THRESHOLD * 3, 5);
-
-    HoughLines(binary_image, lines, 1, CV_PI/270, 125, 0, 0);
-
-    if(lines.size() > 250){
-        std::cout << "Too many lines" << std::endl;
-
-        lines.clear();
-
-        method_5(source_image, binary_image);
-
-        cv::Canny(binary_image, binary_image, CANNY_THRESHOLD, CANNY_THRESHOLD * 3, 3);
-
-        HoughLines(binary_image, lines, 1, CV_PI/180, 125, 0, 0);
-
-        return lines.size() < 500;
-    }
-
-    return true;
 }
 
 bool on_same_line(cv::Vec4i& v1, cv::Vec4i& v2){
@@ -486,8 +461,8 @@ bool intersects(const cv::Vec4i& v1, const cv::Vec4i& v2){
 
 constexpr const bool SHOW_LINE_SEGMENTS = false;
 constexpr const bool SHOW_MERGED_LINE_SEGMENTS = false;
-constexpr const bool SHOW_LONG_LINES = true;
-constexpr const bool SHOW_FINAL_LINES = true;
+constexpr const bool SHOW_LONG_LINES = false;
+constexpr const bool SHOW_FINAL_LINES = false;
 
 void detect_lines_2(std::vector<std::pair<cv::Point2f, cv::Point2f>>& final_lines, const cv::Mat& source_image, cv::Mat& dest_image){
     //1. Detect lines
@@ -708,17 +683,6 @@ void detect_lines_2(std::vector<std::pair<cv::Point2f, cv::Point2f>>& final_line
     }
 }
 
-void draw_lines(const cv::Mat& source_image, cv::Mat& dest_image){
-    std::vector<cv::Vec2f> lines;
-    detect_lines(lines, source_image);
-
-    dest_image = source_image.clone();
-
-    for(auto& line : lines){
-        draw_line(dest_image, line);
-    }
-}
-
 bool acceptLinePair(const cv::Vec2f& line1, const cv::Vec2f& line2, float minTheta){
     auto theta1 = line1[1];
     auto theta2 = line2[1];
@@ -832,278 +796,6 @@ void draw_points(cv::Mat& dest_image, const std::vector<cv::Point2f>& points){
     }
 }
 
-void sudoku_lines_0(const cv::Mat& source_image, cv::Mat& dest_image){
-    auto_stop_watch<std::chrono::microseconds> watch("sudoku_lines");
-
-    dest_image = source_image.clone();
-
-    std::vector<cv::Vec2f> lines;
-    if(!detect_lines(lines, source_image)){
-        return;
-    }
-
-    auto intersections = find_intersections(lines);
-
-    auto clusters = cluster(intersections);
-
-    auto points = gravity_points(clusters);
-
-    draw_points(dest_image, points);
-
-    constexpr const size_t PARALLEL_RESOLUTION = 10;
-    constexpr const size_t BUCKETS = 180 / PARALLEL_RESOLUTION;
-    constexpr const size_t DISTANCE_RESOLUTION = 5;
-
-    std::vector<std::vector<cv::Vec2f>> groups(BUCKETS);
-
-    for(auto& line : lines){
-        auto theta = line[1];
-
-        auto theta_deg = static_cast<size_t>(theta * (180 / CV_PI)) % 360;
-
-        auto group = theta_deg / PARALLEL_RESOLUTION;
-        groups[group].push_back(line);
-
-        printf("theta:%f theta_deg=%ld group:%ld\n", theta, theta_deg, group);
-    }
-
-    std::copy(groups.back().begin(), groups.back().end(), std::back_inserter(groups.front()));
-    groups.back().clear();
-
-    for(size_t i = 0; i < groups.size(); ++i){
-        auto& group = groups[i];
-
-        if(group.size() < 9){
-            continue;
-        }
-
-        auto angle_first = i * PARALLEL_RESOLUTION;
-        auto angle_last = angle_first + PARALLEL_RESOLUTION - 1;
-
-        std::cout << "size[" << angle_first << "," << angle_last << "]=" << group.size() << std::endl;
-
-        double max_d = 0;
-        for(size_t i = 0 ; i < group.size() - 1; ++i){
-            for(size_t j = i + 1; j < group.size(); ++j){
-                max_d = std::max(distance(group[i],group[j]), max_d);
-            }
-        }
-
-        auto buckets = static_cast<size_t>(max_d) / DISTANCE_RESOLUTION + 1;
-        std::vector<std::vector<std::pair<size_t, size_t>>> pairs(buckets);
-
-        for(size_t i = 0 ; i < group.size() - 1; ++i){
-            for(size_t j = i + 1; j < group.size(); ++j){
-                auto d = distance(group[i], group[j]);
-
-                pairs[d / DISTANCE_RESOLUTION].emplace_back(i, j);
-            }
-        }
-
-        unsigned int min_tot = std::min(source_image.rows, source_image.cols);
-
-        for(size_t i = 0 ; i < pairs.size() - 1; ++i){
-            auto& pair_group = pairs[i];
-
-            auto d_first = i * DISTANCE_RESOLUTION;
-            auto d_last = d_first + DISTANCE_RESOLUTION - 1;
-
-            if(pair_group.size() < 9){
-                continue;
-            }
-
-            if(d_last < min_tot / 25){
-                continue;
-            }
-
-            std::cout << i << std::endl;
-
-            std::cout << "pair_group[" << d_first << ", " << d_last << "].size()=" << pair_group.size() << std::endl;
-
-            for(auto& pair : pair_group){
-                draw_line(dest_image, group[pair.first]);
-                draw_line(dest_image, group[pair.second]);
-            }
-        }
-    }
-}
-
-void sudoku_lines_1(const cv::Mat& source_image, cv::Mat& dest_image){
-    auto_stop_watch<std::chrono::microseconds> watch("sudoku_lines");
-
-    dest_image = source_image.clone();
-
-    std::vector<cv::Vec2f> lines;
-    if(!detect_lines(lines, source_image)){
-        return;
-    }
-
-    auto intersections = find_intersections(lines);
-
-    auto clusters = cluster(intersections);
-
-    auto points = gravity_points(clusters);
-
-    draw_points(dest_image, points);
-
-    constexpr const size_t PARALLEL_RESOLUTION = 10;
-    constexpr const size_t BUCKETS = 180 / PARALLEL_RESOLUTION;
-
-    std::vector<std::vector<cv::Vec2f>> groups(BUCKETS);
-
-    for(auto& line : lines){
-        auto theta = line[1];
-
-        auto theta_deg = static_cast<size_t>(theta * (180 / CV_PI)) % 360;
-
-        auto group = theta_deg / PARALLEL_RESOLUTION;
-        groups[group].push_back(line);
-
-        printf("theta:%f theta_deg=%ld group:%ld\n", theta, theta_deg, group);
-    }
-
-    std::copy(groups.back().begin(), groups.back().end(), std::back_inserter(groups.front()));
-    groups.back().clear();
-
-    for(size_t g = 0; g < groups.size(); ++g){
-        auto& group = groups[g];
-
-        if(group.size() < 10){
-            continue;
-        }
-
-        std::vector<std::vector<size_t>> distance_groups;
-
-        for(size_t i = 0 ; i < group.size(); ++i){
-            auto& line = group[i];
-
-            bool found = false;
-            for(auto& distance_group : distance_groups){
-                for(auto j : distance_group){
-                    if(std::abs(ordered_distance(line, group[j])) < 2){
-                        distance_group.push_back(i);
-                        found = true;
-                        break;
-                    }
-                }
-
-                if(found){
-                    break;
-                }
-            }
-
-            if(!found){
-                distance_groups.emplace_back();
-                distance_groups.back().push_back(i);
-            }
-        }
-
-        if(distance_groups.size() < 10){
-            continue;
-        }
-
-        size_t ei = 0;
-        size_t ej = 0;
-        size_t max_d = 0;
-
-        for(size_t i = 0 ; i < distance_groups.size() - 1; ++i){
-            for(size_t j = i ; j < distance_groups.size() - 1; ++j){
-                auto d = distance(group[distance_groups[i][0]], group[distance_groups[j][0]]);
-                if(d > max_d){
-                    ei = i;
-                    ej = j;
-                    max_d = d;
-                }
-            }
-        }
-
-        auto extreme = group[distance_groups[ei][0]];
-        std::sort(distance_groups.begin(), distance_groups.end(), [&group,&extreme](auto& lhs, auto& rhs){
-            auto d1 = distance(extreme, group[lhs[0]]);
-            auto d2 = distance(extreme, group[rhs[0]]);
-
-            return d1 > d2;
-        });
-
-        while(true){
-            double average = average_distance(group, distance_groups);
-
-            size_t max = 0;
-            size_t max_i = 0;
-
-            for(size_t i = 0 ; i < distance_groups.size() - 1; ++i){
-                auto d = distance(group[distance_groups[i][0]], group[distance_groups[i+1][0]]);
-                if(d > max){
-                    max_i = i;
-                    max = d;
-                }
-            }
-
-            std::cout << "average " << average << std::endl;
-            std::cout << "max " << max << std::endl;
-
-            if(max > average * 1.20){
-                if(max_i == 0){
-                    distance_groups.erase(distance_groups.begin() + max_i);
-                    continue;
-                } else if(max_i+1 == distance_groups.size() - 1){
-                    distance_groups.erase(distance_groups.begin() + max_i + 1);
-                    continue;
-                } else {
-                    std::cout << "here" << std::endl;
-                    //TODO
-                }
-            }
-
-            double min = 1111111111;
-            size_t min_i = 0;
-
-            for(size_t i = 0 ; i < distance_groups.size() - 1; ++i){
-                auto d = distance(group[distance_groups[i][0]], group[distance_groups[i+1][0]]);
-                if(d < min){
-                    min_i = i;
-                    min = d;
-                }
-            }
-
-            std::cout << "average " << average << std::endl;
-            std::cout << "min " << min << std::endl;
-
-            if(min < average * 0.80){
-                if(min_i == 0){
-                    distance_groups.erase(distance_groups.begin() + min_i);
-                    continue;
-                } else if(min_i+1 == distance_groups.size() - 1){
-                    distance_groups.erase(distance_groups.begin() + min_i + 1);
-                    continue;
-                } else {
-                    auto d_to_next_next = distance(group[distance_groups[min_i][0]], group[distance_groups[min_i+2][0]]);
-                    auto d_prev_to_next = distance(group[distance_groups[min_i-1][0]], group[distance_groups[min_i+1][0]]);
-
-                    auto delete_i = d_prev_to_next;
-                    auto delete_next = d_to_next_next;
-
-                    if(std::abs(delete_i - average) > std::abs(delete_next - average)){
-                        std::cout << "delete i " << std::endl;
-                        distance_groups.erase(distance_groups.begin() + min_i);
-                        continue;
-                    } else {
-                        std::cout << "delete next " << std::endl;
-                        distance_groups.erase(distance_groups.begin() + min_i + 1);
-                        continue;
-                    }
-                }
-            }
-
-            break;
-        }
-
-        for(auto& distance_group : distance_groups){
-            draw_line(dest_image, group[distance_group[0]]);
-        }
-    }
-}
-
 typedef std::tuple<std::size_t,std::size_t,std::size_t,std::size_t> square_t;
 
 //MAX Square
@@ -1112,12 +804,10 @@ void sudoku_lines_2(const cv::Mat& source_image, cv::Mat& dest_image){
 
     dest_image = source_image.clone();
 
-    std::vector<cv::Vec2f> lines;
-    if(!detect_lines(lines, source_image)){
-        return;
-    }
+    std::vector<std::pair<cv::Point2f, cv::Point2f>> lines;
+    detect_lines_2(lines, source_image, dest_image);
 
-    auto intersections = find_intersections(lines);
+    auto intersections = find_intersections_direct(lines);
 
     auto clusters = cluster(intersections);
 
@@ -1180,12 +870,10 @@ void sudoku_lines_3(const cv::Mat& source_image, cv::Mat& dest_image){
 
     dest_image = source_image.clone();
 
-    std::vector<cv::Vec2f> lines;
-    if(!detect_lines(lines, source_image)){
-        return;
-    }
+    std::vector<std::pair<cv::Point2f, cv::Point2f>> lines;
+    detect_lines_2(lines, source_image, dest_image);
 
-    auto intersections = find_intersections(lines);
+    auto intersections = find_intersections_direct(lines);
 
     auto clusters = cluster(intersections);
 
@@ -1507,28 +1195,15 @@ void remove_evil_squares(std::vector<square_t>& squares, const std::vector<cv::P
 }
 
 //LEGO Algorithm
-template<bool Proba>
 void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
     auto_stop_watch<std::chrono::microseconds> watch("sudoku_lines");
 
     dest_image = source_image.clone();
 
-    std::vector<cv::Point2f> intersections;
-    if(Proba){
-        std::vector<std::pair<cv::Point2f, cv::Point2f>> lines;
-        detect_lines_2(lines, source_image, dest_image);
-        /*for(auto& line : lines){
-            cv::line(dest_image, line.first, line.second, cv::Scalar(255, 255, 0), 4, CV_AA);
-        }*/
-        return;
-        intersections = find_intersections_direct(lines);
-    } else {
-        std::vector<cv::Vec2f> lines;
-        if(!detect_lines(lines, source_image)){
-            return;
-        }
-        intersections = find_intersections(lines);
-    }
+    std::vector<std::pair<cv::Point2f, cv::Point2f>> lines;
+    detect_lines_2(lines, source_image, dest_image);
+
+    auto intersections = find_intersections_direct(lines);
 
     std::cout << intersections.size() << " intersections found" << std::endl;
 
@@ -1737,9 +1412,7 @@ int main(int argc, char** argv ){
         }
 
         cv::Mat dest_image = source_image.clone();
-        //draw_lines(source_image, dest_image);
-        //method_41(source_image, dest_image);
-        sudoku_lines_4<true>(source_image, dest_image);
+        sudoku_lines_4(source_image, dest_image);
 
         cv::namedWindow("Sudoku Grid", cv::WINDOW_AUTOSIZE);
         cv::imshow("Sudoku Grid", dest_image);
@@ -1760,8 +1433,7 @@ int main(int argc, char** argv ){
             }
 
             cv::Mat dest_image;
-            sudoku_lines_4<true>(source_image, dest_image);
-            //detect_lines_2(source_image, dest_image);
+            sudoku_lines_4(source_image, dest_image);
 
             source_path.insert(source_path.rfind('.'), ".lines");
             imwrite(source_path.c_str(), dest_image);
