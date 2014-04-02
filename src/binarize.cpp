@@ -483,7 +483,6 @@ bool intersects(const cv::Vec4i& v1, const cv::Vec4i& v2){
         &&  std::min(x3, x4) <= x0 && std::max(x3, x4) >= x0;
 }
 
-//TODO Pass vector of lines
 void detect_lines_2(std::vector<std::pair<cv::Point2f, cv::Point2f>>& final_lines, const cv::Mat& source_image){
     cv::Mat binary_image;
     method_41(source_image, binary_image);
@@ -615,6 +614,8 @@ void detect_lines_2(std::vector<std::pair<cv::Point2f, cv::Point2f>>& final_line
 
     std::cout << "Cluster of " << max_cluster.size() << " lines found" << std::endl;
 
+    std::vector<std::pair<cv::Point2f, cv::Point2f>> long_lines;
+
     for(auto& l : max_cluster){
         cv::Point2f a(l[0], l[1]);
         cv::Point2f b(l[2], l[3]);
@@ -638,27 +639,87 @@ void detect_lines_2(std::vector<std::pair<cv::Point2f, cv::Point2f>>& final_line
         a.x += u[0];
         a.y += u[1];
 
-        final_lines.emplace_back(a, b);
+        long_lines.emplace_back(a, b);
     }
 
-    final_lines.erase(std::remove_if(final_lines.begin(), final_lines.end(), [&final_lines](const auto& l1) -> bool {
+    /*constexpr const size_t PARALLEL_RESOLUTION = 2;
+    constexpr const size_t BUCKETS = 90 / PARALLEL_RESOLUTION;
+
+    std::cout << BUCKETS << std::endl;
+
+    std::vector<std::vector<std::pair<cv::Point2f, cv::Point2f>>> groups(BUCKETS);
+
+    for(auto& l1 : long_lines){
+        auto theta = std::fabs(atan((l1.second.y - l1.first.y) / (l1.second.x - l1.first.x)) * 180 / CV_PI);
+
+        auto group = static_cast<size_t>(theta) / PARALLEL_RESOLUTION;
+
+        //Only angle=90 can be in this bucket
+        //So we put it in the previous one
+        if(group == BUCKETS){
+            --group;
+        }
+
+        groups[group].push_back(l1);
+
+        printf("theta:%f theta_deg=%f group:%ld\n", theta, theta, group);
+    }*/
+
+    long_lines.erase(std::remove_if(long_lines.begin(), long_lines.end(), [&long_lines](const auto& l1) -> bool {
         std::size_t similar = 0;
 
         float rho_1 = std::fabs(atan((l1.second.y - l1.first.y) / (l1.second.x - l1.first.x)) * 180 / CV_PI);
 
-        std::cout << rho_1 << std::endl;
+        /*bool debug = false;
+        if(std::fabs(rho_1 - 2.56) < 0.1){
+        debug = true;
+        }*/
 
-        for(auto& l2 : final_lines){
+        for(auto& l2 : long_lines){
             float rho_2 = std::fabs(atan((l2.second.y - l2.first.y) / (l2.second.x - l2.first.x)) * 180 / CV_PI);
 
-            if(std::fabs(rho_2 - rho_1) <= 3.0f){
-                ++similar;
+            if(std::fabs(rho_2 - rho_1) <= 1.66f){
+                /*cv::Point2f a(l1.second.x - l1.first.x, l1.second.y - l1.first.y);
+
+                //Unit vector of line made  by v1
+                cv::Vec2f na(a.x, a.y);
+                na *= (1.0 / norm(na));
+
+                //First point
+                cv::Vec2f ap1 = l1.first - l2.second;
+                cv::Vec2f dist_v1 = ap1 - (ap1.dot(na)) * na;
+
+                //First point
+                cv::Vec2f ap2 = l1.first - l2.first;
+                cv::Vec2f dist_v2 = ap2 - (ap2.dot(na)) * na;
+
+                auto distance_parallel = (norm(dist_v1) + norm(dist_v2)) / 2.0f;*/
+
+                float dist_1 = distance(l1.first, l2.first);
+                float dist_2 = distance(l1.first, l2.second);
+                float dist_3 = distance(l1.second, l2.first);
+                float dist_4 = distance(l1.second, l2.second);
+
+                auto distance = dist_1 < dist_2 ? dist_1 + dist_4 : dist_2 + dist_3;
+
+                //TODO The threshold should be related to the size of the window
+                if(distance < 250.0f){
+                    ++similar;
+                }
+
+                /*if(debug){
+                    std::cout << norm(dist_v1) << std::endl;
+                    std::cout << norm(dist_v2) << std::endl;
+                    std::cout << distance << std::endl;
+                }*/
             }
         }
 
         return similar < 3;
+    }), long_lines.end());
 
-    }), final_lines.end());
+    //TODO Make it more efficient
+    std::copy(long_lines.begin(), long_lines.end(), std::back_inserter(final_lines));
 
     std::cout << "Final lines: " << final_lines.size() << std::endl;
 }
@@ -1363,7 +1424,7 @@ void remove_unsquare(std::vector<square_t>& max_square, const std::vector<cv::Po
 
 //TODO Rename in is_evil_twin
 
-bool is_evil(const square_t& s1, const square_t& s2, const std::vector<square_t>& squares, const std::vector<cv::Point2f>& points){
+size_t is_evil(const square_t& s1, const square_t& s2, const std::vector<square_t>& squares, const std::vector<cv::Point2f>& points){
     size_t a, b;
     if(equals_one_of(std::get<0>(s1), s2) && equals_one_of(std::get<1>(s1), s2)){
         a = std::get<2>(s1);
@@ -1384,7 +1445,7 @@ bool is_evil(const square_t& s1, const square_t& s2, const std::vector<square_t>
         a = std::get<0>(s1);
         b = std::get<1>(s1);
     } else {
-        return false;
+        return 0;
     }
 
     auto ss1 = mse(s1, points);
@@ -1409,29 +1470,47 @@ bool is_evil(const square_t& s1, const square_t& s2, const std::vector<square_t>
 
         if(ca == 0 && cb == 0){
             std::cout << "Evil square found" << std::endl;
-            std::cout << ss1 << std::endl;
-            std::cout << ss2 << std::endl;
 
-            return true;
+            return 1;
+        }
+
+        if((ca == 1 && cb == 0) || (ca == 0 && cb == 1)){
+            std::cout << "Maybe Evil square found" << std::endl;
+
+            return 2;
         }
     }
 
-    return false;
+    return 0;
 }
 
 void remove_evil_squares(std::vector<square_t>& squares, const std::vector<cv::Point2f>& points){
     std::vector<square_t> evil_squares;
+    std::vector<square_t> maybe_evil_squares;
 
     //TODO Maybe not interesting to do several passes
 
     do {
         evil_squares.clear();
+        maybe_evil_squares.clear();
 
-        pairwise_foreach(squares.begin(), squares.end(), [&points,&squares,&evil_squares](const auto& s1, const auto& s2){
-            if(is_evil(s1, s2, squares, points)){
-                evil_squares.push_back(s1);
-            } else if(is_evil(s2, s1, squares, points)){
-                evil_squares.push_back(s2);
+        pairwise_foreach(squares.begin(), squares.end(), [&points,&squares,&maybe_evil_squares,&evil_squares](const auto& s1, const auto& s2){
+            auto evil_s1 = is_evil(s1, s2, squares, points);
+
+            if(evil_s1){
+                if(evil_s1 == 1){
+                    evil_squares.push_back(s1);
+                } else if(evil_s1 == 2){
+                    maybe_evil_squares.push_back(s1);
+                }
+            } else {
+                auto evil_s2 = is_evil(s2, s1, squares, points);
+
+                if(evil_s2 == 1){
+                    evil_squares.push_back(s2);
+                } else if(evil_s2 == 2){
+                    maybe_evil_squares.push_back(s2);
+                }
             }
         });
 
@@ -1454,10 +1533,10 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
     if(Proba){
         std::vector<std::pair<cv::Point2f, cv::Point2f>> lines;
         detect_lines_2(lines, source_image);
-        /*for(auto& line : lines){
+        for(auto& line : lines){
             cv::line(dest_image, line.first, line.second, cv::Scalar(255, 255, 0), 4, CV_AA);
         }
-        return;*/
+        return;
         intersections = find_intersections_direct(lines);
     } else {
         std::vector<cv::Vec2f> lines;
