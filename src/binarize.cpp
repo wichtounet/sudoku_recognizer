@@ -1247,6 +1247,7 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
     std::sort(max_square_i.begin(), max_square_i.end());
     max_square_i.erase(std::unique(max_square_i.begin(), max_square_i.end()), max_square_i.end());
 
+    //Transform indexes into real points
     std::vector<cv::Point2f> max_square_points;
     for(auto& i : max_square_i){
         max_square_points.push_back(points[i]);
