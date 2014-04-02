@@ -683,9 +683,10 @@ void detect_lines_2(std::vector<std::pair<cv::Point2f, cv::Point2f>>& final_line
     }
 }
 
-std::vector<cv::Point2f> find_intersections(const std::vector<std::pair<cv::Point2f, cv::Point2f>>& lines){
+std::vector<cv::Point2f> find_intersections(const std::vector<std::pair<cv::Point2f, cv::Point2f>>& lines, const cv::Mat& source_image){
     std::vector<cv::Point2f> intersections;
 
+    //Detect intersections
     pairwise_foreach(lines.begin(), lines.end(), [&intersections](auto& p1, auto& p2){
         float denom = (p1.first.x - p1.second.x)*(p2.first.y - p2.second.y) - (p1.first.y - p1.second.y)*(p2.first.x - p2.second.x);
         intersections.emplace_back(
@@ -695,6 +696,7 @@ std::vector<cv::Point2f> find_intersections(const std::vector<std::pair<cv::Poin
                 (p1.first.y - p1.second.y)*(p2.first.x*p2.second.y - p2.first.y*p2.second.x)) / denom);
     });
 
+    //Put the points out of the image but very close to it inside the image
     for(auto& i : intersections){
         if(i.x >= -4.0f && i.x < 0.0f){
             i.x = 0.1f;
@@ -703,11 +705,27 @@ std::vector<cv::Point2f> find_intersections(const std::vector<std::pair<cv::Poin
         if(i.y >= -4.0f && i.y < 0.0f){
             i.y = 0.1f;
         }
+
+        if(i.x >= source_image.cols && i.x <= source_image.cols + 4.0f){
+            i.x = source_image.cols - 0.1f;
+        }
+
+        if(i.y >= source_image.rows && i.y <= source_image.rows + 4.0f){
+            i.y = source_image.rows - 0.1f;
+        }
     }
 
-    intersections.erase(std::remove_if(intersections.begin(), intersections.end(), [](const auto& p) -> bool {
-        return std::isnan(p.x) || std::isnan(p.y) || std::isinf(p.x) || std::isinf(p.y);
+    //Filter bad points
+    intersections.erase(std::remove_if(intersections.begin(), intersections.end(), [&source_image](const auto& p) -> bool {
+        return
+                std::isnan(p.x) || std::isnan(p.y) || std::isinf(p.x) || std::isinf(p.y)
+            ||  p.x < 0 || p.y < 0
+            ||  p.x > source_image.cols || p.y > source_image.rows;
     }), intersections.end());
+
+    //Make sure there are no duplicates
+    std::sort(intersections.begin(), intersections.end(), [](auto& a, auto& b){ return a.x < b.x && a.y < b.y; });
+    intersections.erase(std::unique(intersections.begin(), intersections.end()), intersections.end());
 
     return intersections;
 }
@@ -754,7 +772,7 @@ void sudoku_lines_2(const cv::Mat& source_image, cv::Mat& dest_image){
     std::vector<std::pair<cv::Point2f, cv::Point2f>> lines;
     detect_lines_2(lines, source_image, dest_image);
 
-    auto intersections = find_intersections(lines);
+    auto intersections = find_intersections(lines, source_image);
 
     auto clusters = cluster(intersections);
 
@@ -818,7 +836,7 @@ void sudoku_lines_3(const cv::Mat& source_image, cv::Mat& dest_image){
     std::vector<std::pair<cv::Point2f, cv::Point2f>> lines;
     detect_lines_2(lines, source_image, dest_image);
 
-    auto intersections = find_intersections(lines);
+    auto intersections = find_intersections(lines, source_image);
 
     auto clusters = cluster(intersections);
 
@@ -1151,7 +1169,7 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
     std::vector<std::pair<cv::Point2f, cv::Point2f>> lines;
     detect_lines_2(lines, source_image, dest_image);
 
-    auto intersections = find_intersections(lines);
+    auto intersections = find_intersections(lines, source_image);
 
     if(SHOW_INTERSECTIONS){
         for(auto& point : intersections){
