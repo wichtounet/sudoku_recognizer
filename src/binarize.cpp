@@ -11,6 +11,16 @@
 
 namespace {
 
+constexpr const bool SHOW_LINE_SEGMENTS = false;
+constexpr const bool SHOW_MERGED_LINE_SEGMENTS = false;
+constexpr const bool SHOW_LONG_LINES = false;
+constexpr const bool SHOW_FINAL_LINES = false;
+
+constexpr const bool SHOW_INTERSECTIONS = false;
+constexpr const bool SHOW_CLUSTERED_INTERSECTIONS = true;
+constexpr const bool SHOW_SQUARES = false;
+constexpr const bool SHOW_MAX_SQUARES = true;
+
 void method_1(const cv::Mat& source_image, cv::Mat& dest_image){
     cv::Mat gray_image;
     cv::cvtColor(source_image, gray_image, CV_RGB2GRAY);
@@ -459,11 +469,6 @@ bool intersects(const cv::Vec4i& v1, const cv::Vec4i& v2){
         &&  std::min(x3, x4) < x0 && std::max(x3, x4) > x0;
 }
 
-constexpr const bool SHOW_LINE_SEGMENTS = false;
-constexpr const bool SHOW_MERGED_LINE_SEGMENTS = false;
-constexpr const bool SHOW_LONG_LINES = false;
-constexpr const bool SHOW_FINAL_LINES = false;
-
 void detect_lines_2(std::vector<std::pair<cv::Point2f, cv::Point2f>>& final_lines, const cv::Mat& source_image, cv::Mat& dest_image){
     //1. Detect lines
 
@@ -696,22 +701,25 @@ std::vector<cv::Point2f> find_intersections(const std::vector<std::pair<cv::Poin
                 (p1.first.y - p1.second.y)*(p2.first.x*p2.second.y - p2.first.y*p2.second.x)) / denom);
     });
 
+    constexpr const float CLOSE_INTERSECTION_THRESHOLD = 15.0f;
+    constexpr const float CLOSE_INNER_MARGIN = 0.1f;
+
     //Put the points out of the image but very close to it inside the image
     for(auto& i : intersections){
-        if(i.x >= -4.0f && i.x < 0.0f){
-            i.x = 0.1f;
+        if(i.x >= -CLOSE_INTERSECTION_THRESHOLD && i.x < CLOSE_INNER_MARGIN){
+            i.x = CLOSE_INNER_MARGIN;
         }
 
-        if(i.y >= -4.0f && i.y < 0.0f){
-            i.y = 0.1f;
+        if(i.y >= -CLOSE_INTERSECTION_THRESHOLD && i.y < CLOSE_INNER_MARGIN){
+            i.y = CLOSE_INNER_MARGIN;
         }
 
-        if(i.x >= source_image.cols && i.x <= source_image.cols + 4.0f){
-            i.x = source_image.cols - 0.1f;
+        if(i.x >= source_image.cols - CLOSE_INNER_MARGIN && i.x <= source_image.cols + CLOSE_INTERSECTION_THRESHOLD){
+            i.x = source_image.cols - CLOSE_INNER_MARGIN;
         }
 
-        if(i.y >= source_image.rows && i.y <= source_image.rows + 4.0f){
-            i.y = source_image.rows - 0.1f;
+        if(i.y >= source_image.rows - CLOSE_INNER_MARGIN && i.y <= source_image.rows + CLOSE_INTERSECTION_THRESHOLD){
+            i.y = source_image.rows - CLOSE_INNER_MARGIN;
         }
     }
 
@@ -1157,9 +1165,6 @@ void remove_evil_squares(std::vector<square_t>& squares, const std::vector<cv::P
     } while(!evil_squares.empty());
 }
 
-constexpr const bool SHOW_INTERSECTIONS = true;
-constexpr const bool SHOW_CLUSTERED_INTERSECTIONS = true;
-
 //LEGO Algorithm
 void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
     auto_stop_watch<std::chrono::microseconds> watch("sudoku_lines");
@@ -1190,8 +1195,6 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
 
     std::cout << points.size() << " clustered intersections found" << std::endl;
 
-    return;
-
     auto squares = detect_squares(source_image, points);
 
     if(squares.empty()){
@@ -1199,7 +1202,32 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
         return;
     }
 
+    if(SHOW_SQUARES){
+        for(auto& square : squares){
+            draw_square(dest_image,
+                points[std::get<0>(square)], points[std::get<1>(square)],
+                points[std::get<2>(square)], points[std::get<3>(square)]
+                );
+        }
+    }
+
+    std::cout << squares.size() << " squares found" << std::endl;
+
+    //TODO There are very few cases when this is useful, this probably could be removed
     auto max_square = find_max_square(squares, points);
+
+    if(SHOW_MAX_SQUARES){
+        for(auto& square : max_square){
+            draw_square(dest_image,
+                points[std::get<0>(square)], points[std::get<1>(square)],
+                points[std::get<2>(square)], points[std::get<3>(square)]
+                );
+        }
+    }
+
+    return;
+
+    std::cout << "cluster of " << squares.size() << " squares found" << std::endl;
 
     remove_unsquare(max_square, points);
 
