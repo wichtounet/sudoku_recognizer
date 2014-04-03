@@ -6,10 +6,12 @@
 #include "algo.hpp"
 
 //TODO Use more STL algorithms
-//TODO Remove unused stuff
 //TODO Improve constness handling
 
 namespace {
+
+typedef std::pair<cv::Point2f, cv::Point2f> line_t;
+typedef std::tuple<std::size_t,std::size_t,std::size_t,std::size_t> square_t;
 
 constexpr const bool SHOW_LINE_SEGMENTS = false;
 constexpr const bool SHOW_MERGED_LINE_SEGMENTS = false;
@@ -24,7 +26,7 @@ constexpr const bool SHOW_FINAL_SQUARES = false;
 constexpr const bool SHOW_HULL = true;
 constexpr const bool SHOW_GRID = true;
 
-void method_41(const cv::Mat& source_image, cv::Mat& dest_image){
+void binarize(const cv::Mat& source_image, cv::Mat& dest_image){
     cv::Mat gray_image;
     cv::cvtColor(source_image, gray_image, CV_RGB2GRAY);
 
@@ -78,10 +80,7 @@ cv::Point2f gravity(const std::vector<cv::Point2f>& vec){
         y += v.y;
     }
 
-    x /= vec.size();
-    y /= vec.size();
-
-    return cv::Point2f(x, y);
+    return cv::Point2f(x / vec.size(), y / vec.size());
 }
 
 float distance_to_gravity(const cv::Point2f& p, const std::vector<cv::Point2f>& vec){
@@ -115,8 +114,6 @@ bool is_square(const cv::Point2f& p1, const cv::Point2f& p2, const cv::Point2f& 
     return false;
 }
 
-typedef std::pair<cv::Point2f, cv::Point2f> line_t;
-
 float approximate_parallel_distance(const line_t& l1, const line_t& l2){
     //Direction vectors
     cv::Point2f l1_d(l1.second.x - l1.first.x, l1.second.y - l1.first.y);
@@ -139,7 +136,7 @@ float approximate_parallel_distance(const line_t& l1, const line_t& l2){
     return (d1 + d2 + d3 + d4) / 4.0f;
 }
 
-bool on_same_line(cv::Vec4i& v1, cv::Vec4i& v2){
+bool on_same_line(const cv::Vec4i& v1, const cv::Vec4i& v2){
     cv::Point2f a(v1[0] - v1[2], v1[1] - v1[3]);
     cv::Point2f b(v2[0] - v2[2], v2[1] - v2[3]);
 
@@ -217,11 +214,11 @@ bool intersects(const cv::Vec4i& v1, const cv::Vec4i& v2){
         &&  std::min(x3, x4) < x0 && std::max(x3, x4) > x0;
 }
 
-void detect_lines_2(std::vector<std::pair<cv::Point2f, cv::Point2f>>& final_lines, const cv::Mat& source_image, cv::Mat& dest_image){
+void detect_lines(std::vector<line_t>& final_lines, const cv::Mat& source_image, cv::Mat& dest_image){
     //1. Detect lines
 
     cv::Mat binary_image;
-    method_41(source_image, binary_image);
+    binarize(source_image, binary_image);
 
     cv::Mat lines_image;
     constexpr const size_t CANNY_THRESHOLD = 60;
@@ -537,7 +534,7 @@ void detect_lines_2(std::vector<std::pair<cv::Point2f, cv::Point2f>>& final_line
     }
 }
 
-std::vector<cv::Point2f> find_intersections(const std::vector<std::pair<cv::Point2f, cv::Point2f>>& lines, const cv::Mat& source_image){
+std::vector<cv::Point2f> find_intersections(const std::vector<line_t>& lines, const cv::Mat& source_image){
     std::vector<cv::Point2f> intersections;
 
     //Detect intersections
@@ -617,8 +614,6 @@ void draw_points(cv::Mat& dest_image, const std::vector<cv::Point2f>& points, co
         cv::circle(dest_image, point, 1, color, 3);
     }
 }
-
-typedef std::tuple<std::size_t,std::size_t,std::size_t,std::size_t> square_t;
 
 double mse(const square_t& s, const std::vector<cv::Point2f>& points){
     auto& p1 = points[std::get<0>(s)];
@@ -782,14 +777,13 @@ void compute_grid(const std::vector<cv::Point2f>& hull, cv::Mat& dest_image){
     }
 }
 
-//LEGO Algorithm
 void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
     auto_stop_watch<std::chrono::microseconds> watch("sudoku_lines");
 
     dest_image = source_image.clone();
 
     std::vector<std::pair<cv::Point2f, cv::Point2f>> lines;
-    detect_lines_2(lines, source_image, dest_image);
+    detect_lines(lines, source_image, dest_image);
 
     auto intersections = find_intersections(lines, source_image);
 
@@ -887,55 +881,7 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
         }
 
         std::vector<cv::Point2f> hull;
-        cv::Point2f bounding_v[4];
-        cv::RotatedRect bounding;
-
-        bool pruned;
-        do {
-            pruned = false;
-
-            cv::convexHull(max_square_points, hull, false);
-
-            bounding = cv::minAreaRect(hull);
-            bounding.points(bounding_v);
-
-            if(hull.size() > 3){
-/*                for(std::size_t i = 0; i < 4; ++i){
-                    auto& p1 = bounding_v[i];
-                    auto& p2 = bounding_v[i+1%4];
-
-                    cv::Vec2f line(p2.x - p1.x, p2.y - p1.y);
-                    line *= (1.0 / norm(line));
-                    auto a = p1;
-
-                    std::size_t n = 0;
-                    std::vector<cv::Point2f> close;
-
-                    for(auto& hull_p : max_square_points){
-                        cv::Vec2f ap = a - hull_p;
-                        cv::Vec2f dist_v = ap - (ap.dot(line)) * line;
-                        auto dist = norm(dist_v);
-
-                        if(dist < 5.0f){
-                            ++n;
-                            close.push_back(hull_p);
-                        }
-                    }
-
-                    if(!close.empty() && close.size() <= 1){
-                        for(auto& p : close){
-                            max_square_points.erase(
-                                std::remove_if(max_square_points.begin(), max_square_points.end(),
-                                [&p](auto& x) -> bool {return x == p; }),
-                                max_square_points.end());
-                        }
-
-                        pruned = true;
-                        break;
-                    }
-                }
-            */}
-        } while(pruned);
+        cv::convexHull(max_square_points, hull, false);
 
         if(SHOW_HULL){
             for(std::size_t i = 0; i < hull.size(); ++i){
