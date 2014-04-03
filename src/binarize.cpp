@@ -762,25 +762,22 @@ void detect_lines_2(std::vector<std::pair<cv::Point2f, cv::Point2f>>& final_line
                 }
 
                 if(sorted){
-                    /*for(size_t i = 0; i < cluster.size() - 1; ++i){
-                        std::cout << cluster[i].first << std::endl;
-                        std::cout << cluster[i].second << std::endl;
-                        std::cout << approximate_parallel_distance(cluster[i], cluster[i+1]) << std::endl;
-                    }*/
-
                     auto total = 0.0f;
                     for(size_t i = 0; i < cluster.size() - 1; ++i){
                         total += approximate_parallel_distance(cluster[i], cluster[i+1]);
                     }
 
-                    auto mean_first = (total - approximate_parallel_distance(cluster[0], cluster[1])) / (cluster.size() - 1);
-                    auto mean_last = (total - approximate_parallel_distance(cluster[cluster.size() - 2], cluster[cluster.size() - 1])) / (cluster.size() - 1);
+                    auto d_first = approximate_parallel_distance(cluster[0], cluster[1]);
+                    auto d_first_next = approximate_parallel_distance(cluster[1], cluster[2]);
+                    auto mean_first = (total - d_first) / (cluster.size() - 1);
 
-                    if(approximate_parallel_distance(cluster[0], cluster[1]) < 0.6f * mean_first){
+                    auto d_last = approximate_parallel_distance(cluster[cluster.size() - 2], cluster[cluster.size() - 1]);
+                    auto d_last_prev = approximate_parallel_distance(cluster[cluster.size() - 3], cluster[cluster.size() - 2]);
+                    auto mean_last = (total - d_last) / (cluster.size() - 1);
+
+                    if(d_first < 0.6f * mean_first && almost_equals(d_first_next, mean_first, 0.20f)){
                         final_lines.erase(std::remove(final_lines.begin(), final_lines.end(), cluster[0]), final_lines.end());
-                    }
-
-                    if(approximate_parallel_distance(cluster[cluster.size() - 2], cluster[cluster.size() - 1]) < 0.6f * mean_last){
+                    } else if(d_last < 0.6f * mean_last && almost_equals(d_last_prev, mean_last, 0.20f)){
                         final_lines.erase(std::remove(final_lines.begin(), final_lines.end(), cluster[cluster.size() - 1]), final_lines.end());
                     }
                 }
