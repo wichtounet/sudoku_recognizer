@@ -6,7 +6,6 @@
 #include "algo.hpp"
 
 //TODO Use more STL algorithms
-//TODO Improve constness handling
 
 namespace {
 
@@ -233,22 +232,14 @@ void detect_lines(std::vector<line_t>& final_lines, const cv::Mat& source_image,
 
     //Enlarge a bit the lines to enhance the clusters
     for(auto& l : lines){
-        cv::Point2f a(l[0], l[1]);
-        cv::Point2f b(l[2], l[3]);
-
-        cv::Vec2f u(b.x - a.x, b.y - a.y);
+        cv::Vec2f u(l[2] - l[0], l[3] - l[1]);
         u *= 0.02;
 
-        b.x += u[0];
-        b.y += u[1];
+        l[2] += u[0];
+        l[2] += u[1];
 
-        a.x -= u[0];
-        a.y -= u[1];
-
-        l[0] = a.x;
-        l[1] = a.y;
-        l[2] = b.x;
-        l[3] = b.y;
+        l[0] -= u[0];
+        l[1] -= u[1];
     }
 
     std::vector<std::vector<cv::Vec4i>> clusters;
