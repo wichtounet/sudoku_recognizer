@@ -1302,8 +1302,6 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
 
         std::cout << "Final max_square size: " << max_square.size() << std::endl;
 
-        return;
-
         //Get all the points of the squares
         std::vector<std::size_t> max_square_i;
         for(auto& square : max_square){
@@ -1337,7 +1335,7 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
             bounding.points(bounding_v);
 
             if(hull.size() > 3){
-                for(std::size_t i = 0; i < 4; ++i){
+/*                for(std::size_t i = 0; i < 4; ++i){
                     auto& p1 = bounding_v[i];
                     auto& p2 = bounding_v[i+1%4];
 
@@ -1371,7 +1369,7 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
                         break;
                     }
                 }
-            }
+            */}
         } while(pruned);
 
         if(SHOW_HULL){
