@@ -1176,6 +1176,43 @@ void remove_unsquare(std::vector<square_t>& squares, const std::vector<cv::Point
     }
 }
 
+void compute_grid(const std::vector<cv::Point2f>& hull, cv::Mat& dest_image){
+    auto bounding = cv::minAreaRect(hull);
+
+    cv::Point2f bounding_v[4];
+    bounding.points(bounding_v);
+
+    if(SHOW_GRID){
+        for(std::size_t i = 0; i < 4; ++i){
+            cv::line(dest_image, bounding_v[i], bounding_v[(i+1)%4], cv::Scalar(0,0,255), 2, CV_AA);
+        }
+
+        for(std::size_t i = 1; i < 9; ++i){
+            auto mul = (1.0f / 9.0f) * i;
+
+            cv::Point2f p1;
+            p1.x = bounding_v[0].x + mul * (bounding_v[1].x - bounding_v[0].x);
+            p1.y = bounding_v[0].y + mul * (bounding_v[1].y - bounding_v[0].y);
+
+            cv::Point2f p2;
+            p2.x = bounding_v[3].x + mul * (bounding_v[2].x - bounding_v[3].x);
+            p2.y = bounding_v[3].y + mul * (bounding_v[2].y - bounding_v[3].y);
+
+            cv::line(dest_image, p1, p2, cv::Scalar(0,255,0), 2, CV_AA);
+
+            cv::Point2f p3;
+            p3.x = bounding_v[1].x + mul * (bounding_v[2].x - bounding_v[1].x);
+            p3.y = bounding_v[1].y + mul * (bounding_v[2].y - bounding_v[1].y);
+
+            cv::Point2f p4;
+            p4.x = bounding_v[0].x + mul * (bounding_v[3].x - bounding_v[0].x);
+            p4.y = bounding_v[0].y + mul * (bounding_v[3].y - bounding_v[0].y);
+
+            cv::line(dest_image, p3, p4, cv::Scalar(0,255,0), 2, CV_AA);
+        }
+    }
+}
+
 //LEGO Algorithm
 void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
     auto_stop_watch<std::chrono::microseconds> watch("sudoku_lines");
@@ -1219,40 +1256,7 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
             }
         }
 
-        auto bounding = cv::minAreaRect(hull);
-
-        cv::Point2f bounding_v[4];
-        bounding.points(bounding_v);
-
-        if(SHOW_GRID){
-            for(std::size_t i = 0; i < 4; ++i){
-                cv::line(dest_image, bounding_v[i], bounding_v[(i+1)%4], cv::Scalar(0,0,255), 2, CV_AA);
-            }
-
-            for(std::size_t i = 1; i < 9; ++i){
-                auto mul = (1.0f / 9.0f) * i;
-
-                cv::Point2f p1;
-                p1.x = bounding_v[0].x + mul * (bounding_v[1].x - bounding_v[0].x);
-                p1.y = bounding_v[0].y + mul * (bounding_v[1].y - bounding_v[0].y);
-
-                cv::Point2f p2;
-                p2.x = bounding_v[3].x + mul * (bounding_v[2].x - bounding_v[3].x);
-                p2.y = bounding_v[3].y + mul * (bounding_v[2].y - bounding_v[3].y);
-
-                cv::line(dest_image, p1, p2, cv::Scalar(0,255,0), 2, CV_AA);
-
-                cv::Point2f p3;
-                p3.x = bounding_v[1].x + mul * (bounding_v[2].x - bounding_v[1].x);
-                p3.y = bounding_v[1].y + mul * (bounding_v[2].y - bounding_v[1].y);
-
-                cv::Point2f p4;
-                p4.x = bounding_v[0].x + mul * (bounding_v[3].x - bounding_v[0].x);
-                p4.y = bounding_v[0].y + mul * (bounding_v[3].y - bounding_v[0].y);
-
-                cv::line(dest_image, p3, p4, cv::Scalar(0,255,0), 2, CV_AA);
-            }
-        }
+        compute_grid(hull, dest_image);
     } else {
         auto squares = detect_squares(source_image, points);
 
@@ -1370,37 +1374,13 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
             }
         } while(pruned);
 
-        for(std::size_t i = 0; i < hull.size(); ++i){
-            cv::line(dest_image, hull[i], hull[(i+1)%hull.size()], cv::Scalar(128,128,128), 2, CV_AA);
+        if(SHOW_HULL){
+            for(std::size_t i = 0; i < hull.size(); ++i){
+                cv::line(dest_image, hull[i], hull[(i+1)%hull.size()], cv::Scalar(128,128,128), 2, CV_AA);
+            }
         }
 
-        for(std::size_t i = 0; i < 4; ++i){
-            cv::line(dest_image, bounding_v[i], bounding_v[(i+1)%4], cv::Scalar(0,0,255), 2, CV_AA);
-        }
-
-        for(std::size_t i = 1; i < 9; ++i){
-            auto mul = (1.0f / 9.0f) * i;
-
-            cv::Point2f p1;
-            p1.x = bounding_v[0].x + mul * (bounding_v[1].x - bounding_v[0].x);
-            p1.y = bounding_v[0].y + mul * (bounding_v[1].y - bounding_v[0].y);
-
-            cv::Point2f p2;
-            p2.x = bounding_v[3].x + mul * (bounding_v[2].x - bounding_v[3].x);
-            p2.y = bounding_v[3].y + mul * (bounding_v[2].y - bounding_v[3].y);
-
-            cv::line(dest_image, p1, p2, cv::Scalar(0,255,0), 2, CV_AA);
-
-            cv::Point2f p3;
-            p3.x = bounding_v[1].x + mul * (bounding_v[2].x - bounding_v[1].x);
-            p3.y = bounding_v[1].y + mul * (bounding_v[2].y - bounding_v[1].y);
-
-            cv::Point2f p4;
-            p4.x = bounding_v[0].x + mul * (bounding_v[3].x - bounding_v[0].x);
-            p4.y = bounding_v[0].y + mul * (bounding_v[3].y - bounding_v[0].y);
-
-            cv::line(dest_image, p3, p4, cv::Scalar(0,255,0), 2, CV_AA);
-        }
+        compute_grid(hull, dest_image);
     }
 }
 
