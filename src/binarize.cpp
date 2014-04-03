@@ -705,6 +705,8 @@ void detect_lines_2(std::vector<std::pair<cv::Point2f, cv::Point2f>>& final_line
         }
     }
 
+    //6. Filtere extreme outliers
+
     //20 is the optimal number for a Sudoku
     //If there is less, we cannot do anything to add more
     if(final_lines.size() > 20){
@@ -734,57 +736,74 @@ void detect_lines_2(std::vector<std::pair<cv::Point2f, cv::Point2f>>& final_line
             }
         }
 
+        bool cleaned_once = false;
+
         for(auto& cluster : p_clusters){
-            //10 is the optimal size for a cluster
-            if(cluster.size() > 10){
-                float theta = std::fabs(atan((cluster.front().second.y - cluster.front().first.y) / (cluster.front().second.x - cluster.front().first.x)) * 180 / CV_PI);
+            bool cleaned;
 
-                bool sorted = false;
-                if(std::fabs(theta - 90.0f) < 5.0f){
-                    line_t base_line(cv::Point2f(0,0), cv::Point2f(0,100));
+            do {
+                cleaned = false;
 
-                    std::sort(cluster.begin(), cluster.end(), [&base_line](const auto& lhs, const auto& rhs){
-                        return approximate_parallel_distance(lhs, base_line) < approximate_parallel_distance(rhs, base_line);
-                    });
+                //10 is the optimal size for a cluster
+                if(cluster.size() > 10){
+                    std::cout << "cluster " << cluster.size() << std::endl;
 
-                    sorted = true;
-                } else if(std::fabs(theta - 0.0f) < 5.0f){
-                    line_t base_line(cv::Point2f(0,0), cv::Point2f(100,0));
+                    float theta = std::fabs(atan((cluster.front().second.y - cluster.front().first.y) / (cluster.front().second.x - cluster.front().first.x)) * 180 / CV_PI);
 
-                    std::sort(cluster.begin(), cluster.end(), [&base_line](const auto& lhs, const auto& rhs){
-                        return approximate_parallel_distance(lhs, base_line) < approximate_parallel_distance(rhs, base_line);
-                    });
+                    bool sorted = false;
+                    if(std::fabs(theta - 90.0f) < 5.0f){
+                        line_t base_line(cv::Point2f(0,0), cv::Point2f(0,100));
 
-                    sorted = true;
-                } else {
-                    //TODO We need a rotation mechanism to handle such lines
-                    //Or create a base line with the correct angle
-                }
+                        std::sort(cluster.begin(), cluster.end(), [&base_line](const auto& lhs, const auto& rhs){
+                            return approximate_parallel_distance(lhs, base_line) < approximate_parallel_distance(rhs, base_line);
+                        });
 
-                if(sorted){
-                    auto total = 0.0f;
-                    for(size_t i = 0; i < cluster.size() - 1; ++i){
-                        total += approximate_parallel_distance(cluster[i], cluster[i+1]);
+                        sorted = true;
+                    } else if(std::fabs(theta - 0.0f) < 5.0f){
+                        line_t base_line(cv::Point2f(0,0), cv::Point2f(100,0));
+
+                        std::sort(cluster.begin(), cluster.end(), [&base_line](const auto& lhs, const auto& rhs){
+                            return approximate_parallel_distance(lhs, base_line) < approximate_parallel_distance(rhs, base_line);
+                        });
+
+                        sorted = true;
+                    } else {
+                        //TODO We need a rotation mechanism to handle such lines
+                        //Or create a base line with the correct angle
                     }
 
-                    auto d_first = approximate_parallel_distance(cluster[0], cluster[1]);
-                    auto d_first_next = approximate_parallel_distance(cluster[1], cluster[2]);
-                    auto mean_first = (total - d_first) / (cluster.size() - 1);
+                    if(sorted){
+                        auto total = 0.0f;
+                        for(size_t i = 0; i < cluster.size() - 1; ++i){
+                            total += approximate_parallel_distance(cluster[i], cluster[i+1]);
+                        }
 
-                    auto d_last = approximate_parallel_distance(cluster[cluster.size() - 2], cluster[cluster.size() - 1]);
-                    auto d_last_prev = approximate_parallel_distance(cluster[cluster.size() - 3], cluster[cluster.size() - 2]);
-                    auto mean_last = (total - d_last) / (cluster.size() - 1);
+                        auto d_first = approximate_parallel_distance(cluster[0], cluster[1]);
+                        auto d_first_next = approximate_parallel_distance(cluster[1], cluster[2]);
+                        auto mean_first = (total - d_first) / (cluster.size() - 1);
 
-                    if(d_first < 0.6f * mean_first && almost_equals(d_first_next, mean_first, 0.20f)){
-                        final_lines.erase(std::remove(final_lines.begin(), final_lines.end(), cluster[0]), final_lines.end());
-                    } else if(d_last < 0.6f * mean_last && almost_equals(d_last_prev, mean_last, 0.20f)){
-                        final_lines.erase(std::remove(final_lines.begin(), final_lines.end(), cluster[cluster.size() - 1]), final_lines.end());
+                        auto d_last = approximate_parallel_distance(cluster[cluster.size() - 2], cluster[cluster.size() - 1]);
+                        auto d_last_prev = approximate_parallel_distance(cluster[cluster.size() - 3], cluster[cluster.size() - 2]);
+                        auto mean_last = (total - d_last) / (cluster.size() - 1);
+
+                        if((d_first < 0.6f * mean_first || d_first < 0.40f * d_first_next) && almost_equals(d_first_next, mean_first, 0.25f)){
+                            cluster.erase(cluster.begin(), std::next(cluster.begin()));
+                            cleaned_once = cleaned = true;
+                        } else if((d_last < 0.6f * mean_last || d_last < 0.40f * d_last_prev) && almost_equals(d_last_prev, mean_last, 0.20f)){
+                            cluster.erase(std::prev(cluster.end()), cluster.end());
+                            cleaned_once = cleaned = true;
+                        }
+                    } else {
+                        std::cout << "Failed to sort" << std::endl;
                     }
                 }
+            } while(cleaned);
+        }
 
-                if(!sorted){
-                    std::cout << "Failed to sort" << std::endl;
-                }
+        if(cleaned_once){
+            final_lines.clear();
+            for(auto& cluster : p_clusters){
+                std::copy(cluster.begin(), cluster.end(), std::back_inserter(final_lines));
             }
         }
     }
