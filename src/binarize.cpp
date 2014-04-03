@@ -24,40 +24,6 @@ constexpr const bool SHOW_FINAL_SQUARES = false;
 constexpr const bool SHOW_HULL = true;
 constexpr const bool SHOW_GRID = true;
 
-void method_1(const cv::Mat& source_image, cv::Mat& dest_image){
-    cv::Mat gray_image;
-    cv::cvtColor(source_image, gray_image, CV_RGB2GRAY);
-
-    cv::threshold(gray_image, dest_image, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
-}
-
-void method_2(const cv::Mat& source_image, cv::Mat& dest_image){
-    cv::Mat gray_image;
-    cv::cvtColor(source_image, gray_image, CV_RGB2GRAY);
-
-    cv::Mat blurred_image;
-    cv::GaussianBlur(gray_image, blurred_image, cv::Size(5,5), 0, 0);
-
-    cv::threshold(blurred_image, dest_image, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
-}
-
-void method_3(const cv::Mat& source_image, cv::Mat& dest_image){
-    cv::Mat gray_image;
-    cv::cvtColor(source_image, gray_image, CV_RGB2GRAY);
-
-    cv::adaptiveThreshold(gray_image, dest_image, 255, CV_ADAPTIVE_THRESH_GAUSSIAN_C, CV_THRESH_BINARY, 11, 2);
-}
-
-void method_4(const cv::Mat& source_image, cv::Mat& dest_image){
-    cv::Mat gray_image;
-    cv::cvtColor(source_image, gray_image, CV_RGB2GRAY);
-
-    cv::Mat blurred_image = gray_image.clone();
-    cv::medianBlur(gray_image, blurred_image, 3);
-
-    cv::adaptiveThreshold(blurred_image, dest_image, 255, CV_ADAPTIVE_THRESH_GAUSSIAN_C, CV_THRESH_BINARY, 11, 2);
-}
-
 void method_41(const cv::Mat& source_image, cv::Mat& dest_image){
     cv::Mat gray_image;
     cv::cvtColor(source_image, gray_image, CV_RGB2GRAY);
@@ -74,240 +40,20 @@ void method_41(const cv::Mat& source_image, cv::Mat& dest_image){
     cv::morphologyEx(dest_image, dest_image, cv::MORPH_DILATE, structure_elem);
 }
 
-struct integral_image {
-    size_t* const image;
-    const size_t rows;
-    const size_t cols;
-
-    integral_image(size_t rows, size_t cols) : image(new size_t[cols * rows]), rows(rows), cols(cols) {
-        //Nothing
-    }
-
-    ~integral_image(){
-        delete[] image;
-    }
-
-    size_t space = 0;
-
-    size_t& operator()(int64_t i, int64_t j){
-        return image[i * cols + j];
-    }
-};
-
-void method_5(const cv::Mat& source_image, cv::Mat& dest_image){
-    cv::Mat g;
-    cv::cvtColor(source_image, g, CV_RGB2GRAY);
-
-    auto cols = g.cols;
-    auto rows = g.rows;
-
-    integral_image sI(rows, cols);
-    integral_image sIs(rows, cols);
-
-    integral_image I(rows, cols);
-    integral_image Is(rows, cols);
-
-    for(int j = 0; j < cols; ++j){
-        sI(0,j) = g.at<char>(0,j);
-        sIs(0,j) = sI(0,j) * sI(0, j);
-    }
-
-    for(int i = 1; i < rows; i++){
-        for(int j = 0; j < cols; j++){
-            size_t value = g.at<char>(i,j);
-            sI(i,j) = sI(i-1,j) + value;
-            sIs(i,j) = sIs(i-1,j) + value * value;
-        }
-    }
-
-    for(int i = 0; i < rows; ++i){
-        I(i,0) = sI(i,0);
-        Is(i,0) = sIs(i,0);
-    }
-
-    for(int i = 0; i < rows; i++){
-        for(int j = 1; j < cols; j++){
-            I(i, j) = I(i, j-1) + sI(i,j);
-            Is(i, j) = Is(i, j-1) + sIs(i,j);
-        }
-    }
-
-    double k = 0.2;
-    int w = 22;
-    size_t R = 128;
-
-    dest_image = g.clone();
-
-    for(int i = 0; i < rows; ++i){
-        for(int j = 0; j < cols; j++){
-            auto i1 = std::max(0, i - w/2);
-            auto j1 = std::max(0, j - w/2);
-            auto i2 = std::min(rows-1,i + w/2);
-            auto j2 = std::min(cols-1,j + w/2);
-            double area = (i2-i1+1)*(j2-j1+1);
-
-            double diff = 0;
-            double sqdiff = 0;
-
-            if(i1 == 0 && j1 == 0){
-                diff = I(i2,j2);
-                sqdiff = Is(i2,j2);
-            } else if(i1 == 0 && j1 != 0){
-                diff = I(i2,j2) - I(i2,j1-1);
-                sqdiff = Is(i2,j2) - Is(i2,j1-1);
-            } else if(i1 != 0 && j1 == 0){
-                diff = I(i2,j2) - I(i1-1,j2);
-                sqdiff = Is(i2,j2) - Is(i1-1,j2);
-            } else {
-                double diagsum = I(i2,j2) + I(i1-1, j1-1);
-                double idiagsum = I(i2,j1 - 1) + I(i1-1, j2);
-                diff = diagsum - idiagsum;
-                double sqdiagsum = Is(i2,j2) + Is(i1-1, j1-1);
-                double sqidiagsum = Is(i2,j1 - 1) + Is(i1-1, j2);
-                sqdiff = sqdiagsum - sqidiagsum;
-            }
-
-            double m = static_cast<double>(diff) / area;
-            double s = sqrt((sqdiff - diff * diff / area) / (area -1));
-            double t = m * (1 + k * (s / R - 1));
-
-            //std::cout << t << std::endl;
-
-            if(g.at<char>(i,j) < t){
-                dest_image.at<char>(i,j) = 255;
-            } else {
-                dest_image.at<char>(i,j) = 0;
-            }
-        }
-    }
-}
-
-double ordered_distance(const cv::Vec2f& line){
-    auto rho = line[0];
-    auto theta = line[1];
-
-    double a = cos(theta);
-    double b = sin(theta);
-    double x0 = a*rho;
-    double y0 = b*rho;
-
-    cv::Point pt1(cvRound(x0 + 1000 * -b), cvRound(y0 + 1000 * a));
-
-    return sqrt(pt1.x * pt1.x + pt1.y * pt1.y);
-}
-
-double ordered_distance(const cv::Vec2f& l1, const cv::Vec2f& l2){
-    double d1 = ordered_distance(l1);
-    double d2 = ordered_distance(l2);
-    return d2 - d1;
-}
-
-double distance(const cv::Vec2f& l1, const cv::Vec2f& l2){
-    double a = cos(l1[1]);
-    double b = sin(l1[1]);
-    double c1 = l1[0];
-    double c2 = l2[0];
-
-    return abs(c2 - c1) / sqrt(a * a + b * b);
-}
-
-double average_distance(std::vector<cv::Vec2f>& group, std::vector<std::vector<size_t>>& distance_groups){
-    double average = 0;
-    for(size_t i = 0 ; i < distance_groups.size() - 1; ++i){
-        auto d = distance(group[distance_groups[i][0]], group[distance_groups[i+1][0]]);
-
-        average += d;
-    }
-
-    average /= distance_groups.size();
-    return average;
-}
-
-void draw_line(cv::Mat& dest_image, const cv::Vec2f& line){
-    auto rho = line[0];
-    auto theta = line[1];
-
-    double a = cos(theta);
-    double b = sin(theta);
-    double x0 = a*rho;
-    double y0 = b*rho;
-
-    cv::Point pt1(cvRound(x0 + 1000 * -b), cvRound(y0 + 1000 * a));
-    cv::Point pt2(cvRound(x0 - 1000 * -b), cvRound(y0 - 1000 * a));
-
-    cv::line(dest_image, pt1, pt2, cv::Scalar(0,0,255), 2, CV_AA);
-}
-
 constexpr bool almost_equals(float a, float b, float epsilon){
     return a >= (1.0f - epsilon) * b && a <= (1.0f + epsilon) * b;
 }
 
-float sq_distance(const cv::Point2f& p1, const cv::Point2f& p2){
+//Manhattan distance between two points
+float manhattan_distance(const cv::Point2f& p1, const cv::Point2f& p2){
     auto dx = p1.x - p2.x;
     auto dy = p1.y - p2.y;
     return dx * dx + dy * dy;
 }
 
-float distance(const cv::Point2f& p1, const cv::Point2f& p2){
-    return sqrt(sq_distance(p1, p2));
-}
-
-cv::Rect_<float> to_rect(const cv::Point2f& p1, const cv::Point2f& p2, const cv::Point2f& p3, const cv::Point2f& p4){
-    auto d12 = sq_distance(p1, p2);
-    auto d13 = sq_distance(p1, p3);
-    auto d14 = sq_distance(p1, p4);
-    auto d23 = sq_distance(p2, p3);
-    auto d24 = sq_distance(p2, p4);
-    auto d34 = sq_distance(p3, p4);
-
-    auto s = std::min(d12, std::min(d13, std::min(d14, std::min(d23, std::min(d24, d34)))));
-    auto d = 2.0 * s;
-
-    if(almost_equals(d12, d, 0.13f)){
-        return {p1, p2};
-    }
-
-    if(almost_equals(d13, d, 0.13f)){
-        return {p1, p3};
-    }
-
-    if(almost_equals(d14, d, 0.13f)){
-        return {p1, p4};
-    }
-
-    if(almost_equals(d23, d, 0.13f)){
-        return {p2, p3};
-    }
-
-    if(almost_equals(d24, d, 0.13f)){
-        return {p2, p4};
-    }
-
-    return {p3, p4};
-}
-
-void enlarge(cv::Rect_<float>& rect){
-    auto tl = rect.tl();
-    auto br = rect.br();
-
-    tl.x = std::max(.0f, tl.x * 0.975f);
-    tl.y = std::max(.0f, tl.y * 0.975f);
-
-    br.x *= 1.025;
-    br.y *= 1.025;
-
-    rect = cv::Rect_<float>(tl, br);
-}
-
-float square_edge(const cv::Point2f& p1, const cv::Point2f& p2, const cv::Point2f& p3, const cv::Point2f& p4){
-    auto d12 = distance(p1, p2);
-    auto d13 = distance(p1, p3);
-    auto d14 = distance(p1, p4);
-    auto d23 = distance(p2, p3);
-    auto d24 = distance(p2, p4);
-    auto d34 = distance(p3, p4);
-
-    return std::min(d12, std::min(d13, std::min(d14, std::min(d23, std::min(d24, d34)))));
+//Euclidean distance between two points
+float euclidean_distance(const cv::Point2f& p1, const cv::Point2f& p2){
+    return sqrt(manhattan_distance(p1, p2));
 }
 
 void draw_square(cv::Mat& dest_image, const cv::Point2f& p1, const cv::Point2f& p2, const cv::Point2f& p3, const cv::Point2f& p4){
@@ -339,41 +85,16 @@ cv::Point2f gravity(const std::vector<cv::Point2f>& vec){
 }
 
 float distance_to_gravity(const cv::Point2f& p, const std::vector<cv::Point2f>& vec){
-    return distance(p, gravity(vec));
+    return euclidean_distance(p, gravity(vec));
 }
 
-float angle(const cv::Point2f& p1, const cv::Point2f& p2){
-    return atan(p1.cross(p2) / p1.dot(p2));
-}
-
-bool is_square_1(const cv::Point2f& p1, const cv::Point2f& p2, const cv::Point2f& p3, const cv::Point2f& p4){
-    auto d12 = sq_distance(p1, p2);
-    auto d13 = sq_distance(p1, p3);
-    auto d14 = sq_distance(p1, p4);
-    auto d23 = sq_distance(p2, p3);
-    auto d24 = sq_distance(p2, p4);
-    auto d34 = sq_distance(p3, p4);
-
-    auto s = std::min(d12, std::min(d13, std::min(d14, std::min(d23, std::min(d24, d34)))));
-    auto d = std::max(d12, std::max(d13, std::max(d14, std::max(d23, std::max(d24, d34)))));
-
-    if(almost_equals(d, 2.0f * s, 0.13f)){
-        auto sc = almost_equals(d12, s, 0.13f) + almost_equals(d13, s, 0.13f) + almost_equals(d14, s, 0.13f) + almost_equals(d23, s, 0.13f) + almost_equals(d24, s, 0.13f) + almost_equals(d34, s, 0.13f);
-        auto sd = almost_equals(d12, d, 0.13f) + almost_equals(d13, d, 0.13f) + almost_equals(d14, d, 0.13f) + almost_equals(d23, d, 0.13f) + almost_equals(d24, d, 0.13f) + almost_equals(d34, d, 0.13f);
-
-        return sc == 4 && sd == 2;
-    }
-
-    return false;
-}
-
-bool is_square_2(const cv::Point2f& p1, const cv::Point2f& p2, const cv::Point2f& p3, const cv::Point2f& p4){
-    auto d12 = sq_distance(p1, p2);
-    auto d13 = sq_distance(p1, p3);
-    auto d14 = sq_distance(p1, p4);
-    auto d23 = sq_distance(p2, p3);
-    auto d24 = sq_distance(p2, p4);
-    auto d34 = sq_distance(p3, p4);
+bool is_square(const cv::Point2f& p1, const cv::Point2f& p2, const cv::Point2f& p3, const cv::Point2f& p4){
+    auto d12 = manhattan_distance(p1, p2);
+    auto d13 = manhattan_distance(p1, p3);
+    auto d14 = manhattan_distance(p1, p4);
+    auto d23 = manhattan_distance(p2, p3);
+    auto d24 = manhattan_distance(p2, p4);
+    auto d34 = manhattan_distance(p3, p4);
 
     auto s = std::min(d12, std::min(d13, std::min(d14, std::min(d23, std::min(d24, d34)))));
     auto d = std::max(d12, std::max(d13, std::max(d14, std::max(d23, std::max(d24, d34)))));
@@ -381,10 +102,10 @@ bool is_square_2(const cv::Point2f& p1, const cv::Point2f& p2, const cv::Point2f
     if(almost_equals(d, 2.0f * s, 0.5f)){
         cv::Point2f g((p1.x + p2.x + p3.x + p4.x) / 4.0f, (p1.y + p2.y + p3.y + p4.y) / 4.0f);
 
-        auto d1 = sq_distance(p1, g);
-        auto d2 = sq_distance(p2, g);
-        auto d3 = sq_distance(p3, g);
-        auto d4 = sq_distance(p4, g);
+        auto d1 = manhattan_distance(p1, g);
+        auto d2 = manhattan_distance(p2, g);
+        auto d3 = manhattan_distance(p3, g);
+        auto d4 = manhattan_distance(p4, g);
 
         return
             almost_equals(d1, d2, 0.5f) && almost_equals(d1, d3, 0.5f) && almost_equals(d1, d4, 0.5f) &&
@@ -594,12 +315,12 @@ void detect_lines_2(std::vector<std::pair<cv::Point2f, cv::Point2f>>& final_line
                     cv::Point2f c(v2[0], v2[1]);
                     cv::Point2f d(v2[2], v2[3]);
 
-                    auto dab = distance(a, b);
-                    auto dac = distance(a, c);
-                    auto dad = distance(a, d);
-                    auto dbc = distance(b, c);
-                    auto dbd = distance(b, d);
-                    auto dcd = distance(c, d);
+                    auto dab = euclidean_distance(a, b);
+                    auto dac = euclidean_distance(a, c);
+                    auto dad = euclidean_distance(a, d);
+                    auto dbc = euclidean_distance(b, c);
+                    auto dbd = euclidean_distance(b, d);
+                    auto dcd = euclidean_distance(c, d);
 
                     auto max = std::max(dab, std::max(dac, std::max(dad, std::max(dbc, std::max(dbd, dcd)))));
 
@@ -893,158 +614,13 @@ std::vector<cv::Point2f> gravity_points(const std::vector<std::vector<cv::Point2
     return vector_transform(begin(clusters), end(clusters), [](auto& cluster) -> cv::Point2f {return gravity(cluster);});
 }
 
-void draw_points(cv::Mat& dest_image, const std::vector<cv::Point2f>& points){
+void draw_points(cv::Mat& dest_image, const std::vector<cv::Point2f>& points, const cv::Scalar& color){
     for(auto& point : points){
-        cv::circle(dest_image, point, 1, cv::Scalar(0, 0, 255), 3);
+        cv::circle(dest_image, point, 1, color, 3);
     }
 }
 
 typedef std::tuple<std::size_t,std::size_t,std::size_t,std::size_t> square_t;
-
-//MAX Square
-void sudoku_lines_2(const cv::Mat& source_image, cv::Mat& dest_image){
-    auto_stop_watch<std::chrono::microseconds> watch("sudoku_lines");
-
-    dest_image = source_image.clone();
-
-    std::vector<std::pair<cv::Point2f, cv::Point2f>> lines;
-    detect_lines_2(lines, source_image, dest_image);
-
-    auto intersections = find_intersections(lines, source_image);
-
-    auto clusters = cluster(intersections);
-
-    auto points = gravity_points(clusters);
-
-    draw_points(dest_image, points);
-
-    std::cout << points.size() << std::endl;
-
-    float max = 0.0;
-
-    size_t max_i = 0;
-    size_t max_j = 0;
-    size_t max_k = 0;
-    size_t max_l = 0;
-
-    std::vector<square_t> squares;
-
-    for(size_t i = 0; i < points.size(); ++i){
-        for(size_t j = i + 1; j < points.size(); ++j){
-            auto dij = distance(points[i], points[j]);
-
-            if(dij < max){
-                continue;
-            }
-
-            for(size_t k = 0; k < points.size(); ++k){
-                if(k != j && k != i){
-                    for(size_t l = 0; l < points.size(); ++l){
-                        if(l != k && l != j && l != i){
-                            if(is_square_1(points[i], points[j], points[k], points[l])){
-                                max = dij;
-
-                                max_i = i;
-                                max_j = j;
-                                max_k = k;
-                                max_l = l;
-                                squares.emplace_back(i,j,k,l);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    draw_square(dest_image,
-        points[max_i], points[max_j],
-        points[max_k], points[max_l]
-    );
-
-    return;
-}
-
-//MAX square with enough inside points
-void sudoku_lines_3(const cv::Mat& source_image, cv::Mat& dest_image){
-    auto_stop_watch<std::chrono::microseconds> watch("sudoku_lines");
-
-    dest_image = source_image.clone();
-
-    std::vector<std::pair<cv::Point2f, cv::Point2f>> lines;
-    detect_lines_2(lines, source_image, dest_image);
-
-    auto intersections = find_intersections(lines, source_image);
-
-    auto clusters = cluster(intersections);
-
-    auto points = gravity_points(clusters);
-
-    draw_points(dest_image, points);
-
-    float max = 0.0;
-
-    typedef std::tuple<std::size_t,std::size_t,std::size_t,std::size_t> square_t;
-    std::vector<square_t> squares;
-
-    for(size_t i = 0; i < points.size(); ++i){
-        for(size_t j = i + 1; j < points.size(); ++j){
-            auto dij = distance(points[i], points[j]);
-
-            if(dij < 0.3 * source_image.cols || dij < 0.3 * source_image.rows){
-                continue;
-            }
-
-            if(dij < 0.7 * max){
-                continue;
-            }
-
-            for(size_t k = 0; k < points.size(); ++k){
-                if(k != j && k != i){
-                    for(size_t l = 0; l < points.size(); ++l){
-                        if(l != k && l != j && l != i){
-                            if(is_square_1(points[i], points[j], points[k], points[l])){
-                                max = std::max(max, dij);
-
-                                squares.emplace_back(i,j,k,l);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    std::size_t max_inside = 0;
-    square_t max_square;
-
-    for(auto& square : squares){
-        if(distance(points[std::get<0>(square)], points[std::get<1>(square)]) > 0.8 * max){
-            auto rect = to_rect(
-                points[std::get<0>(square)], points[std::get<1>(square)],
-                points[std::get<2>(square)], points[std::get<3>(square)]);
-
-            enlarge(rect);
-
-            std::size_t inside = 0;
-            for(auto& p : points){
-                if(p.inside(rect)){
-                    ++inside;
-                }
-            }
-
-            if(inside > max_inside){
-                max_square = square;
-                max_inside = inside;
-            }
-        }
-    }
-
-    draw_square(dest_image,
-        points[std::get<0>(max_square)], points[std::get<1>(max_square)],
-        points[std::get<2>(max_square)], points[std::get<3>(max_square)]
-    );
-}
 
 double mse(const square_t& s, const std::vector<cv::Point2f>& points){
     auto& p1 = points[std::get<0>(s)];
@@ -1052,12 +628,12 @@ double mse(const square_t& s, const std::vector<cv::Point2f>& points){
     auto& p3 = points[std::get<2>(s)];
     auto& p4 = points[std::get<3>(s)];
 
-    auto d12 = distance(p1, p2);
-    auto d13 = distance(p1, p3);
-    auto d14 = distance(p1, p4);
-    auto d23 = distance(p2, p3);
-    auto d24 = distance(p2, p4);
-    auto d34 = distance(p3, p4);
+    auto d12 = euclidean_distance(p1, p2);
+    auto d13 = euclidean_distance(p1, p3);
+    auto d14 = euclidean_distance(p1, p4);
+    auto d23 = euclidean_distance(p2, p3);
+    auto d24 = euclidean_distance(p2, p4);
+    auto d34 = euclidean_distance(p3, p4);
 
     return (d12 + d13 + d14 + d23 + d24 + d34) / 6.0f;
 }
@@ -1081,7 +657,7 @@ std::vector<square_t> detect_squares(const cv::Mat& source_image, const std::vec
 
     for(size_t i = 0; i < points.size(); ++i){
         for(size_t j = i + 1; j < points.size(); ++j){
-            auto dij = distance(points[i], points[j]);
+            auto dij = euclidean_distance(points[i], points[j]);
 
             if(dij > limit){
                 continue;
@@ -1089,7 +665,7 @@ std::vector<square_t> detect_squares(const cv::Mat& source_image, const std::vec
 
             for(size_t k = j + 1; k < points.size(); ++k){
                 for(size_t l = k + 1; l < points.size(); ++l){
-                    if(is_square_2(points[i], points[j], points[k], points[l])){
+                    if(is_square(points[i], points[j], points[k], points[l])){
                         squares.emplace_back(i,j,k,l);
                     }
                 }
@@ -1100,11 +676,6 @@ std::vector<square_t> detect_squares(const cv::Mat& source_image, const std::vec
     std::cout << "Found " << squares.size() << " squares" << std::endl;
 
     return squares;
-}
-
-typedef std::tuple<std::size_t,std::size_t,std::size_t,std::size_t> square_t;
-bool equals_one_of(std::size_t a, const square_t& other){
-    return a == std::get<0>(other) || a == std::get<1>(other) || a == std::get<2>(other) || a == std::get<3>(other);
 }
 
 std::vector<square_t> find_max_square(const std::vector<square_t>& squares, const std::vector<cv::Point2f>& points){
@@ -1157,10 +728,10 @@ void remove_unsquare(std::vector<square_t>& squares, const std::vector<cv::Point
 
         cv::Point2f g((p1.x + p2.x + p3.x + p4.x) / 4.0f, (p1.y + p2.y + p3.y + p4.y) / 4.0f);
 
-        auto d1 = sq_distance(p1, g);
-        auto d2 = sq_distance(p2, g);
-        auto d3 = sq_distance(p3, g);
-        auto d4 = sq_distance(p4, g);
+        auto d1 = manhattan_distance(p1, g);
+        auto d2 = manhattan_distance(p2, g);
+        auto d3 = manhattan_distance(p3, g);
+        auto d4 = manhattan_distance(p4, g);
 
         auto diffs = std::fabs(d1 - d2) + std::fabs(d1 - d3) + std::fabs(d1 - d4) + std::fabs(d2 - d3) + std::fabs(d2 - d4) + std::fabs(d3 - d4);
         auto norm = d1 + d2 + d3 + d4;
@@ -1225,9 +796,7 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
     auto intersections = find_intersections(lines, source_image);
 
     if(SHOW_INTERSECTIONS){
-        for(auto& point : intersections){
-            cv::circle(dest_image, point, 1, cv::Scalar(0, 0, 255), 3);
-        }
+        draw_points(dest_image, intersections, cv::Scalar(0,0,255));
     }
 
     std::cout << intersections.size() << " intersections found" << std::endl;
@@ -1236,9 +805,7 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
     auto points = gravity_points(clusters);
 
     if(SHOW_CLUSTERED_INTERSECTIONS){
-        for(auto& point : points){
-            cv::circle(dest_image, point, 1, cv::Scalar(255, 0, 0), 3);
-        }
+        draw_points(dest_image, points, cv::Scalar(255,0,0));
     }
 
     std::cout << points.size() << " clustered intersections found" << std::endl;
