@@ -468,8 +468,6 @@ void detect_lines_2(std::vector<std::pair<cv::Point2f, cv::Point2f>>& final_line
 
                 //10 is the optimal size for a cluster
                 if(cluster.size() > 10){
-                    std::cout << "cluster " << cluster.size() << std::endl;
-
                     float theta = std::fabs(atan((cluster.front().second.y - cluster.front().first.y) / (cluster.front().second.x - cluster.front().first.x)) * 180 / CV_PI);
 
                     bool sorted = false;
