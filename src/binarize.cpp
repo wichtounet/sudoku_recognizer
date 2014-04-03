@@ -213,6 +213,10 @@ bool intersects(const cv::Vec4i& v1, const cv::Vec4i& v2){
         &&  std::min(x3, x4) < x0 && std::max(x3, x4) > x0;
 }
 
+float angle(const line_t& l){
+    return std::fabs(atan((l.second.y - l.first.y) / (l.second.x - l.first.x)) * 180 / CV_PI);
+}
+
 void detect_lines(std::vector<line_t>& final_lines, const cv::Mat& source_image, cv::Mat& dest_image){
     //1. Detect lines
 
@@ -288,15 +292,12 @@ void detect_lines(std::vector<line_t>& final_lines, const cv::Mat& source_image,
         merged = false;
 
         auto it = max_cluster.begin();
-        auto end = max_cluster.end();
 
-        while(it != end){
+        while(it != max_cluster.end()){
             auto& v1 = *it;
 
-            auto nit = std::next(it);
-            while(nit != end){
-                auto& v2 = *nit;
-
+            auto before = max_cluster.size();
+            max_cluster.erase(std::remove_if(std::next(it), max_cluster.end(), [&v1](auto& v2){
                 if(on_same_line(v1, v2)){
                     cv::Point2f a(v1[0], v1[1]);
                     cv::Point2f b(v1[2], v1[3]);
@@ -334,16 +335,14 @@ void detect_lines(std::vector<line_t>& final_lines, const cv::Mat& source_image,
                         v1 = v2;
                     }
 
-                    merged = true;
-
-                    nit = max_cluster.erase(nit);
-                    end = max_cluster.end();
+                    return true;
                 } else {
-                    ++nit;
+                    return false;
                 }
-            }
+            }), max_cluster.end());
 
-            if(merged){
+            if(max_cluster.size() != before){
+                merged = true;
                 break;
             }
 
@@ -397,25 +396,17 @@ void detect_lines(std::vector<line_t>& final_lines, const cv::Mat& source_image,
 
     //5. Filter intruders
 
-    for(auto& l1 : long_lines){
-        std::size_t similar = 0;
+    std::copy_if(long_lines.begin(), long_lines.end(), std::back_inserter(final_lines), [&long_lines](auto& l1){
+        auto theta1 = angle(l1);
 
-        float rho_1 = std::fabs(atan((l1.second.y - l1.first.y) / (l1.second.x - l1.first.x)) * 180 / CV_PI);
+        auto similar = std::count_if(long_lines.begin(), long_lines.end(), [theta1](auto& l2){
+            return std::fabs(angle(l2) - theta1) <= 2.0f;
+        });
 
-        for(auto& l2 : long_lines){
-            float rho_2 = std::fabs(atan((l2.second.y - l2.first.y) / (l2.second.x - l2.first.x)) * 180 / CV_PI);
+        return similar >= 3;
+    });
 
-            if(std::fabs(rho_2 - rho_1) <= 2.0f){
-                ++similar;
-            }
-        }
-
-        if(similar >= 3){
-            final_lines.push_back(l1);
-        }
-    }
-
-    //6. Filtere extreme outliers
+    //6. Filter extreme outliers
 
     //20 is the optimal number for a Sudoku
     //If there is less, we cannot do anything to add more
@@ -423,26 +414,22 @@ void detect_lines(std::vector<line_t>& final_lines, const cv::Mat& source_image,
         std::vector<std::vector<line_t>> p_clusters;
 
         for(auto& l1 : final_lines){
-            float rho_1 = std::fabs(atan((l1.second.y - l1.first.y) / (l1.second.x - l1.first.x)) * 180 / CV_PI);
+            auto theta1 = angle(l1);
 
-            bool found = false;
-
-            for(auto& cluster : p_clusters){
+            auto it = std::find_if(p_clusters.begin(), p_clusters.end(), [theta1](const auto& cluster){
                 for(auto& l2 : cluster){
-                    float rho_2 = std::fabs(atan((l2.second.y - l2.first.y) / (l2.second.x - l2.first.x)) * 180 / CV_PI);
-
-                    if(std::fabs(rho_2 - rho_1) <= 10.0f){
-                        cluster.push_back(l1);
-                        found = true;
-                        break;
+                    if(std::fabs(angle(l2) - theta1) <= 10.0f){
+                        return true;
                     }
                 }
-                if(found){
-                    break;
-                }
-            }
-            if(!found){
+
+                return false;
+            });
+
+            if(it == p_clusters.end()){
                 p_clusters.push_back({l1});
+            } else {
+                it->push_back(l1);
             }
         }
 
@@ -456,7 +443,7 @@ void detect_lines(std::vector<line_t>& final_lines, const cv::Mat& source_image,
 
                 //10 is the optimal size for a cluster
                 if(cluster.size() > 10){
-                    float theta = std::fabs(atan((cluster.front().second.y - cluster.front().first.y) / (cluster.front().second.x - cluster.front().first.x)) * 180 / CV_PI);
+                    auto theta = angle(cluster.front());
 
                     bool sorted = false;
                     if(std::fabs(theta - 90.0f) < 5.0f){
@@ -561,7 +548,7 @@ std::vector<cv::Point2f> find_intersections(const std::vector<line_t>& lines, co
     }
 
     //Filter bad points
-    intersections.erase(std::remove_if(intersections.begin(), intersections.end(), [&source_image](const auto& p) -> bool {
+    intersections.erase(std::remove_if(intersections.begin(), intersections.end(), [&source_image](const auto& p){
         return
                 std::isnan(p.x) || std::isnan(p.y) || std::isinf(p.x) || std::isinf(p.y)
             ||  p.x < 0 || p.y < 0
@@ -579,17 +566,14 @@ std::vector<std::vector<cv::Point2f>> cluster(const std::vector<cv::Point2f>& in
     std::vector<std::vector<cv::Point2f>> clusters;
 
     for(auto& i : intersections){
-        bool found = false;
-        for(auto& cluster : clusters){
-            if(distance_to_gravity(i, cluster) < 10.0f){
-                cluster.push_back(i);
-                found = true;
-                break;
-            }
-        }
+        auto it = std::find_if(clusters.begin(), clusters.end(), [&i](auto& cluster){
+            return distance_to_gravity(i, cluster) < 10.0f;
+        });
 
-        if(!found){
+        if(it == clusters.end()){
             clusters.push_back({i});
+        } else {
+            it->push_back(i);
         }
     }
 
@@ -699,12 +683,7 @@ std::vector<square_t> find_max_square(const std::vector<square_t>& squares, cons
 }
 
 void remove_unsquare(std::vector<square_t>& squares, const std::vector<cv::Point2f>& points){
-    auto it = squares.begin();
-    auto end = squares.end();
-
-    while(it != end){
-        auto& square = *it;
-
+    squares.erase(std::remove_if(squares.begin(), squares.end(), [&points](auto& square){
         auto& p1 = points[std::get<0>(square)];
         auto& p2 = points[std::get<1>(square)];
         auto& p3 = points[std::get<2>(square)];
@@ -722,13 +701,8 @@ void remove_unsquare(std::vector<square_t>& squares, const std::vector<cv::Point
 
         auto squareness = diffs / norm;
 
-        if(squareness > 0.33){
-            it = squares.erase(it);
-            end = squares.end();
-        } else {
-            ++it;
-        }
-    }
+        return squareness > 0.33;
+    }), squares.end());
 }
 
 void compute_grid(const std::vector<cv::Point2f>& hull, cv::Mat& dest_image){
@@ -745,23 +719,23 @@ void compute_grid(const std::vector<cv::Point2f>& hull, cv::Mat& dest_image){
         for(std::size_t i = 1; i < 9; ++i){
             auto mul = (1.0f / 9.0f) * i;
 
-            cv::Point2f p1;
-            p1.x = bounding_v[0].x + mul * (bounding_v[1].x - bounding_v[0].x);
-            p1.y = bounding_v[0].y + mul * (bounding_v[1].y - bounding_v[0].y);
+            cv::Point2f p1(
+                bounding_v[0].x + mul * (bounding_v[1].x - bounding_v[0].x),
+                bounding_v[0].y + mul * (bounding_v[1].y - bounding_v[0].y));
 
-            cv::Point2f p2;
-            p2.x = bounding_v[3].x + mul * (bounding_v[2].x - bounding_v[3].x);
-            p2.y = bounding_v[3].y + mul * (bounding_v[2].y - bounding_v[3].y);
+            cv::Point2f p2(
+                bounding_v[3].x + mul * (bounding_v[2].x - bounding_v[3].x),
+                bounding_v[3].y + mul * (bounding_v[2].y - bounding_v[3].y));
 
             cv::line(dest_image, p1, p2, cv::Scalar(0,255,0), 2, CV_AA);
 
-            cv::Point2f p3;
-            p3.x = bounding_v[1].x + mul * (bounding_v[2].x - bounding_v[1].x);
-            p3.y = bounding_v[1].y + mul * (bounding_v[2].y - bounding_v[1].y);
+            cv::Point2f p3(
+                bounding_v[1].x + mul * (bounding_v[2].x - bounding_v[1].x),
+                bounding_v[1].y + mul * (bounding_v[2].y - bounding_v[1].y));
 
-            cv::Point2f p4;
-            p4.x = bounding_v[0].x + mul * (bounding_v[3].x - bounding_v[0].x);
-            p4.y = bounding_v[0].y + mul * (bounding_v[3].y - bounding_v[0].y);
+            cv::Point2f p4(
+                bounding_v[0].x + mul * (bounding_v[3].x - bounding_v[0].x),
+                bounding_v[0].y + mul * (bounding_v[3].y - bounding_v[0].y));
 
             cv::line(dest_image, p3, p4, cv::Scalar(0,255,0), 2, CV_AA);
         }
@@ -866,10 +840,8 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
         max_square_i.erase(std::unique(max_square_i.begin(), max_square_i.end()), max_square_i.end());
 
         //Transform indexes into real points
-        std::vector<cv::Point2f> max_square_points;
-        for(auto& i : max_square_i){
-            max_square_points.push_back(points[i]);
-        }
+        auto max_square_points = vector_transform(max_square_i.begin(), max_square_i.end(),
+            [&points](auto& i){return points[i];});
 
         std::vector<cv::Point2f> hull;
         cv::convexHull(max_square_points, hull, false);
