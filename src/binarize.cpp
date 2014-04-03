@@ -14,14 +14,15 @@ namespace {
 constexpr const bool SHOW_LINE_SEGMENTS = false;
 constexpr const bool SHOW_MERGED_LINE_SEGMENTS = false;
 constexpr const bool SHOW_LONG_LINES = false;
-constexpr const bool SHOW_FINAL_LINES = true;
+constexpr const bool SHOW_FINAL_LINES = false;
 
 constexpr const bool SHOW_INTERSECTIONS = false;
 constexpr const bool SHOW_CLUSTERED_INTERSECTIONS = true;
 constexpr const bool SHOW_SQUARES = false;
 constexpr const bool SHOW_MAX_SQUARES = false;
-constexpr const bool SHOW_FILTERED_MAX_SQUARES = false;
 constexpr const bool SHOW_FINAL_SQUARES = false;
+constexpr const bool SHOW_HULL = true;
+constexpr const bool SHOW_GRID = true;
 
 void method_1(const cv::Mat& source_image, cv::Mat& dest_image){
     cv::Mat gray_image;
@@ -1305,165 +1306,201 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
 
     std::cout << points.size() << " clustered intersections found" << std::endl;
 
-    auto squares = detect_squares(source_image, points);
+    //If the detected lines are optimal, the number of intersection is 100
+    //In that case, no need to more post processing, just get the grid around
+    //the points
+    if(points.size() == 100){
+        std::vector<cv::Point2f> hull;
+        cv::convexHull(points, hull, false);
 
-    if(squares.empty()){
-        std::cout << "Failed to detect squares" << std::endl;
-        return;
-    }
-
-    if(SHOW_SQUARES){
-        for(auto& square : squares){
-            draw_square(dest_image,
-                points[std::get<0>(square)], points[std::get<1>(square)],
-                points[std::get<2>(square)], points[std::get<3>(square)]
-                );
-        }
-    }
-
-    std::cout << squares.size() << " squares found" << std::endl;
-
-    auto max_square = find_max_square(squares, points);
-
-    if(SHOW_MAX_SQUARES){
-        for(auto& square : max_square){
-            draw_square(dest_image,
-                points[std::get<0>(square)], points[std::get<1>(square)],
-                points[std::get<2>(square)], points[std::get<3>(square)]
-                );
-        }
-    }
-
-    std::cout << "cluster of " << max_square.size() << " squares found" << std::endl;
-
-    remove_unsquare(max_square, points);
-
-    if(SHOW_FILTERED_MAX_SQUARES){
-        for(auto& square : max_square){
-            draw_square(dest_image,
-                points[std::get<0>(square)], points[std::get<1>(square)],
-                points[std::get<2>(square)], points[std::get<3>(square)]
-                );
-        }
-    }
-
-    std::cout << "cluster reduced to " << max_square.size() << " squares" << std::endl;
-
-    return;
-
-    remove_evil_squares(max_square, points);
-
-    if(SHOW_FINAL_SQUARES){
-        for(auto& square : max_square){
-            draw_square(dest_image,
-                points[std::get<0>(square)], points[std::get<1>(square)],
-                points[std::get<2>(square)], points[std::get<3>(square)]
-                );
-        }
-    }
-
-    std::cout << "Final max_square size: " << max_square.size() << std::endl;
-
-    //Get all the points of the squares
-    std::vector<std::size_t> max_square_i;
-    for(auto& square : max_square){
-        max_square_i.push_back(std::get<0>(square));
-        max_square_i.push_back(std::get<1>(square));
-        max_square_i.push_back(std::get<2>(square));
-        max_square_i.push_back(std::get<3>(square));
-    }
-
-    //Removes similar points
-    std::sort(max_square_i.begin(), max_square_i.end());
-    max_square_i.erase(std::unique(max_square_i.begin(), max_square_i.end()), max_square_i.end());
-
-    //Transform indexes into real points
-    std::vector<cv::Point2f> max_square_points;
-    for(auto& i : max_square_i){
-        max_square_points.push_back(points[i]);
-    }
-
-    std::vector<cv::Point2f> hull;
-    cv::Point2f bounding_v[4];
-    cv::RotatedRect bounding;
-
-    bool pruned;
-    do {
-        pruned = false;
-
-        cv::convexHull(max_square_points, hull, false);
-
-        bounding = cv::minAreaRect(hull);
-        bounding.points(bounding_v);
-
-        if(hull.size() > 3){
-            for(std::size_t i = 0; i < 4; ++i){
-                auto& p1 = bounding_v[i];
-                auto& p2 = bounding_v[i+1%4];
-
-                cv::Vec2f line(p2.x - p1.x, p2.y - p1.y);
-                line *= (1.0 / norm(line));
-                auto a = p1;
-
-                std::size_t n = 0;
-                std::vector<cv::Point2f> close;
-
-                for(auto& hull_p : max_square_points){
-                    cv::Vec2f ap = a - hull_p;
-                    cv::Vec2f dist_v = ap - (ap.dot(line)) * line;
-                    auto dist = norm(dist_v);
-
-                    if(dist < 5.0f){
-                        ++n;
-                        close.push_back(hull_p);
-                    }
-                }
-
-                if(!close.empty() && close.size() <= 1){
-                    for(auto& p : close){
-                        max_square_points.erase(
-                            std::remove_if(max_square_points.begin(), max_square_points.end(),
-                                [&p](auto& x) -> bool {return x == p; }),
-                            max_square_points.end());
-                    }
-
-                    pruned = true;
-                    break;
-                }
+        if(SHOW_HULL){
+            for(std::size_t i = 0; i < hull.size(); ++i){
+                cv::line(dest_image, hull[i], hull[(i+1)%hull.size()], cv::Scalar(128,128,128), 2, CV_AA);
             }
         }
-    } while(pruned);
 
-    for(std::size_t i = 0; i < hull.size(); ++i){
-        cv::line(dest_image, hull[i], hull[(i+1)%hull.size()], cv::Scalar(128,128,128), 2, CV_AA);
-    }
+        auto bounding = cv::minAreaRect(hull);
 
-    for(std::size_t i = 0; i < 4; ++i){
-        cv::line(dest_image, bounding_v[i], bounding_v[(i+1)%4], cv::Scalar(0,0,255), 2, CV_AA);
-    }
+        cv::Point2f bounding_v[4];
+        bounding.points(bounding_v);
 
-    for(std::size_t i = 1; i < 9; ++i){
-        auto mul = (1.0f / 9.0f) * i;
+        if(SHOW_GRID){
+            for(std::size_t i = 0; i < 4; ++i){
+                cv::line(dest_image, bounding_v[i], bounding_v[(i+1)%4], cv::Scalar(0,0,255), 2, CV_AA);
+            }
 
-        cv::Point2f p1;
-        p1.x = bounding_v[0].x + mul * (bounding_v[1].x - bounding_v[0].x);
-        p1.y = bounding_v[0].y + mul * (bounding_v[1].y - bounding_v[0].y);
+            for(std::size_t i = 1; i < 9; ++i){
+                auto mul = (1.0f / 9.0f) * i;
 
-        cv::Point2f p2;
-        p2.x = bounding_v[3].x + mul * (bounding_v[2].x - bounding_v[3].x);
-        p2.y = bounding_v[3].y + mul * (bounding_v[2].y - bounding_v[3].y);
+                cv::Point2f p1;
+                p1.x = bounding_v[0].x + mul * (bounding_v[1].x - bounding_v[0].x);
+                p1.y = bounding_v[0].y + mul * (bounding_v[1].y - bounding_v[0].y);
 
-        cv::line(dest_image, p1, p2, cv::Scalar(0,255,0), 2, CV_AA);
+                cv::Point2f p2;
+                p2.x = bounding_v[3].x + mul * (bounding_v[2].x - bounding_v[3].x);
+                p2.y = bounding_v[3].y + mul * (bounding_v[2].y - bounding_v[3].y);
 
-        cv::Point2f p3;
-        p3.x = bounding_v[1].x + mul * (bounding_v[2].x - bounding_v[1].x);
-        p3.y = bounding_v[1].y + mul * (bounding_v[2].y - bounding_v[1].y);
+                cv::line(dest_image, p1, p2, cv::Scalar(0,255,0), 2, CV_AA);
 
-        cv::Point2f p4;
-        p4.x = bounding_v[0].x + mul * (bounding_v[3].x - bounding_v[0].x);
-        p4.y = bounding_v[0].y + mul * (bounding_v[3].y - bounding_v[0].y);
+                cv::Point2f p3;
+                p3.x = bounding_v[1].x + mul * (bounding_v[2].x - bounding_v[1].x);
+                p3.y = bounding_v[1].y + mul * (bounding_v[2].y - bounding_v[1].y);
 
-        cv::line(dest_image, p3, p4, cv::Scalar(0,255,0), 2, CV_AA);
+                cv::Point2f p4;
+                p4.x = bounding_v[0].x + mul * (bounding_v[3].x - bounding_v[0].x);
+                p4.y = bounding_v[0].y + mul * (bounding_v[3].y - bounding_v[0].y);
+
+                cv::line(dest_image, p3, p4, cv::Scalar(0,255,0), 2, CV_AA);
+            }
+        }
+    } else {
+        auto squares = detect_squares(source_image, points);
+
+        if(squares.empty()){
+            std::cout << "Failed to detect squares" << std::endl;
+            return;
+        }
+
+        if(SHOW_SQUARES){
+            for(auto& square : squares){
+                draw_square(dest_image,
+                    points[std::get<0>(square)], points[std::get<1>(square)],
+                    points[std::get<2>(square)], points[std::get<3>(square)]
+                    );
+            }
+        }
+
+        std::cout << squares.size() << " squares found" << std::endl;
+
+        auto max_square = find_max_square(squares, points);
+
+        if(SHOW_MAX_SQUARES){
+            for(auto& square : max_square){
+                draw_square(dest_image,
+                    points[std::get<0>(square)], points[std::get<1>(square)],
+                    points[std::get<2>(square)], points[std::get<3>(square)]
+                    );
+            }
+        }
+
+        std::cout << "cluster of " << max_square.size() << " squares found" << std::endl;
+
+        remove_unsquare(max_square, points);
+
+        if(SHOW_FINAL_SQUARES){
+            for(auto& square : max_square){
+                draw_square(dest_image,
+                    points[std::get<0>(square)], points[std::get<1>(square)],
+                    points[std::get<2>(square)], points[std::get<3>(square)]
+                    );
+            }
+        }
+
+        std::cout << "Final max_square size: " << max_square.size() << std::endl;
+
+        return;
+
+        //Get all the points of the squares
+        std::vector<std::size_t> max_square_i;
+        for(auto& square : max_square){
+            max_square_i.push_back(std::get<0>(square));
+            max_square_i.push_back(std::get<1>(square));
+            max_square_i.push_back(std::get<2>(square));
+            max_square_i.push_back(std::get<3>(square));
+        }
+
+        //Removes similar points
+        std::sort(max_square_i.begin(), max_square_i.end());
+        max_square_i.erase(std::unique(max_square_i.begin(), max_square_i.end()), max_square_i.end());
+
+        //Transform indexes into real points
+        std::vector<cv::Point2f> max_square_points;
+        for(auto& i : max_square_i){
+            max_square_points.push_back(points[i]);
+        }
+
+        std::vector<cv::Point2f> hull;
+        cv::Point2f bounding_v[4];
+        cv::RotatedRect bounding;
+
+        bool pruned;
+        do {
+            pruned = false;
+
+            cv::convexHull(max_square_points, hull, false);
+
+            bounding = cv::minAreaRect(hull);
+            bounding.points(bounding_v);
+
+            if(hull.size() > 3){
+                for(std::size_t i = 0; i < 4; ++i){
+                    auto& p1 = bounding_v[i];
+                    auto& p2 = bounding_v[i+1%4];
+
+                    cv::Vec2f line(p2.x - p1.x, p2.y - p1.y);
+                    line *= (1.0 / norm(line));
+                    auto a = p1;
+
+                    std::size_t n = 0;
+                    std::vector<cv::Point2f> close;
+
+                    for(auto& hull_p : max_square_points){
+                        cv::Vec2f ap = a - hull_p;
+                        cv::Vec2f dist_v = ap - (ap.dot(line)) * line;
+                        auto dist = norm(dist_v);
+
+                        if(dist < 5.0f){
+                            ++n;
+                            close.push_back(hull_p);
+                        }
+                    }
+
+                    if(!close.empty() && close.size() <= 1){
+                        for(auto& p : close){
+                            max_square_points.erase(
+                                std::remove_if(max_square_points.begin(), max_square_points.end(),
+                                [&p](auto& x) -> bool {return x == p; }),
+                                max_square_points.end());
+                        }
+
+                        pruned = true;
+                        break;
+                    }
+                }
+            }
+        } while(pruned);
+
+        for(std::size_t i = 0; i < hull.size(); ++i){
+            cv::line(dest_image, hull[i], hull[(i+1)%hull.size()], cv::Scalar(128,128,128), 2, CV_AA);
+        }
+
+        for(std::size_t i = 0; i < 4; ++i){
+            cv::line(dest_image, bounding_v[i], bounding_v[(i+1)%4], cv::Scalar(0,0,255), 2, CV_AA);
+        }
+
+        for(std::size_t i = 1; i < 9; ++i){
+            auto mul = (1.0f / 9.0f) * i;
+
+            cv::Point2f p1;
+            p1.x = bounding_v[0].x + mul * (bounding_v[1].x - bounding_v[0].x);
+            p1.y = bounding_v[0].y + mul * (bounding_v[1].y - bounding_v[0].y);
+
+            cv::Point2f p2;
+            p2.x = bounding_v[3].x + mul * (bounding_v[2].x - bounding_v[3].x);
+            p2.y = bounding_v[3].y + mul * (bounding_v[2].y - bounding_v[3].y);
+
+            cv::line(dest_image, p1, p2, cv::Scalar(0,255,0), 2, CV_AA);
+
+            cv::Point2f p3;
+            p3.x = bounding_v[1].x + mul * (bounding_v[2].x - bounding_v[1].x);
+            p3.y = bounding_v[1].y + mul * (bounding_v[2].y - bounding_v[1].y);
+
+            cv::Point2f p4;
+            p4.x = bounding_v[0].x + mul * (bounding_v[3].x - bounding_v[0].x);
+            p4.y = bounding_v[0].y + mul * (bounding_v[3].y - bounding_v[0].y);
+
+            cv::line(dest_image, p3, p4, cv::Scalar(0,255,0), 2, CV_AA);
+        }
     }
 }
 
