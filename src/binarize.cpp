@@ -14,13 +14,14 @@ namespace {
 constexpr const bool SHOW_LINE_SEGMENTS = false;
 constexpr const bool SHOW_MERGED_LINE_SEGMENTS = false;
 constexpr const bool SHOW_LONG_LINES = false;
-constexpr const bool SHOW_FINAL_LINES = false;
+constexpr const bool SHOW_FINAL_LINES = true;
 
 constexpr const bool SHOW_INTERSECTIONS = false;
 constexpr const bool SHOW_CLUSTERED_INTERSECTIONS = true;
 constexpr const bool SHOW_SQUARES = false;
 constexpr const bool SHOW_MAX_SQUARES = false;
-constexpr const bool SHOW_FILTERED_MAX_SQUARES = true;
+constexpr const bool SHOW_FILTERED_MAX_SQUARES = false;
+constexpr const bool SHOW_FINAL_SQUARES = false;
 
 void method_1(const cv::Mat& source_image, cv::Mat& dest_image){
     cv::Mat gray_image;
@@ -392,6 +393,30 @@ bool is_square_2(const cv::Point2f& p1, const cv::Point2f& p2, const cv::Point2f
     return false;
 }
 
+typedef std::pair<cv::Point2f, cv::Point2f> line_t;
+
+float approximate_parallel_distance(const line_t& l1, const line_t& l2){
+    //Direction vectors
+    cv::Point2f l1_d(l1.second.x - l1.first.x, l1.second.y - l1.first.y);
+    cv::Point2f l2_d(l2.second.x - l2.first.x, l2.second.y - l2.first.y);
+
+    //Unit vector
+    auto l1_n = cv::Vec2f(l1_d.x, l1_d.y) * (1.0f / norm(l1_d));
+    auto l2_n = cv::Vec2f(l2_d.x, l2_d.y) * (1.0f / norm(l2_d));
+
+    //Compute all the possible distances
+
+    auto d1 = norm(cv::Vec2f(l1.first - l2.first) - (cv::Vec2f(l1.first - l2.first).dot(l1_n)) * l1_n);
+    auto d2 = norm(cv::Vec2f(l1.first - l2.second) - (cv::Vec2f(l1.first - l2.second).dot(l1_n)) * l1_n);
+
+    auto d3 = norm(cv::Vec2f(l2.first - l1.first) - (cv::Vec2f(l2.first - l1.first).dot(l2_n)) * l2_n);
+    auto d4 = norm(cv::Vec2f(l2.first - l1.second) - (cv::Vec2f(l2.first - l1.second).dot(l2_n)) * l2_n);
+
+    //Get the mean of the distances
+
+    return (d1 + d2 + d3 + d4) / 4.0f;
+}
+
 bool on_same_line(cv::Vec4i& v1, cv::Vec4i& v2){
     cv::Point2f a(v1[0] - v1[2], v1[1] - v1[3]);
     cv::Point2f b(v2[0] - v2[2], v2[1] - v2[3]);
@@ -626,7 +651,7 @@ void detect_lines_2(std::vector<std::pair<cv::Point2f, cv::Point2f>>& final_line
 
     //4. Transform segments into lines
 
-    std::vector<std::pair<cv::Point2f, cv::Point2f>> long_lines;
+    std::vector<line_t> long_lines;
 
     for(auto& l : max_cluster){
         cv::Point2f a(l[0], l[1]);
@@ -677,6 +702,83 @@ void detect_lines_2(std::vector<std::pair<cv::Point2f, cv::Point2f>>& final_line
 
         if(similar >= 3){
             final_lines.push_back(l1);
+        }
+    }
+
+    //20 is the optimal number for a Sudoku
+    //If there is less, we cannot do anything to add more
+    if(final_lines.size() > 20){
+        std::vector<std::vector<line_t>> p_clusters;
+
+        for(auto& l1 : final_lines){
+            float rho_1 = std::fabs(atan((l1.second.y - l1.first.y) / (l1.second.x - l1.first.x)) * 180 / CV_PI);
+
+            bool found = false;
+
+            for(auto& cluster : p_clusters){
+                for(auto& l2 : cluster){
+                    float rho_2 = std::fabs(atan((l2.second.y - l2.first.y) / (l2.second.x - l2.first.x)) * 180 / CV_PI);
+
+                    if(std::fabs(rho_2 - rho_1) <= 10.0f){
+                        cluster.push_back(l1);
+                        found = true;
+                        break;
+                    }
+                }
+                if(found){
+                    break;
+                }
+            }
+            if(!found){
+                p_clusters.push_back({l1});
+            }
+        }
+
+        for(auto& cluster : p_clusters){
+            //10 is the optimal size for a cluster
+            if(cluster.size() > 10){
+                float theta = std::fabs(atan((cluster.front().second.y - cluster.front().first.y) / (cluster.front().second.x - cluster.front().first.x)) * 180 / CV_PI);
+
+                bool sorted = false;
+                if(std::fabs(theta - 90.0f) < 5.0f){
+                    line_t base_line(cv::Point2f(0,0), cv::Point2f(0,100));
+
+                    std::sort(cluster.begin(), cluster.end(), [&base_line](const auto& lhs, const auto& rhs){
+                        return approximate_parallel_distance(lhs, base_line) < approximate_parallel_distance(rhs, base_line);
+                    });
+
+                    sorted = true;
+                } else if(std::fabs(theta - 0.0f) < 5.0f){
+                    line_t base_line(cv::Point2f(0,0), cv::Point2f(100,0));
+
+                    std::sort(cluster.begin(), cluster.end(), [&base_line](const auto& lhs, const auto& rhs){
+                        return approximate_parallel_distance(lhs, base_line) < approximate_parallel_distance(rhs, base_line);
+                    });
+
+                    sorted = false;
+                } else {
+                    //TODO We need a rotation mechanism to handle such lines
+                    //Or create a base line with the correct angle
+                }
+
+                if(sorted){
+                    auto mean = 0.0f;
+                    for(size_t i = 0; i < cluster.size() - 1; ++i){
+                        mean += approximate_parallel_distance(cluster[i], cluster[i+1]);
+                    }
+                    mean /= cluster.size();
+
+                    if(approximate_parallel_distance(cluster[0], cluster[1]) < 0.5f * mean){
+                        final_lines.erase(std::remove(final_lines.begin(), final_lines.end(), cluster[0]), final_lines.end());
+                    } else if(approximate_parallel_distance(cluster[cluster.size() - 2], cluster[cluster.size() - 1]) < 0.5f * mean){
+                        final_lines.erase(std::remove(final_lines.begin(), final_lines.end(), cluster[cluster.size() - 1]), final_lines.end());
+                    }
+                }
+
+                if(!sorted){
+                    std::cout << "Failed to sort" << std::endl;
+                }
+            }
         }
     }
 
@@ -1225,14 +1327,16 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
 
     remove_evil_squares(max_square, points);
 
-    std::cout << "Final max_square size: " << max_square.size() << std::endl;
-
-    for(auto& square : max_square){
-        draw_square(dest_image,
-            points[std::get<0>(square)], points[std::get<1>(square)],
-            points[std::get<2>(square)], points[std::get<3>(square)]
-            );
+    if(SHOW_FINAL_SQUARES){
+        for(auto& square : max_square){
+            draw_square(dest_image,
+                points[std::get<0>(square)], points[std::get<1>(square)],
+                points[std::get<2>(square)], points[std::get<3>(square)]
+                );
+        }
     }
+
+    std::cout << "Final max_square size: " << max_square.size() << std::endl;
 
     //Get all the points of the squares
     std::vector<std::size_t> max_square_i;
