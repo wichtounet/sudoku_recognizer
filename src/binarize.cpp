@@ -1467,14 +1467,7 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
     }
 }
 
-} //end of anonymous namespace
-
-int main(int argc, char** argv ){
-    if(argc < 2){
-        std::cout << "Usage: binarize <image>..." << std::endl;
-        return -1;
-    }
-
+void intersects_test(){
     cv::Vec4i a;
     cv::Vec4i b;
 
@@ -1527,6 +1520,15 @@ int main(int argc, char** argv ){
     b[0] = 80; b[1] = 346; b[2] = 450; b[3] = 346;
     std::cout << "Returns: " << intersects(a, b) << std::endl;
     std::cout << "Should:  " << 0 << std::endl;
+}
+
+} //end of anonymous namespace
+
+int main(int argc, char** argv ){
+    if(argc < 2){
+        std::cout << "Usage: binarize <image>..." << std::endl;
+        return -1;
+    }
 
     if(argc == 2){
         std::string source_path(argv[1]);
