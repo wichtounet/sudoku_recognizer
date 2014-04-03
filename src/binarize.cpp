@@ -755,22 +755,32 @@ void detect_lines_2(std::vector<std::pair<cv::Point2f, cv::Point2f>>& final_line
                         return approximate_parallel_distance(lhs, base_line) < approximate_parallel_distance(rhs, base_line);
                     });
 
-                    sorted = false;
+                    sorted = true;
                 } else {
                     //TODO We need a rotation mechanism to handle such lines
                     //Or create a base line with the correct angle
                 }
 
                 if(sorted){
-                    auto mean = 0.0f;
-                    for(size_t i = 0; i < cluster.size() - 1; ++i){
-                        mean += approximate_parallel_distance(cluster[i], cluster[i+1]);
-                    }
-                    mean /= cluster.size();
+                    /*for(size_t i = 0; i < cluster.size() - 1; ++i){
+                        std::cout << cluster[i].first << std::endl;
+                        std::cout << cluster[i].second << std::endl;
+                        std::cout << approximate_parallel_distance(cluster[i], cluster[i+1]) << std::endl;
+                    }*/
 
-                    if(approximate_parallel_distance(cluster[0], cluster[1]) < 0.5f * mean){
+                    auto total = 0.0f;
+                    for(size_t i = 0; i < cluster.size() - 1; ++i){
+                        total += approximate_parallel_distance(cluster[i], cluster[i+1]);
+                    }
+
+                    auto mean_first = (total - approximate_parallel_distance(cluster[0], cluster[1])) / (cluster.size() - 1);
+                    auto mean_last = (total - approximate_parallel_distance(cluster[cluster.size() - 2], cluster[cluster.size() - 1])) / (cluster.size() - 1);
+
+                    if(approximate_parallel_distance(cluster[0], cluster[1]) < 0.6f * mean_first){
                         final_lines.erase(std::remove(final_lines.begin(), final_lines.end(), cluster[0]), final_lines.end());
-                    } else if(approximate_parallel_distance(cluster[cluster.size() - 2], cluster[cluster.size() - 1]) < 0.5f * mean){
+                    }
+
+                    if(approximate_parallel_distance(cluster[cluster.size() - 2], cluster[cluster.size() - 1]) < 0.6f * mean_last){
                         final_lines.erase(std::remove(final_lines.begin(), final_lines.end(), cluster[cluster.size() - 1]), final_lines.end());
                     }
                 }
