@@ -236,7 +236,7 @@ void detect_lines(std::vector<line_t>& final_lines, const cv::Mat& source_image,
         u *= 0.02;
 
         l[2] += u[0];
-        l[2] += u[1];
+        l[3] += u[1];
 
         l[0] -= u[0];
         l[1] -= u[1];
