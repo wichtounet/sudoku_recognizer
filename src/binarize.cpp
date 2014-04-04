@@ -5,8 +5,6 @@
 #include "stop_watch.hpp"
 #include "algo.hpp"
 
-//TODO Use more STL algorithms
-
 namespace {
 
 typedef std::pair<cv::Point2f, cv::Point2f> line_t;
@@ -23,7 +21,8 @@ constexpr const bool SHOW_SQUARES = false;
 constexpr const bool SHOW_MAX_SQUARES = false;
 constexpr const bool SHOW_FINAL_SQUARES = false;
 constexpr const bool SHOW_HULL = true;
-constexpr const bool SHOW_GRID = true;
+constexpr const bool SHOW_HULL_FILL = true;
+constexpr const bool SHOW_GRID = false;
 
 void binarize(const cv::Mat& source_image, cv::Mat& dest_image){
     cv::Mat gray_image;
@@ -217,7 +216,9 @@ float angle(const line_t& l){
     return std::fabs(atan((l.second.y - l.first.y) / (l.second.x - l.first.x)) * 180 / CV_PI);
 }
 
-void detect_lines(std::vector<line_t>& final_lines, const cv::Mat& source_image, cv::Mat& dest_image){
+std::vector<line_t> detect_lines(const cv::Mat& source_image, cv::Mat& dest_image){
+    std::vector<line_t> final_lines;
+
     //1. Detect lines
 
     cv::Mat binary_image;
@@ -246,12 +247,9 @@ void detect_lines(std::vector<line_t>& final_lines, const cv::Mat& source_image,
         l[1] -= u[1];
     }
 
-    std::vector<std::vector<cv::Vec4i>> clusters;
-    clusters.reserve(lines.size());
-
-    for(auto& v1 : lines){
-        clusters.push_back({v1});
-    }
+    auto clusters = vector_transform(lines.begin(), lines.end(), [](auto& v) -> std::vector<cv::Vec4i> {
+        return {v};
+    });
 
     bool merged_cluster;
     do {
@@ -510,6 +508,8 @@ void detect_lines(std::vector<line_t>& final_lines, const cv::Mat& source_image,
             cv::line(dest_image, l.first, l.second, cv::Scalar(0, 255, 0), 2, CV_AA);
         }
     }
+
+    return final_lines;
 }
 
 std::vector<cv::Point2f> find_intersections(const std::vector<line_t>& lines, const cv::Mat& source_image){
@@ -705,6 +705,26 @@ void remove_unsquare(std::vector<square_t>& squares, const std::vector<cv::Point
     }), squares.end());
 }
 
+std::vector<cv::Point2f> compute_hull(const std::vector<cv::Point2f>& points, cv::Mat& dest_image){
+    std::vector<cv::Point2f> hull;
+    cv::convexHull(points, hull, false);
+
+    if(SHOW_HULL){
+        for(std::size_t i = 0; i < hull.size(); ++i){
+            cv::line(dest_image, hull[i], hull[(i+1)%hull.size()], cv::Scalar(128,128,128), 2, CV_AA);
+        }
+    }
+
+    if(SHOW_HULL_FILL){
+        auto hull_i = vector_transform(hull.begin(), hull.end(),
+            [](auto& p) -> cv::Point2i {return {static_cast<int>(p.x), static_cast<int>(p.y)};});
+        std::vector<decltype(hull_i)> contours = {hull_i};
+        cv::fillPoly(dest_image, contours, cv::Scalar(128, 128, 0));
+    }
+
+    return hull;
+}
+
 void compute_grid(const std::vector<cv::Point2f>& hull, cv::Mat& dest_image){
     auto bounding = cv::minAreaRect(hull);
 
@@ -747,8 +767,7 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
 
     dest_image = source_image.clone();
 
-    std::vector<std::pair<cv::Point2f, cv::Point2f>> lines;
-    detect_lines(lines, source_image, dest_image);
+    auto lines = detect_lines(source_image, dest_image);
 
     auto intersections = find_intersections(lines, source_image);
 
@@ -771,14 +790,7 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
     //In that case, no need to more post processing, just get the grid around
     //the points
     if(points.size() == 100){
-        std::vector<cv::Point2f> hull;
-        cv::convexHull(points, hull, false);
-
-        if(SHOW_HULL){
-            for(std::size_t i = 0; i < hull.size(); ++i){
-                cv::line(dest_image, hull[i], hull[(i+1)%hull.size()], cv::Scalar(128,128,128), 2, CV_AA);
-            }
-        }
+        auto hull = compute_hull(points, dest_image);
 
         compute_grid(hull, dest_image);
     } else {
@@ -843,14 +855,7 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
         auto max_square_points = vector_transform(max_square_i.begin(), max_square_i.end(),
             [&points](auto& i){return points[i];});
 
-        std::vector<cv::Point2f> hull;
-        cv::convexHull(max_square_points, hull, false);
-
-        if(SHOW_HULL){
-            for(std::size_t i = 0; i < hull.size(); ++i){
-                cv::line(dest_image, hull[i], hull[(i+1)%hull.size()], cv::Scalar(128,128,128), 2, CV_AA);
-            }
-        }
+        auto hull = compute_hull(max_square_points, dest_image);
 
         compute_grid(hull, dest_image);
     }
