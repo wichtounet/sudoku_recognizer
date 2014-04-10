@@ -9,6 +9,7 @@ namespace {
 
 typedef std::pair<cv::Point2f, cv::Point2f> line_t;
 typedef std::tuple<std::size_t,std::size_t,std::size_t,std::size_t> square_t;
+typedef std::pair<cv::Point2f, cv::Point2f> grid_cell;
 
 constexpr const bool SHOW_LINE_SEGMENTS = false;
 constexpr const bool SHOW_MERGED_LINE_SEGMENTS = false;
@@ -16,13 +17,15 @@ constexpr const bool SHOW_LONG_LINES = false;
 constexpr const bool SHOW_FINAL_LINES = false;
 
 constexpr const bool SHOW_INTERSECTIONS = false;
-constexpr const bool SHOW_CLUSTERED_INTERSECTIONS = true;
+constexpr const bool SHOW_CLUSTERED_INTERSECTIONS = false;
 constexpr const bool SHOW_SQUARES = false;
 constexpr const bool SHOW_MAX_SQUARES = false;
 constexpr const bool SHOW_FINAL_SQUARES = false;
-constexpr const bool SHOW_HULL = true;
-constexpr const bool SHOW_HULL_FILL = true;
+constexpr const bool SHOW_HULL = false;
+constexpr const bool SHOW_HULL_FILL = false;
 constexpr const bool SHOW_GRID = false;
+constexpr const bool SHOW_TL_BR = true;
+constexpr const bool SHOW_GRID_NUMBERS= true;
 
 void binarize(const cv::Mat& source_image, cv::Mat& dest_image){
     cv::Mat gray_image;
@@ -725,7 +728,7 @@ std::vector<cv::Point2f> compute_hull(const std::vector<cv::Point2f>& points, cv
     return hull;
 }
 
-void compute_grid(const std::vector<cv::Point2f>& hull, cv::Mat& dest_image){
+std::vector<cv::RotatedRect> compute_grid(const std::vector<cv::Point2f>& hull, cv::Mat& dest_image){
     auto bounding = cv::minAreaRect(hull);
 
     cv::Point2f bounding_v[4];
@@ -758,11 +761,98 @@ void compute_grid(const std::vector<cv::Point2f>& hull, cv::Mat& dest_image){
                 bounding_v[0].y + mul * (bounding_v[3].y - bounding_v[0].y));
 
             cv::line(dest_image, p3, p4, cv::Scalar(0,255,0), 2, CV_AA);
+
         }
     }
+
+    std::size_t tl = 0;
+    cv::Point2f origin(0.0f, 0.0f);
+    float min_dist = euclidean_distance(bounding_v[tl], origin);
+
+    for(std::size_t i = 1; i < 4; ++i){
+        if(euclidean_distance(bounding_v[i], origin) < min_dist){
+            min_dist = euclidean_distance(bounding_v[i], origin);
+            tl = i;
+        }
+    }
+
+    std::size_t br = (tl + 2) % 4;
+
+    if(SHOW_TL_BR){
+        cv::putText(dest_image, "TL", bounding_v[tl], cv::FONT_HERSHEY_PLAIN, 0.5f, cv::Scalar(0,255,25));
+        cv::putText(dest_image, "BR", bounding_v[br], cv::FONT_HERSHEY_PLAIN, 0.5f, cv::Scalar(0,255,25));
+    }
+
+    cv::Point2f down_vector;
+    cv::Point2f right_vector;
+
+    if(std::fabs(bounding_v[tl].y - bounding_v[(tl+1) % 4].y) > std::fabs(bounding_v[tl].y - bounding_v[(tl+3)%4].y)){
+        down_vector.x = std::fabs(bounding_v[tl].x - bounding_v[(tl+1)%4].x);
+        down_vector.y = std::fabs(bounding_v[tl].y - bounding_v[(tl+1)%4].y);
+        right_vector.x = std::fabs(bounding_v[tl].x - bounding_v[(tl+3)%4].x);
+        right_vector.y = std::fabs(bounding_v[tl].y - bounding_v[(tl+3)%4].y);
+    } else {
+        down_vector.x = std::fabs(bounding_v[tl].x - bounding_v[(tl+3)%4].x);
+        down_vector.y = std::fabs(bounding_v[tl].y - bounding_v[(tl+3)%4].y);
+        right_vector.x = std::fabs(bounding_v[tl].x - bounding_v[(tl+1)%4].x);
+        right_vector.y = std::fabs(bounding_v[tl].y - bounding_v[(tl+1)%4].y);
+    }
+
+    auto cell_factor = 1.0f / 9.0f;
+
+    std::vector<cv::RotatedRect> cells(9 * 9);
+
+    for(std::size_t i = 0; i < 9; ++i){
+        for(std::size_t j = 0; j < 9; ++j){
+            cv::Point2f p_tl(
+                bounding_v[tl].x + cell_factor * i * right_vector.x,
+                bounding_v[tl].y + cell_factor * j * down_vector.y);
+
+            cv::Point2f p_tr(
+                bounding_v[tl].x + cell_factor * (i+1) * right_vector.x,
+                bounding_v[tl].y + cell_factor * j * down_vector.y);
+
+            cv::Point2f p_bl(
+                bounding_v[tl].x + cell_factor * i * right_vector.x,
+                bounding_v[tl].y + cell_factor * (j+1) * down_vector.y);
+
+            cv::Point2f p_br(
+                bounding_v[tl].x + cell_factor * (i+1) * right_vector.x,
+                bounding_v[tl].y + cell_factor * (j+1) * down_vector.y);
+
+            cv::Point2f p_center(
+                (p_br.x + p_tl.x) / 2.0f - cell_factor * 0.1f * right_vector.x,
+                (p_br.y + p_tl.y) / 2.0f);
+
+            auto diff_x = p_tr.x - p_tl.x;
+            auto diff_y = p_tr.y - p_tl.y;
+            auto angle = atan(diff_x / diff_y);
+
+            cv::Size p_size(p_tr.x - p_tl.x, p_br.y - p_tr.y);
+
+            cv::RotatedRect p(p_center, p_size, angle);
+
+            cells[i + j * 9] = p;
+
+            if(i + j * 9 == 40){
+                cv::circle(dest_image, p_tl, 1, cv::Scalar(0,255,255), 3);
+                cv::circle(dest_image, p_tr, 1, cv::Scalar(0,255,255), 3);
+                cv::circle(dest_image, p_bl, 1, cv::Scalar(0,255,255), 3);
+                cv::circle(dest_image, p_br, 1, cv::Scalar(0,255,255), 3);
+            }
+        }
+    }
+
+    if(SHOW_GRID_NUMBERS){
+        for(size_t i = 0; i < cells.size(); ++i){
+            cv::putText(dest_image, std::to_string(i + 1), cells[i].center, cv::FONT_HERSHEY_PLAIN, 0.7f, cv::Scalar(0,255,25));
+        }
+    }
+
+    return cells;
 }
 
-void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
+std::vector<cv::RotatedRect> detect_grid(const cv::Mat& source_image, cv::Mat& dest_image){
     auto_stop_watch<std::chrono::microseconds> watch("sudoku_lines");
 
     dest_image = source_image.clone();
@@ -792,14 +882,9 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
     if(points.size() == 100){
         auto hull = compute_hull(points, dest_image);
 
-        compute_grid(hull, dest_image);
+        return compute_grid(hull, dest_image);
     } else {
         auto squares = detect_squares(source_image, points);
-
-        if(squares.empty()){
-            std::cout << "Failed to detect squares" << std::endl;
-            return;
-        }
 
         if(SHOW_SQUARES){
             for(auto& square : squares){
@@ -857,7 +942,7 @@ void sudoku_lines_4(const cv::Mat& source_image, cv::Mat& dest_image){
 
         auto hull = compute_hull(max_square_points, dest_image);
 
-        compute_grid(hull, dest_image);
+        return compute_grid(hull, dest_image);
     }
 }
 
@@ -916,6 +1001,30 @@ void intersects_test(){
     std::cout << "Should:  " << 0 << std::endl;
 }
 
+void recognize(const cv::Mat& source_image, const std::vector<cv::RotatedRect>& cells){
+    for(size_t i = 0; i < cells.size(); ++i){
+        cv::Mat cell_mat(cv::Size(64, 64), source_image.type());
+
+        //TODO In case the angle is too big, just taking the bounding rect
+        //will not be enough
+
+        auto bounding = cells[i].boundingRect();
+
+        std::cout << cells[i].center << std::endl;
+        std::cout << cells[i].size << std::endl;
+        std::cout << cells[i].angle << std::endl;
+        std::cout << "==> " << bounding << std::endl;
+
+        cv::Mat rect_mat(source_image, bounding);
+        std::cout << rect_mat.size() << std::endl;
+
+        auto left = (64 - bounding.size().width) / 2;
+        auto top = (64 - bounding.size().height) / 2;
+
+        //TODO Copy rect_mat into cell_mat from left_top
+    }
+}
+
 } //end of anonymous namespace
 
 int main(int argc, char** argv ){
@@ -936,7 +1045,8 @@ int main(int argc, char** argv ){
         }
 
         cv::Mat dest_image = source_image.clone();
-        sudoku_lines_4(source_image, dest_image);
+        auto cells = detect_grid(source_image, dest_image);
+        recognize(source_image, cells);
 
         cv::namedWindow("Sudoku Grid", cv::WINDOW_AUTOSIZE);
         cv::imshow("Sudoku Grid", dest_image);
@@ -957,7 +1067,7 @@ int main(int argc, char** argv ){
             }
 
             cv::Mat dest_image;
-            sudoku_lines_4(source_image, dest_image);
+            detect_grid(source_image, dest_image);
 
             source_path.insert(source_path.rfind('.'), ".lines");
             imwrite(source_path.c_str(), dest_image);
