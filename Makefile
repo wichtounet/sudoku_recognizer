@@ -8,7 +8,7 @@ O_FILES=$(CPP_FILES:%.cpp=%.cpp.o)
 
 CC=clang++
 LD=clang++
-CXX_FLAGS=-Iinclude -std=c++1y -Ofast -g -Wextra -Wall -Wno-unused-function
+CXX_FLAGS=-Iinclude -std=c++1y -Ofast -march=native -g -Wextra -Wall -Wno-unused-function
 LD_FLAGS=$(CXX_FLAGS) -lopencv_core -lopencv_imgproc -lopencv_highgui
 
 src/%.cpp.d: $(CPP_FILES)
