@@ -1,6 +1,6 @@
 default: release
 
-.PHONY: default
+.PHONY: default release debug all clean
 
 OUTPUT=sudoku
 
@@ -21,7 +21,7 @@ CXX_FLAGS=-Iinclude -std=c++1y -Wextra -Wall -Wno-unused-function
 LD_FLAGS=$(CXX_FLAGS) -lopencv_core -lopencv_imgproc -lopencv_highgui
 
 DEBUG_FLAGS=-g
-RELEASE_FLAGS=-g -Ofast -march=native
+RELEASE_FLAGS=-g -Ofast -march=native -fvectorize -fslp-vectorize-aggressive -fomit-frame-pointer
 
 debug/src/%.cpp.o: src/%.cpp
 	@ mkdir -p debug/src/
