@@ -1,30 +1,60 @@
-default: bin/binarize
+default: release
 
 .PHONY: default
 
+OUTPUT=sudoku
+
 CPP_FILES=$(wildcard src/*.cpp)
-D_FILES=$(CPP_FILES:%.cpp=%.cpp.d)
-O_FILES=$(CPP_FILES:%.cpp=%.cpp.o)
+
+DEBUG_D_FILES=$(CPP_FILES:%.cpp=debug/%.cpp.d)
+RELEASE_D_FILES=$(CPP_FILES:%.cpp=release/%.cpp.d)
+
+DEBUG_O_FILES=$(CPP_FILES:%.cpp=debug/%.cpp.o)
+RELEASE_O_FILES=$(CPP_FILES:%.cpp=release/%.cpp.o)
 
 CC=clang++
 LD=clang++
-CXX_FLAGS=-Iinclude -std=c++1y -Ofast -march=native -g -Wextra -Wall -Wno-unused-function
-LD_FLAGS=$(CXX_FLAGS) -lopencv_core -lopencv_imgproc -lopencv_highgui
-
-src/%.cpp.d: $(CPP_FILES)
-	@ $(CC) $(CXX_FLAGS) -MM -MT src/$*.cpp.o src/$*.cpp | sed -e 's@^\(.*\)\.o:@\1.d \1.o:@' > $@
-
-include $(D_FILES)
 
 #TODO Add flags from dbn
-src/%.cpp.o:
-	$(CC) $(CXX_FLAGS) -o $@ -c $<
 
-bin/binarize: $(O_FILES)
-	mkdir -p bin/
-	$(LD) $(LD_FLAGS) -o bin/sudoku $(O_FILES)
+CXX_FLAGS=-Iinclude -std=c++1y -Wextra -Wall -Wno-unused-function
+LD_FLAGS=$(CXX_FLAGS) -lopencv_core -lopencv_imgproc -lopencv_highgui
+
+DEBUG_FLAGS=-g
+RELEASE_FLAGS=-g -Ofast -march=native
+
+debug/src/%.cpp.o: src/%.cpp
+	@ mkdir -p debug/src/
+	$(CC) $(CXX_FLAGS) $(DEBUG_FLAGS) -o $@ -c $<
+
+release/src/%.cpp.o: src/%.cpp
+	@ mkdir -p release/src/
+	$(CC) $(CXX_FLAGS) $(RELEASE_FLAGS) -o $@ -c $<
+
+debug/bin/$(OUTPUT): $(DEBUG_O_FILES)
+	@ mkdir -p debug/bin/
+	$(LD) $(LD_FLAGS) $(DEBUG_FLAGS) -o debug/bin/$(OUTPUT) $(DEBUG_O_FILES)
+
+release/bin/$(OUTPUT): $(RELEASE_O_FILES)
+	@ mkdir -p release/bin/
+	$(LD) $(LD_FLAGS) $(RELEASE_FLAGS) -o release/bin/$(OUTPUT) $(RELEASE_O_FILES)
+
+debug/src/%.cpp.d: $(CPP_FILES)
+	@ mkdir -p debug/src/
+	@ $(CC) $(CXX_FLAGS) $(DEBUG_FLAGS) -MM -MT debug/src/$*.cpp.o src/$*.cpp | sed -e 's@^\(.*\)\.o:@\1.d \1.o:@' > $@
+
+release/src/%.cpp.d: $(CPP_FILES)
+	@ mkdir -p release/src/
+	@ $(CC) $(CXX_FLAGS) $(RELEASE_FLAGS) -MM -MT release/src/$*.cpp.o src/$*.cpp | sed -e 's@^\(.*\)\.o:@\1.d \1.o:@' > $@
+
+release: release/bin/$(OUTPUT)
+debug: debug/bin/$(OUTPUT)
+
+all: release debug
 
 clean:
-	rm -rf $(O_FILES)
-	rm -rf $(D_FILES)
-	rm -rf bin
+	rm -rf release/
+	rm -rf debug/
+
+-include $(DEBUG_D_FILES)
+-include $(RELEASE_D_FILES)
