@@ -26,6 +26,7 @@ constexpr const bool SHOW_HULL_FILL = false;
 constexpr const bool SHOW_GRID = false;
 constexpr const bool SHOW_TL_BR = true;
 constexpr const bool SHOW_GRID_NUMBERS= true;
+constexpr const bool SHOW_REGRID = true;
 
 void binarize(const cv::Mat& source_image, cv::Mat& dest_image){
     cv::Mat gray_image;
@@ -1002,26 +1003,60 @@ void intersects_test(){
 }
 
 void recognize(const cv::Mat& source_image, const std::vector<cv::RotatedRect>& cells){
-    for(size_t i = 0; i < cells.size(); ++i){
-        cv::Mat cell_mat(cv::Size(64, 64), source_image.type());
+    std::vector<cv::Mat> cell_mats;
+    for(size_t n = 0; n < cells.size(); ++n){
+        cv::Mat cell_mat(cv::Size(64, 64), CV_8U);
+
+        cell_mat = cv::Scalar(255,255,255);
 
         //TODO In case the angle is too big, just taking the bounding rect
         //will not be enough
 
-        auto bounding = cells[i].boundingRect();
+        auto bounding = cells[n].boundingRect();
 
-        std::cout << cells[i].center << std::endl;
-        std::cout << cells[i].size << std::endl;
-        std::cout << cells[i].angle << std::endl;
+        std::cout << cells[n].center << std::endl;
+        std::cout << cells[n].size << std::endl;
+        std::cout << cells[n].angle << std::endl;
         std::cout << "==> " << bounding << std::endl;
 
         cv::Mat rect_mat(source_image, bounding);
         std::cout << rect_mat.size() << std::endl;
 
+        cv::Mat binary_rect_mat;
+        binarize(rect_mat, binary_rect_mat);
+
         auto left = (64 - bounding.size().width) / 2;
         auto top = (64 - bounding.size().height) / 2;
 
         //TODO Copy rect_mat into cell_mat from left_top
+
+        for(size_t i = 0; i < rect_mat.size().width; ++i){
+            for(size_t j = 0; j < rect_mat.size().height; ++j){
+                cell_mat.at<char>(i+left,j+top) = binary_rect_mat.at<char>(i, j);
+            }
+        }
+
+        cell_mats.emplace_back(std::move(cell_mat));
+    }
+
+    if(SHOW_REGRID){
+        cv::Mat remat(cv::Size(64 * 9, 64 * 9), CV_8U);
+
+        for(size_t n = 0; n < cells.size(); ++n){
+            const auto& mat = cell_mats[n];
+
+            size_t ni = n / 9;
+            size_t nj = n % 9;
+
+            for(size_t i = 0; i < 64; ++i){
+                for(size_t j = 0; j < 64; ++j){
+                    remat.at<char>(i+ni * 64,j+nj * 64) = mat.at<char>(i, j);
+                }
+            }
+        }
+
+        cv::namedWindow("Sudoku Final", cv::WINDOW_AUTOSIZE);
+        cv::imshow("Sudoku Final", remat);
     }
 }
 
