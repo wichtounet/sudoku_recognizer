@@ -22,7 +22,7 @@ src/%.cpp.o:
 
 bin/binarize: $(O_FILES)
 	mkdir -p bin/
-	$(LD) $(LD_FLAGS) -o bin/binarize $(O_FILES)
+	$(LD) $(LD_FLAGS) -o bin/sudoku $(O_FILES)
 
 clean:
 	rm -rf $(O_FILES)

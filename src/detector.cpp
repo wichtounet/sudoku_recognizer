@@ -865,6 +865,63 @@ std::vector<cv::RotatedRect> compute_grid(const std::vector<cv::Point2f>& hull, 
     return cells;
 }
 
+void intersects_test(){
+    cv::Vec4i a;
+    cv::Vec4i b;
+
+    a[0] = 199; a[1] = 277; a[2] = 267; a[3] = 275;
+    b[0] = 0; b[1] = 318; b[2] = 0; b[3] = 197;
+    std::cout << "Returns: " << intersects(a, b) << std::endl;
+    std::cout << "Should:  " << 0 << std::endl;
+
+    a[0] = 0; a[1] = 318; a[2] = 0; a[3] = 197;
+    b[0] = 199; b[1] = 277; b[2] = 267; b[3] = 275;
+    std::cout << "Returns: " << intersects(a, b) << std::endl;
+    std::cout << "Should:  " << 0 << std::endl;
+
+    a[0] = 199; a[1] = 277; a[2] = 267; a[3] = 275;
+    b[0] = 200; b[1] = 318; b[2] = 200; b[3] = 197;
+    std::cout << "Returns: " << intersects(a, b) << std::endl;
+    std::cout << "Should:  " << 1 << std::endl;
+
+    a[0] = 100; a[1] = 100; a[2] = 300; a[3] = 300;
+    b[0] = 100; b[1] = 300; b[2] = 300; b[3] = 100;
+    std::cout << "Returns: " << intersects(a, b) << std::endl;
+    std::cout << "Should:  " << 1 << std::endl;
+
+    a[0] = 30; a[1] = 242; a[2] = 451; a[3] = 242;
+    b[0] = 440; b[1] = 346; b[2] = 440; b[3] = 5;
+    std::cout << "Returns: " << intersects(a, b) << std::endl;
+    std::cout << "Should:  " << 1 << std::endl;
+
+    a[0] = 440; a[1] = 346; a[2] = 440; a[3] = 5;
+    b[0] = 30; b[1] = 242; b[2] = 451; b[3] = 242;
+    std::cout << "Returns: " << intersects(a, b) << std::endl;
+    std::cout << "Should:  " << 1 << std::endl;
+
+    a[0] = 440; a[1] = 5; a[2] = 440; a[3] = 346;
+    b[0] = 30; b[1] = 242; b[2] = 451; b[3] = 242;
+    std::cout << "Returns: " << intersects(a, b) << std::endl;
+    std::cout << "Should:  " << 1 << std::endl;
+
+    a[0] = 440; a[1] = 346; a[2] = 440; a[3] = 5;
+    b[0] = 451; b[1] = 242; b[2] = 30; b[3] = 242;
+    std::cout << "Returns: " << intersects(a, b) << std::endl;
+    std::cout << "Should:  " << 1 << std::endl;
+
+    a[0] = 30; a[1] = 242; a[2] = 431; a[3] = 242;
+    b[0] = 440; b[1] = 346; b[2] = 440; b[3] = 5;
+    std::cout << "Returns: " << intersects(a, b) << std::endl;
+    std::cout << "Should:  " << 0 << std::endl;
+
+    a[0] = 100; a[1] = 200; a[2] = 500; a[3] = 200;
+    b[0] = 80; b[1] = 346; b[2] = 450; b[3] = 346;
+    std::cout << "Returns: " << intersects(a, b) << std::endl;
+    std::cout << "Should:  " << 0 << std::endl;
+}
+
+} //end of anonymous namespace
+
 std::vector<cv::RotatedRect> detect_grid(const cv::Mat& source_image, cv::Mat& dest_image){
     auto_stop_watch<std::chrono::microseconds> watch("sudoku_lines");
 
@@ -959,62 +1016,7 @@ std::vector<cv::RotatedRect> detect_grid(const cv::Mat& source_image, cv::Mat& d
     }
 }
 
-void intersects_test(){
-    cv::Vec4i a;
-    cv::Vec4i b;
-
-    a[0] = 199; a[1] = 277; a[2] = 267; a[3] = 275;
-    b[0] = 0; b[1] = 318; b[2] = 0; b[3] = 197;
-    std::cout << "Returns: " << intersects(a, b) << std::endl;
-    std::cout << "Should:  " << 0 << std::endl;
-
-    a[0] = 0; a[1] = 318; a[2] = 0; a[3] = 197;
-    b[0] = 199; b[1] = 277; b[2] = 267; b[3] = 275;
-    std::cout << "Returns: " << intersects(a, b) << std::endl;
-    std::cout << "Should:  " << 0 << std::endl;
-
-    a[0] = 199; a[1] = 277; a[2] = 267; a[3] = 275;
-    b[0] = 200; b[1] = 318; b[2] = 200; b[3] = 197;
-    std::cout << "Returns: " << intersects(a, b) << std::endl;
-    std::cout << "Should:  " << 1 << std::endl;
-
-    a[0] = 100; a[1] = 100; a[2] = 300; a[3] = 300;
-    b[0] = 100; b[1] = 300; b[2] = 300; b[3] = 100;
-    std::cout << "Returns: " << intersects(a, b) << std::endl;
-    std::cout << "Should:  " << 1 << std::endl;
-
-    a[0] = 30; a[1] = 242; a[2] = 451; a[3] = 242;
-    b[0] = 440; b[1] = 346; b[2] = 440; b[3] = 5;
-    std::cout << "Returns: " << intersects(a, b) << std::endl;
-    std::cout << "Should:  " << 1 << std::endl;
-
-    a[0] = 440; a[1] = 346; a[2] = 440; a[3] = 5;
-    b[0] = 30; b[1] = 242; b[2] = 451; b[3] = 242;
-    std::cout << "Returns: " << intersects(a, b) << std::endl;
-    std::cout << "Should:  " << 1 << std::endl;
-
-    a[0] = 440; a[1] = 5; a[2] = 440; a[3] = 346;
-    b[0] = 30; b[1] = 242; b[2] = 451; b[3] = 242;
-    std::cout << "Returns: " << intersects(a, b) << std::endl;
-    std::cout << "Should:  " << 1 << std::endl;
-
-    a[0] = 440; a[1] = 346; a[2] = 440; a[3] = 5;
-    b[0] = 451; b[1] = 242; b[2] = 30; b[3] = 242;
-    std::cout << "Returns: " << intersects(a, b) << std::endl;
-    std::cout << "Should:  " << 1 << std::endl;
-
-    a[0] = 30; a[1] = 242; a[2] = 431; a[3] = 242;
-    b[0] = 440; b[1] = 346; b[2] = 440; b[3] = 5;
-    std::cout << "Returns: " << intersects(a, b) << std::endl;
-    std::cout << "Should:  " << 0 << std::endl;
-
-    a[0] = 100; a[1] = 200; a[2] = 500; a[3] = 200;
-    b[0] = 80; b[1] = 346; b[2] = 450; b[3] = 346;
-    std::cout << "Returns: " << intersects(a, b) << std::endl;
-    std::cout << "Should:  " << 0 << std::endl;
-}
-
-void recognize(const cv::Mat& source_image, const std::vector<cv::RotatedRect>& cells){
+std::vector<cv::Mat> split(const cv::Mat& source_image, const std::vector<cv::RotatedRect>& cells){
     std::vector<cv::Mat> cell_mats;
     for(size_t n = 0; n < cells.size(); ++n){
         cv::Mat cell_mat(cv::Size(64, 64), CV_8U);
@@ -1065,64 +1067,6 @@ void recognize(const cv::Mat& source_image, const std::vector<cv::RotatedRect>& 
         cv::namedWindow("Sudoku Final", cv::WINDOW_AUTOSIZE);
         cv::imshow("Sudoku Final", remat);
     }
-}
 
-} //end of anonymous namespace
-
-int main(int argc, char** argv ){
-    if(argc < 2){
-        std::cout << "Usage: binarize <image>..." << std::endl;
-        return -1;
-    }
-
-    if(argc == 2){
-        std::string image_source_path(argv[1]);
-
-        cv::Mat source_image;
-        source_image = cv::imread(image_source_path.c_str(), 1);
-
-        if (!source_image.data){
-            std::cout << "Invalid source_image" << std::endl;
-            return -1;
-        }
-
-        std::string data_source_path(image_source_path);
-        data_source_path.replace(data_source_path.end() - 3, data_source_path.end(), "dat");
-
-        auto data = read_data(data_source_path);
-
-        std::cout << data.phone_type << std::endl;
-        std::cout << data.image_type << std::endl;
-
-        cv::Mat dest_image = source_image.clone();
-        auto cells = detect_grid(source_image, dest_image);
-        recognize(source_image, cells);
-
-        cv::namedWindow("Sudoku Grid", cv::WINDOW_AUTOSIZE);
-        cv::imshow("Sudoku Grid", dest_image);
-
-        cv::waitKey(0);
-    } else {
-        for(size_t i = 1; i < static_cast<size_t>(argc); ++i){
-            std::string image_source_path(argv[i]);
-
-            std::cout << image_source_path << std::endl;
-
-            cv::Mat source_image;
-            source_image = cv::imread(image_source_path.c_str(), 1);
-
-            if (!source_image.data){
-                std::cout << "Invalid source_image" << std::endl;
-                continue;
-            }
-
-            cv::Mat dest_image;
-            detect_grid(source_image, dest_image);
-
-            image_source_path.insert(image_source_path.rfind('.'), ".lines");
-            imwrite(image_source_path.c_str(), dest_image);
-        }
-    }
-
-    return 0;
+    return cell_mats;
 }
