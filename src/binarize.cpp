@@ -28,7 +28,7 @@ constexpr const bool SHOW_TL_BR = true;
 constexpr const bool SHOW_GRID_NUMBERS= true;
 constexpr const bool SHOW_REGRID = true;
 
-void binarize(const cv::Mat& source_image, cv::Mat& dest_image){
+void sudoku_binarize(const cv::Mat& source_image, cv::Mat& dest_image){
     cv::Mat gray_image;
     cv::cvtColor(source_image, gray_image, CV_RGB2GRAY);
 
@@ -39,6 +39,17 @@ void binarize(const cv::Mat& source_image, cv::Mat& dest_image){
     cv::adaptiveThreshold(blurred_image, temp_image, 255, CV_ADAPTIVE_THRESH_MEAN_C, CV_THRESH_BINARY, 11, 2);
 
     cv::medianBlur(temp_image, dest_image, 5);
+
+    auto structure_elem = cv::getStructuringElement(cv::MORPH_CROSS, cv::Size(3, 3));
+    cv::morphologyEx(dest_image, dest_image, cv::MORPH_DILATE, structure_elem);
+}
+
+void cell_binarize(const cv::Mat& source_image, cv::Mat& dest_image){
+    cv::Mat gray_image;
+    cv::cvtColor(source_image, gray_image, CV_RGB2GRAY);
+
+    cv::Mat temp_image;
+    cv::adaptiveThreshold(gray_image, dest_image, 255, CV_ADAPTIVE_THRESH_MEAN_C, CV_THRESH_BINARY, 11, 2);
 
     auto structure_elem = cv::getStructuringElement(cv::MORPH_CROSS, cv::Size(3, 3));
     cv::morphologyEx(dest_image, dest_image, cv::MORPH_DILATE, structure_elem);
@@ -226,7 +237,7 @@ std::vector<line_t> detect_lines(const cv::Mat& source_image, cv::Mat& dest_imag
     //1. Detect lines
 
     cv::Mat binary_image;
-    binarize(source_image, binary_image);
+    sudoku_binarize(source_image, binary_image);
 
     cv::Mat lines_image;
     constexpr const size_t CANNY_THRESHOLD = 60;
@@ -1023,7 +1034,7 @@ void recognize(const cv::Mat& source_image, const std::vector<cv::RotatedRect>& 
         std::cout << rect_mat.size() << std::endl;
 
         cv::Mat binary_rect_mat;
-        binarize(rect_mat, binary_rect_mat);
+        cell_binarize(rect_mat, binary_rect_mat);
 
         auto left = (64 - bounding.size().width) / 2;
         auto top = (64 - bounding.size().height) / 2;
