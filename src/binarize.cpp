@@ -1,6 +1,7 @@
 #include <opencv2/opencv.hpp>
 
 #include <iostream>
+#include <fstream>
 
 #include "stop_watch.hpp"
 #include "algo.hpp"
@@ -1066,6 +1067,29 @@ void recognize(const cv::Mat& source_image, const std::vector<cv::RotatedRect>& 
     }
 }
 
+struct gt_data {
+    std::string phone_type;
+    std::string image_type;
+    char results[9][9];
+};
+
+gt_data read_data(const std::string& path){
+    gt_data data;
+
+    std::ifstream is(path);
+
+    std::getline(is, data.phone_type);
+    std::getline(is, data.image_type);
+
+    for(size_t i = 0; i < 9; ++i){
+        for(size_t j = 0; j < 9; ++j){
+            is >> data.results[i][j];
+        }
+    }
+
+    return data;
+}
+
 } //end of anonymous namespace
 
 int main(int argc, char** argv ){
@@ -1075,15 +1099,23 @@ int main(int argc, char** argv ){
     }
 
     if(argc == 2){
-        std::string source_path(argv[1]);
+        std::string image_source_path(argv[1]);
 
         cv::Mat source_image;
-        source_image = cv::imread(source_path.c_str(), 1);
+        source_image = cv::imread(image_source_path.c_str(), 1);
 
         if (!source_image.data){
             std::cout << "Invalid source_image" << std::endl;
             return -1;
         }
+
+        std::string data_source_path(image_source_path);
+        data_source_path.replace(data_source_path.end() - 3, data_source_path.end(), "dat");
+
+        auto data = read_data(data_source_path);
+
+        std::cout << data.phone_type << std::endl;
+        std::cout << data.image_type << std::endl;
 
         cv::Mat dest_image = source_image.clone();
         auto cells = detect_grid(source_image, dest_image);
@@ -1095,12 +1127,12 @@ int main(int argc, char** argv ){
         cv::waitKey(0);
     } else {
         for(size_t i = 1; i < static_cast<size_t>(argc); ++i){
-            std::string source_path(argv[i]);
+            std::string image_source_path(argv[i]);
 
-            std::cout << source_path << std::endl;
+            std::cout << image_source_path << std::endl;
 
             cv::Mat source_image;
-            source_image = cv::imread(source_path.c_str(), 1);
+            source_image = cv::imread(image_source_path.c_str(), 1);
 
             if (!source_image.data){
                 std::cout << "Invalid source_image" << std::endl;
@@ -1110,8 +1142,8 @@ int main(int argc, char** argv ){
             cv::Mat dest_image;
             detect_grid(source_image, dest_image);
 
-            source_path.insert(source_path.rfind('.'), ".lines");
-            imwrite(source_path.c_str(), dest_image);
+            image_source_path.insert(image_source_path.rfind('.'), ".lines");
+            imwrite(image_source_path.c_str(), dest_image);
         }
     }
 
