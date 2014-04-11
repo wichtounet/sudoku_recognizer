@@ -48,8 +48,10 @@ void cell_binarize(const cv::Mat& source_image, cv::Mat& dest_image){
     cv::Mat gray_image;
     cv::cvtColor(source_image, gray_image, CV_RGB2GRAY);
 
-    cv::Mat temp_image;
+    dest_image = gray_image.clone();
     cv::adaptiveThreshold(gray_image, dest_image, 255, CV_ADAPTIVE_THRESH_MEAN_C, CV_THRESH_BINARY, 11, 2);
+
+    cv::medianBlur(dest_image, dest_image, 5);
 
     auto structure_elem = cv::getStructuringElement(cv::MORPH_CROSS, cv::Size(3, 3));
     cv::morphologyEx(dest_image, dest_image, cv::MORPH_DILATE, structure_elem);
@@ -1025,25 +1027,20 @@ void recognize(const cv::Mat& source_image, const std::vector<cv::RotatedRect>& 
 
         auto bounding = cells[n].boundingRect();
 
-        std::cout << cells[n].center << std::endl;
-        std::cout << cells[n].size << std::endl;
-        std::cout << cells[n].angle << std::endl;
-        std::cout << "==> " << bounding << std::endl;
+        bounding.x = std::max(0, bounding.x);
+        bounding.y = std::max(0, bounding.y);
 
         cv::Mat rect_mat(source_image, bounding);
-        std::cout << rect_mat.size() << std::endl;
 
         cv::Mat binary_rect_mat;
         cell_binarize(rect_mat, binary_rect_mat);
 
-        auto left = (64 - bounding.size().width) / 2;
-        auto top = (64 - bounding.size().height) / 2;
+        auto top = (64 - binary_rect_mat.rows) / 2;
+        auto left = (64 - binary_rect_mat.cols) / 2;
 
-        //TODO Copy rect_mat into cell_mat from left_top
-
-        for(size_t i = 0; i < rect_mat.size().width; ++i){
-            for(size_t j = 0; j < rect_mat.size().height; ++j){
-                cell_mat.at<char>(i+left,j+top) = binary_rect_mat.at<char>(i, j);
+        for(size_t i = 0; i < binary_rect_mat.rows; ++i){
+            for(size_t j = 0; j < binary_rect_mat.cols; ++j){
+                cell_mat.at<unsigned char>(i+top,j+left) = binary_rect_mat.at<unsigned char>(i, j);
             }
         }
 
