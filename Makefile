@@ -15,9 +15,8 @@ RELEASE_O_FILES=$(CPP_FILES:%.cpp=release/%.cpp.o)
 CC=clang++
 LD=clang++
 
-#TODO Add flags from dbn
-
-CXX_FLAGS=-Iinclude -std=c++1y -Wextra -Wall -Wno-unused-function
+WARNING_FLAGS=-Wextra -Wall -Qunused-arguments -Wuninitialized -Wsometimes-uninitialized -Wno-long-long -Winit-self -Wdocumentation
+CXX_FLAGS=-Iinclude -std=c++1y $(WARNING_FLAGS)
 LD_FLAGS=$(CXX_FLAGS) -lopencv_core -lopencv_imgproc -lopencv_highgui
 
 DEBUG_FLAGS=-g
@@ -33,11 +32,11 @@ release/src/%.cpp.o: src/%.cpp
 
 debug/bin/$(OUTPUT): $(DEBUG_O_FILES)
 	@ mkdir -p debug/bin/
-	$(LD) $(LD_FLAGS) $(DEBUG_FLAGS) -o debug/bin/$(OUTPUT) $(DEBUG_O_FILES)
+	$(LD) $(LD_FLAGS) $(DEBUG_FLAGS) -o $@ $?
 
 release/bin/$(OUTPUT): $(RELEASE_O_FILES)
 	@ mkdir -p release/bin/
-	$(LD) $(LD_FLAGS) $(RELEASE_FLAGS) -o release/bin/$(OUTPUT) $(RELEASE_O_FILES)
+	$(LD) $(LD_FLAGS) $(RELEASE_FLAGS) -o $@ $?
 
 debug/src/%.cpp.d: $(CPP_FILES)
 	@ mkdir -p debug/src/
