@@ -29,8 +29,6 @@ int main(int argc, char** argv ){
                 return -1;
             }
 
-            auto data = read_data(image_source_path);
-
             cv::Mat dest_image;
             auto cells = detect_grid(source_image, dest_image);
             split(source_image, cells);
@@ -59,6 +57,25 @@ int main(int argc, char** argv ){
                 image_source_path.insert(image_source_path.rfind('.'), ".lines");
                 imwrite(image_source_path.c_str(), dest_image);
             }
+        }
+    } else if(command == "train"){
+        for(size_t i = 1; i < static_cast<size_t>(argc); ++i){
+            std::string image_source_path(argv[i]);
+
+            std::cout << image_source_path << std::endl;
+
+            auto source_image = cv::imread(image_source_path.c_str(), 1);
+
+            if (!source_image.data){
+                std::cout << "Invalid source_image" << std::endl;
+                continue;
+            }
+
+            auto data = read_data(image_source_path);
+
+            cv::Mat dest_image;
+            auto cells = detect_grid(source_image, dest_image);
+            auto mats = split(source_image, cells);
         }
     } else {
         std::cout << "Invalid command \"" << command << "\"" << std::endl;
