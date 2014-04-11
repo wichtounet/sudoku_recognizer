@@ -32,13 +32,11 @@ void sudoku_binarize(const cv::Mat& source_image, cv::Mat& dest_image){
     cv::Mat gray_image;
     cv::cvtColor(source_image, gray_image, CV_RGB2GRAY);
 
-    cv::Mat blurred_image = gray_image.clone();
-    cv::medianBlur(gray_image, blurred_image, 5);
+    cv::medianBlur(gray_image, gray_image, 5);
 
-    cv::Mat temp_image;
-    cv::adaptiveThreshold(blurred_image, temp_image, 255, CV_ADAPTIVE_THRESH_MEAN_C, CV_THRESH_BINARY, 11, 2);
+    cv::adaptiveThreshold(gray_image, dest_image, 255, CV_ADAPTIVE_THRESH_MEAN_C, CV_THRESH_BINARY, 11, 2);
 
-    cv::medianBlur(temp_image, dest_image, 5);
+    cv::medianBlur(dest_image, dest_image, 5);
 
     auto structure_elem = cv::getStructuringElement(cv::MORPH_CROSS, cv::Size(3, 3));
     cv::morphologyEx(dest_image, dest_image, cv::MORPH_DILATE, structure_elem);
