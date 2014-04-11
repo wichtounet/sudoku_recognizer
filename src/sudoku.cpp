@@ -22,8 +22,7 @@ int main(int argc, char** argv ){
         if(argc == 3){
             std::string image_source_path(argv[2]);
 
-            cv::Mat source_image;
-            source_image = cv::imread(image_source_path.c_str(), 1);
+            auto source_image = cv::imread(image_source_path.c_str(), 1);
 
             if (!source_image.data){
                 std::cout << "Invalid source_image" << std::endl;
@@ -46,8 +45,7 @@ int main(int argc, char** argv ){
 
                 std::cout << image_source_path << std::endl;
 
-                cv::Mat source_image;
-                source_image = cv::imread(image_source_path.c_str(), 1);
+                auto source_image = cv::imread(image_source_path.c_str(), 1);
 
                 if (!source_image.data){
                     std::cout << "Invalid source_image" << std::endl;
