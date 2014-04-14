@@ -4,13 +4,13 @@ default: release
 
 OUTPUT=sudoku
 
-CPP_FILES=$(wildcard src/*.cpp)
+CPP_FILES:=$(wildcard src/*.cpp)
 
-DEBUG_D_FILES=$(CPP_FILES:%.cpp=debug/%.cpp.d)
-RELEASE_D_FILES=$(CPP_FILES:%.cpp=release/%.cpp.d)
+DEBUG_D_FILES:=$(CPP_FILES:%.cpp=debug/%.cpp.d)
+RELEASE_D_FILES:=$(CPP_FILES:%.cpp=release/%.cpp.d)
 
-DEBUG_O_FILES=$(CPP_FILES:%.cpp=debug/%.cpp.o)
-RELEASE_O_FILES=$(CPP_FILES:%.cpp=release/%.cpp.o)
+DEBUG_O_FILES:=$(CPP_FILES:%.cpp=debug/%.cpp.o)
+RELEASE_O_FILES:=$(CPP_FILES:%.cpp=release/%.cpp.o)
 
 CC=clang++
 LD=clang++
