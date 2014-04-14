@@ -15,9 +15,11 @@ RELEASE_O_FILES=$(CPP_FILES:%.cpp=release/%.cpp.o)
 CC=clang++
 LD=clang++
 
+PREFIX=/home/wichtounet/install/
+
 WARNING_FLAGS=-Wextra -Wall -Qunused-arguments -Wuninitialized -Wsometimes-uninitialized -Wno-long-long -Winit-self -Wdocumentation
-CXX_FLAGS=-Iinclude -I../dbn/include -std=c++1y -stdlib=libc++ $(WARNING_FLAGS)
-LD_FLAGS=$(CXX_FLAGS) -lopencv_core -lopencv_imgproc -lopencv_highgui
+CXX_FLAGS=-Iinclude -I../dbn/include -isystem $(PREFIX)/include/ -std=c++1y -stdlib=libc++ $(WARNING_FLAGS)
+LD_FLAGS=$(CXX_FLAGS) -L$(PREFIX)/lib/ -lopencv_core -lopencv_imgproc -lopencv_highgui
 
 DEBUG_FLAGS=-g
 RELEASE_FLAGS=-g -Ofast -march=native -fvectorize -fslp-vectorize-aggressive -fomit-frame-pointer
