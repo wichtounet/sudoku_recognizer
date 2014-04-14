@@ -2,6 +2,8 @@
 
 #include <iostream>
 
+#include "dbn/dbn.hpp"
+
 #include "detector.hpp"
 #include "data.hpp"
 
