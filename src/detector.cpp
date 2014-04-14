@@ -1,6 +1,7 @@
 #include <opencv2/opencv.hpp>
 
 #include <iostream>
+#include <numeric>
 
 #include "stop_watch.hpp"
 #include "algo.hpp"
