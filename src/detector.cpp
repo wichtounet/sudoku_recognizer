@@ -26,9 +26,9 @@ constexpr const bool SHOW_FINAL_SQUARES = false;
 constexpr const bool SHOW_HULL = false;
 constexpr const bool SHOW_HULL_FILL = false;
 constexpr const bool SHOW_GRID = false;
-constexpr const bool SHOW_TL_BR = true;
-constexpr const bool SHOW_GRID_NUMBERS= true;
-constexpr const bool SHOW_REGRID = true;
+constexpr const bool SHOW_TL_BR = false;
+constexpr const bool SHOW_GRID_NUMBERS= false;
+constexpr const bool SHOW_REGRID = false;
 
 void sudoku_binarize(const cv::Mat& source_image, cv::Mat& dest_image){
     cv::Mat gray_image;
