@@ -34,11 +34,11 @@ release/src/%.cpp.o: src/%.cpp
 
 debug/bin/$(OUTPUT): $(DEBUG_O_FILES)
 	@ mkdir -p debug/bin/
-	$(LD) $(LD_FLAGS) $(DEBUG_FLAGS) -o $@ $?
+	$(LD) $(LD_FLAGS) $(DEBUG_FLAGS) -o $@ $+
 
 release/bin/$(OUTPUT): $(RELEASE_O_FILES)
 	@ mkdir -p release/bin/
-	$(LD) $(LD_FLAGS) $(RELEASE_FLAGS) -o $@ $?
+	$(LD) $(LD_FLAGS) $(RELEASE_FLAGS) -o $@ $+
 
 debug/src/%.cpp.d: $(CPP_FILES)
 	@ mkdir -p debug/src/
