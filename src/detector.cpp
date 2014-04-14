@@ -1043,8 +1043,8 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, const std::vector<cv::Ro
         auto top = (64 - binary_rect_mat.rows) / 2;
         auto left = (64 - binary_rect_mat.cols) / 2;
 
-        for(size_t i = 0; i < binary_rect_mat.rows; ++i){
-            for(size_t j = 0; j < binary_rect_mat.cols; ++j){
+        for(size_t i = 0; i < static_cast<size_t>(binary_rect_mat.rows); ++i){
+            for(size_t j = 0; j < static_cast<size_t>(binary_rect_mat.cols); ++j){
                 cell_mat.at<unsigned char>(i+top,j+left) = binary_rect_mat.at<unsigned char>(i, j);
             }
         }
