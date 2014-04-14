@@ -3,6 +3,8 @@
 #include <iostream>
 
 #include "dbn/dbn.hpp"
+#include "dbn/layer.hpp"
+#include "dbn/conf.hpp"
 
 #include "detector.hpp"
 #include "data.hpp"
@@ -40,7 +42,7 @@ int main(int argc, char** argv ){
 
             cv::waitKey(0);
         } else {
-            for(size_t i = 1; i < static_cast<size_t>(argc); ++i){
+            for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
                 std::string image_source_path(argv[i]);
 
                 std::cout << image_source_path << std::endl;
@@ -61,7 +63,17 @@ int main(int argc, char** argv ){
             }
         }
     } else if(command == "train"){
-        for(size_t i = 1; i < static_cast<size_t>(argc); ++i){
+        typedef dbn::dbn<
+            dbn::layer<dbn::conf<true, 10, true, true>, 64 * 64, 30>,
+            //dbn::layer<dbn::conf<true, 100, false, true>, 300, 300>,
+            dbn::layer<dbn::conf<true, 10, false, true>, 30, 30>,
+            dbn::layer<dbn::conf<true, 10, false, true, true, dbn::Type::EXP>, 30, 10>> dbn_t;
+
+        auto dbn = std::make_unique<dbn_t>();
+
+        dbn->display();
+
+        for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
             std::string image_source_path(argv[i]);
 
             std::cout << image_source_path << std::endl;
