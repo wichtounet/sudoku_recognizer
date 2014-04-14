@@ -76,7 +76,7 @@ int main(int argc, char** argv ){
         dbn->display();
 
         std::vector<vector<double>> training_images;
-        std::vector<char> labels;
+        std::vector<uint8_t> training_labels;
 
         for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
             std::string image_source_path(argv[i]);
@@ -94,7 +94,7 @@ int main(int argc, char** argv ){
 
             for(size_t i = 0; i < 9; ++i){
                 for(size_t j = 0; j < 9; ++j){
-                    labels.push_back(data.results[i][j]);
+                    training_labels.push_back(data.results[i][j]);
                 }
             }
 
@@ -125,21 +125,18 @@ int main(int argc, char** argv ){
             }
         }
 
-        auto training_labels = dbn::make_fake(labels);
+        auto labels = dbn::make_fake(training_labels);
 
         std::cout << "Start pretraining" << std::endl;
         dbn->pretrain(training_images, 5);
 
         std::cout << "Start fine-tuning" << std::endl;
-        dbn->fine_tune(training_images, training_labels, 1, 1000);
+        dbn->fine_tune(training_images, labels, 1, 1000);
 
         std::ofstream os("dbn.dat", std::ofstream::binary);
         dbn->store(os);
 
-        std::cout << training_images.size() << " images" << std::endl;
-        std::cout << training_labels.size() << " fake_labels" << std::endl;
-
-        auto error_rate = dbn::test_set(dbn, training_images, labels, dbn::predictor());
+        auto error_rate = dbn::test_set(dbn, training_images, training_labels, dbn::predictor());
         std::cout << "\tError rate (normal): " << 100.0 * error_rate << std::endl;
     } else {
         std::cout << "Invalid command \"" << command << "\"" << std::endl;
