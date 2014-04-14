@@ -28,7 +28,7 @@ constexpr const bool SHOW_HULL_FILL = false;
 constexpr const bool SHOW_GRID = false;
 constexpr const bool SHOW_TL_BR = true;
 constexpr const bool SHOW_GRID_NUMBERS= true;
-constexpr const bool SHOW_REGRID = false;
+constexpr const bool SHOW_REGRID = true;
 
 void sudoku_binarize(const cv::Mat& source_image, cv::Mat& dest_image){
     cv::Mat gray_image;
@@ -1031,6 +1031,9 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, const std::vector<cv::Ro
 
         bounding.x = std::max(0, bounding.x);
         bounding.y = std::max(0, bounding.y);
+
+        bounding.width = std::min(source_image.cols - bounding.x, bounding.width);
+        bounding.height = std::min(source_image.rows - bounding.y, bounding.height);
 
         cv::Mat rect_mat(source_image, bounding);
 
