@@ -14,7 +14,9 @@ gt_data read_data(const std::string& image_source_path){
 
     for(size_t i = 0; i < 9; ++i){
         for(size_t j = 0; j < 9; ++j){
-            is >> data.results[i][j];
+            size_t value;
+            is >> value;
+            data.results[i][j] = static_cast<uint8_t>(value);
         }
     }
 
