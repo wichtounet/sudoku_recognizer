@@ -29,7 +29,8 @@ constexpr const bool SHOW_HULL_FILL = false;
 constexpr const bool SHOW_GRID = false;
 constexpr const bool SHOW_TL_BR = false;
 constexpr const bool SHOW_GRID_NUMBERS= true;
-constexpr const bool SHOW_REGRID = true;
+constexpr const bool SHOW_REGRID = false;
+constexpr const bool SHOW_CELLS = true;
 
 void sudoku_binarize(const cv::Mat& source_image, cv::Mat& dest_image){
     cv::Mat gray_image;
@@ -849,13 +850,6 @@ std::vector<cv::RotatedRect> compute_grid(const std::vector<cv::Point2f>& hull, 
             cv::RotatedRect p(p_center, p_size, angle);
 
             cells[i + j * 9] = p;
-
-            if(i + j * 9 == 40){
-                cv::circle(dest_image, p_tl, 1, cv::Scalar(0,255,255), 3);
-                cv::circle(dest_image, p_tr, 1, cv::Scalar(0,255,255), 3);
-                cv::circle(dest_image, p_bl, 1, cv::Scalar(0,255,255), 3);
-                cv::circle(dest_image, p_br, 1, cv::Scalar(0,255,255), 3);
-            }
         }
     }
 
@@ -1025,7 +1019,7 @@ std::vector<cv::RotatedRect> detect_grid(const cv::Mat& source_image, cv::Mat& d
     }
 }
 
-std::vector<cv::Mat> split(const cv::Mat& source_image, const std::vector<cv::RotatedRect>& cells){
+std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, const std::vector<cv::RotatedRect>& cells){
     if(cells.empty()){
         std::cout << "No cell provided, no splitting" << std::endl;
         return {};
@@ -1044,6 +1038,10 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, const std::vector<cv::Ro
 
         bounding.width = std::min(source_image.cols - bounding.x, bounding.width);
         bounding.height = std::min(source_image.rows - bounding.y, bounding.height);
+
+        if(SHOW_CELLS){
+            cv::rectangle(dest_image, bounding, cv::Scalar(0, 0, 255), 1, 8, 0);
+        }
 
         cv::Mat rect_mat(source_image, bounding);
 
