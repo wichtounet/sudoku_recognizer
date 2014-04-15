@@ -28,8 +28,8 @@ constexpr const bool SHOW_HULL = false;
 constexpr const bool SHOW_HULL_FILL = false;
 constexpr const bool SHOW_GRID = false;
 constexpr const bool SHOW_TL_BR = false;
-constexpr const bool SHOW_GRID_NUMBERS= false;
-constexpr const bool SHOW_REGRID = false;
+constexpr const bool SHOW_GRID_NUMBERS= true;
+constexpr const bool SHOW_REGRID = true;
 
 void sudoku_binarize(const cv::Mat& source_image, cv::Mat& dest_image){
     cv::Mat gray_image;
@@ -45,6 +45,7 @@ void sudoku_binarize(const cv::Mat& source_image, cv::Mat& dest_image){
     cv::morphologyEx(dest_image, dest_image, cv::MORPH_DILATE, structure_elem);
 }
 
+//TODO This should be improved
 void cell_binarize(const cv::Mat& source_image, cv::Mat& dest_image){
     cv::Mat gray_image;
     cv::cvtColor(source_image, gray_image, CV_RGB2GRAY);
