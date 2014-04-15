@@ -1035,21 +1035,28 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, const std::vector<cv::Ro
 
         cv::Mat rect_mat(source_image, bounding);
 
-        cv::Mat binary_rect_mat;
-        cell_binarize(rect_mat, binary_rect_mat);
-
         cv::Mat cell_mat(cv::Size(CELL_SIZE, CELL_SIZE), CV_8U);
 
-        //Fill with white
-        cell_mat = cv::Scalar(255,255,255);
+        if(CELL_EXPAND){
+            cv::Mat binary_rect_mat;
+            cell_binarize(rect_mat, binary_rect_mat);
 
-        auto top = (CELL_SIZE - binary_rect_mat.rows) / 2;
-        auto left = (CELL_SIZE - binary_rect_mat.cols) / 2;
+            //Fill with white
+            cell_mat = cv::Scalar(255,255,255);
 
-        for(size_t i = 0; i < static_cast<size_t>(binary_rect_mat.rows); ++i){
-            for(size_t j = 0; j < static_cast<size_t>(binary_rect_mat.cols); ++j){
-                cell_mat.at<unsigned char>(i+top,j+left) = binary_rect_mat.at<unsigned char>(i, j);
+            auto top = (CELL_SIZE - binary_rect_mat.rows) / 2;
+            auto left = (CELL_SIZE - binary_rect_mat.cols) / 2;
+
+            for(size_t i = 0; i < static_cast<size_t>(binary_rect_mat.rows); ++i){
+                for(size_t j = 0; j < static_cast<size_t>(binary_rect_mat.cols); ++j){
+                    cell_mat.at<unsigned char>(i+top,j+left) = binary_rect_mat.at<unsigned char>(i, j);
+                }
             }
+        } else {
+            cv::Mat resized_mat;
+            cv::resize(rect_mat, resized_mat, cell_mat.size(), 0, 0, cv::INTER_CUBIC);
+
+            cell_binarize(resized_mat, cell_mat);
         }
 
         cell_mats.emplace_back(std::move(cell_mat));
