@@ -968,6 +968,12 @@ std::vector<cv::RotatedRect> detect_grid(const cv::Mat& source_image, cv::Mat& d
             }
         }
 
+        if(squares.empty()){
+            std::cout << " No square found" << std::endl;
+
+            return {};
+        }
+
         std::cout << squares.size() << " squares found" << std::endl;
 
         auto max_square = find_max_square(squares, points);
@@ -1020,6 +1026,11 @@ std::vector<cv::RotatedRect> detect_grid(const cv::Mat& source_image, cv::Mat& d
 }
 
 std::vector<cv::Mat> split(const cv::Mat& source_image, const std::vector<cv::RotatedRect>& cells){
+    if(cells.empty()){
+        std::cout << "No cell provided, no splitting" << std::endl;
+        return {};
+    }
+
     std::vector<cv::Mat> cell_mats;
     for(size_t n = 0; n < cells.size(); ++n){
 
