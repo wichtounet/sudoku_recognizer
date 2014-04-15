@@ -24,14 +24,14 @@ constexpr const bool SHOW_CLUSTERED_INTERSECTIONS = false;
 constexpr const bool SHOW_SQUARES = false;
 constexpr const bool SHOW_MAX_SQUARES = false;
 constexpr const bool SHOW_FINAL_SQUARES = false;
-constexpr const bool SHOW_HULL = true;
+constexpr const bool SHOW_HULL = false;
 constexpr const bool SHOW_HULL_FILL = false;
 constexpr const bool SHOW_GRID = false;
 constexpr const bool SHOW_TL_BR = false;
 constexpr const bool SHOW_GRID_NUMBERS= false;
 constexpr const bool SHOW_REGRID = false;
 
-constexpr const bool SHOW_CELLS = true;
+constexpr const bool SHOW_CELLS = false;
 constexpr const bool SHOW_FINAL_CELLS = true;
 
 void sudoku_binarize(const cv::Mat& source_image, cv::Mat& dest_image){
@@ -807,15 +807,15 @@ std::vector<cv::RotatedRect> compute_grid(const std::vector<cv::Point2f>& hull, 
     cv::Point2f right_vector;
 
     if(std::fabs(bounding_v[tl].y - bounding_v[(tl+1) % 4].y) > std::fabs(bounding_v[tl].y - bounding_v[(tl+3)%4].y)){
-        down_vector.x = std::fabs(bounding_v[tl].x - bounding_v[(tl+1)%4].x);
-        down_vector.y = std::fabs(bounding_v[tl].y - bounding_v[(tl+1)%4].y);
-        right_vector.x = std::fabs(bounding_v[tl].x - bounding_v[(tl+3)%4].x);
-        right_vector.y = std::fabs(bounding_v[tl].y - bounding_v[(tl+3)%4].y);
+        down_vector.x = bounding_v[(tl+1)%4].x - bounding_v[tl].x;
+        down_vector.y = bounding_v[(tl+1)%4].y - bounding_v[tl].y;
+        right_vector.x = bounding_v[(tl+3)%4].x - bounding_v[tl].x;
+        right_vector.y = bounding_v[(tl+3)%4].y - bounding_v[tl].y;
     } else {
-        down_vector.x = std::fabs(bounding_v[tl].x - bounding_v[(tl+3)%4].x);
-        down_vector.y = std::fabs(bounding_v[tl].y - bounding_v[(tl+3)%4].y);
-        right_vector.x = std::fabs(bounding_v[tl].x - bounding_v[(tl+1)%4].x);
-        right_vector.y = std::fabs(bounding_v[tl].y - bounding_v[(tl+1)%4].y);
+        down_vector.x = bounding_v[(tl+3)%4].x - bounding_v[tl].x;
+        down_vector.y = bounding_v[(tl+3)%4].y - bounding_v[tl].y;
+        right_vector.x = bounding_v[(tl+1)%4].x - bounding_v[tl].x;
+        right_vector.y = bounding_v[(tl+1)%4].y - bounding_v[tl].y;
     }
 
     auto cell_factor = 1.0f / 9.0f;
@@ -825,24 +825,20 @@ std::vector<cv::RotatedRect> compute_grid(const std::vector<cv::Point2f>& hull, 
     for(std::size_t i = 0; i < 9; ++i){
         for(std::size_t j = 0; j < 9; ++j){
             cv::Point2f p_tl(
-                bounding_v[tl].x + cell_factor * i * right_vector.x,
-                bounding_v[tl].y + cell_factor * j * down_vector.y);
+                bounding_v[tl].x + cell_factor * (j * down_vector.x + i * right_vector.x),
+                bounding_v[tl].y + cell_factor * (j * down_vector.y + i * right_vector.y));
 
             cv::Point2f p_tr(
-                bounding_v[tl].x + cell_factor * (i+1) * right_vector.x,
-                bounding_v[tl].y + cell_factor * j * down_vector.y);
+                bounding_v[tl].x + cell_factor * (j * down_vector.x + (i+1) * right_vector.x),
+                bounding_v[tl].y + cell_factor * (j * down_vector.y + (i+1) * right_vector.y));
 
             cv::Point2f p_bl(
-                bounding_v[tl].x + cell_factor * i * right_vector.x,
-                bounding_v[tl].y + cell_factor * (j+1) * down_vector.y);
+                bounding_v[tl].x + cell_factor * ((j+1) * down_vector.x + i * right_vector.x),
+                bounding_v[tl].y + cell_factor * ((j+1) * down_vector.y + i * right_vector.y));
 
             cv::Point2f p_br(
-                bounding_v[tl].x + cell_factor * (i+1) * right_vector.x,
-                bounding_v[tl].y + cell_factor * (j+1) * down_vector.y);
-
-            cv::Point2f p_center(
-                (p_br.x + p_tl.x) / 2.0f - cell_factor * 0.1f * right_vector.x,
-                (p_br.y + p_tl.y) / 2.0f);
+                bounding_v[tl].x + cell_factor * ((j+1) * down_vector.x + (i+1) * right_vector.x),
+                bounding_v[tl].y + cell_factor * ((j+1) * down_vector.y + (i+1) * right_vector.y));
 
             if(SHOW_CELLS){
                 cv::line(dest_image, p_tl, p_tr, cv::Scalar(255,255,0));
@@ -850,6 +846,10 @@ std::vector<cv::RotatedRect> compute_grid(const std::vector<cv::Point2f>& hull, 
                 cv::line(dest_image, p_bl, p_br, cv::Scalar(255,255,0));
                 cv::line(dest_image, p_br, p_tr, cv::Scalar(255,255,0));
             }
+
+            cv::Point2f p_center(
+                (p_br.x + p_tl.x) / 2.0f - cell_factor * 0.1f * right_vector.x,
+                (p_br.y + p_tl.y) / 2.0f);
 
             auto diff_x = p_tr.x - p_tl.x;
             auto diff_y = p_tr.y - p_tl.y;
