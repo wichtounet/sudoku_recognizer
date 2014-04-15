@@ -73,8 +73,6 @@ int main(int argc, char** argv ){
 
         auto dbn = std::make_unique<dbn_t>();
 
-        dbn->display();
-
         std::vector<vector<double>> training_images;
         std::vector<uint8_t> training_labels;
 
@@ -125,7 +123,11 @@ int main(int argc, char** argv ){
             }
         }
 
+        assert(training_labels.size() == training_images.size();
+
         auto labels = dbn::make_fake(training_labels);
+
+        dbn->display();
 
         std::cout << "Start pretraining" << std::endl;
         dbn->pretrain(training_images, 5);
