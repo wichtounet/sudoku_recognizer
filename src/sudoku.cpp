@@ -65,14 +65,6 @@ int main(int argc, char** argv ){
             }
         }
     } else if(command == "train"){
-        typedef dbn::dbn<
-            dbn::layer<dbn::conf<true, 100, true, true>, CELL_SIZE * CELL_SIZE, 100>,
-            //dbn::layer<dbn::conf<true, 100, false, true>, 300, 300>,
-            dbn::layer<dbn::conf<true, 100, false, true>, 100, 100>,
-            dbn::layer<dbn::conf<true, 100, false, true, true, dbn::Type::EXP>, 100, 10>> dbn_t;
-
-        auto dbn = std::make_unique<dbn_t>();
-
         std::vector<vector<double>> training_images;
         std::vector<uint8_t> training_labels;
 
@@ -126,6 +118,14 @@ int main(int argc, char** argv ){
         assert(training_labels.size() == training_images.size());
 
         auto labels = dbn::make_fake(training_labels);
+
+        typedef dbn::dbn<
+            dbn::layer<dbn::conf<true, 50, true, true>, CELL_SIZE * CELL_SIZE, 100>,
+            //dbn::layer<dbn::conf<true, 50, false, true>, 300, 300>,
+            dbn::layer<dbn::conf<true, 50, false, true>, 100, 100>,
+            dbn::layer<dbn::conf<true, 50, false, true, true, dbn::Type::EXP>, 100, 10>> dbn_t;
+
+        auto dbn = std::make_unique<dbn_t>();
 
         dbn->display();
 
