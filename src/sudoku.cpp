@@ -123,7 +123,7 @@ int main(int argc, char** argv ){
             }
         }
 
-        assert(training_labels.size() == training_images.size();
+        assert(training_labels.size() == training_images.size());
 
         auto labels = dbn::make_fake(training_labels);
 
