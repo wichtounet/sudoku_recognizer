@@ -66,10 +66,10 @@ int main(int argc, char** argv ){
         }
     } else if(command == "train"){
         typedef dbn::dbn<
-            dbn::layer<dbn::conf<true, 100, true, true>, 64 * 64, 30>,
+            dbn::layer<dbn::conf<true, 100, true, true>, CELL_SIZE * CELL_SIZE, 100>,
             //dbn::layer<dbn::conf<true, 100, false, true>, 300, 300>,
-            dbn::layer<dbn::conf<true, 100, false, true>, 30, 30>,
-            dbn::layer<dbn::conf<true, 100, false, true, true, dbn::Type::EXP>, 30, 10>> dbn_t;
+            dbn::layer<dbn::conf<true, 100, false, true>, 100, 100>,
+            dbn::layer<dbn::conf<true, 100, false, true, true, dbn::Type::EXP>, 100, 10>> dbn_t;
 
         auto dbn = std::make_unique<dbn_t>();
 
@@ -103,7 +103,7 @@ int main(int argc, char** argv ){
             auto mats = split(source_image, cells);
 
             for(auto& mat : mats){
-                vector<double> image(64 * 64);
+                vector<double> image(CELL_SIZE * CELL_SIZE);
 
                 for(size_t i = 0; i < static_cast<size_t>(mat.rows); ++i){
                     for(size_t j = 0; j < static_cast<size_t>(mat.cols); ++j){
@@ -131,7 +131,7 @@ int main(int argc, char** argv ){
         dbn->pretrain(training_images, 5);
 
         std::cout << "Start fine-tuning" << std::endl;
-        dbn->fine_tune(training_images, labels, 1, 1000);
+        dbn->fine_tune(training_images, labels, 5, 1000);
 
         std::ofstream os("dbn.dat", std::ofstream::binary);
         dbn->store(os);

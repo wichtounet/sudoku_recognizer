@@ -3,6 +3,7 @@
 #include <iostream>
 #include <numeric>
 
+#include "detector.hpp"
 #include "stop_watch.hpp"
 #include "algo.hpp"
 #include "data.hpp"
@@ -1020,9 +1021,6 @@ std::vector<cv::RotatedRect> detect_grid(const cv::Mat& source_image, cv::Mat& d
 std::vector<cv::Mat> split(const cv::Mat& source_image, const std::vector<cv::RotatedRect>& cells){
     std::vector<cv::Mat> cell_mats;
     for(size_t n = 0; n < cells.size(); ++n){
-        cv::Mat cell_mat(cv::Size(64, 64), CV_8U);
-
-        cell_mat = cv::Scalar(255,255,255);
 
         //TODO In case the angle is too big, just taking the bounding rect
         //will not be enough
@@ -1040,8 +1038,13 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, const std::vector<cv::Ro
         cv::Mat binary_rect_mat;
         cell_binarize(rect_mat, binary_rect_mat);
 
-        auto top = (64 - binary_rect_mat.rows) / 2;
-        auto left = (64 - binary_rect_mat.cols) / 2;
+        cv::Mat cell_mat(cv::Size(CELL_SIZE, CELL_SIZE), CV_8U);
+
+        //Fill with white
+        cell_mat = cv::Scalar(255,255,255);
+
+        auto top = (CELL_SIZE - binary_rect_mat.rows) / 2;
+        auto left = (CELL_SIZE - binary_rect_mat.cols) / 2;
 
         for(size_t i = 0; i < static_cast<size_t>(binary_rect_mat.rows); ++i){
             for(size_t j = 0; j < static_cast<size_t>(binary_rect_mat.cols); ++j){
@@ -1053,7 +1056,7 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, const std::vector<cv::Ro
     }
 
     if(SHOW_REGRID){
-        cv::Mat remat(cv::Size(64 * 9, 64 * 9), CV_8U);
+        cv::Mat remat(cv::Size(CELL_SIZE * 9, CELL_SIZE * 9), CV_8U);
 
         for(size_t n = 0; n < cells.size(); ++n){
             const auto& mat = cell_mats[n];
@@ -1061,9 +1064,9 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, const std::vector<cv::Ro
             size_t ni = n / 9;
             size_t nj = n % 9;
 
-            for(size_t i = 0; i < 64; ++i){
-                for(size_t j = 0; j < 64; ++j){
-                    remat.at<char>(i+ni * 64,j+nj * 64) = mat.at<char>(i, j);
+            for(size_t i = 0; i < CELL_SIZE; ++i){
+                for(size_t j = 0; j < CELL_SIZE; ++j){
+                    remat.at<char>(i+ni * CELL_SIZE,j+nj * CELL_SIZE) = mat.at<char>(i, j);
                 }
             }
         }
