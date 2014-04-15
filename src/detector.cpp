@@ -24,13 +24,15 @@ constexpr const bool SHOW_CLUSTERED_INTERSECTIONS = false;
 constexpr const bool SHOW_SQUARES = false;
 constexpr const bool SHOW_MAX_SQUARES = false;
 constexpr const bool SHOW_FINAL_SQUARES = false;
-constexpr const bool SHOW_HULL = false;
+constexpr const bool SHOW_HULL = true;
 constexpr const bool SHOW_HULL_FILL = false;
 constexpr const bool SHOW_GRID = false;
 constexpr const bool SHOW_TL_BR = false;
-constexpr const bool SHOW_GRID_NUMBERS= true;
+constexpr const bool SHOW_GRID_NUMBERS= false;
 constexpr const bool SHOW_REGRID = false;
+
 constexpr const bool SHOW_CELLS = true;
+constexpr const bool SHOW_FINAL_CELLS = true;
 
 void sudoku_binarize(const cv::Mat& source_image, cv::Mat& dest_image){
     cv::Mat gray_image;
@@ -729,6 +731,8 @@ std::vector<cv::Point2f> compute_hull(const std::vector<cv::Point2f>& points, cv
     std::vector<cv::Point2f> hull;
     cv::convexHull(points, hull, false);
 
+    std::cout << "Hull of size " << hull.size() << " found" << std::endl;
+
     if(SHOW_HULL){
         for(std::size_t i = 0; i < hull.size(); ++i){
             cv::line(dest_image, hull[i], hull[(i+1)%hull.size()], cv::Scalar(128,128,128), 2, CV_AA);
@@ -778,7 +782,6 @@ std::vector<cv::RotatedRect> compute_grid(const std::vector<cv::Point2f>& hull, 
                 bounding_v[0].y + mul * (bounding_v[3].y - bounding_v[0].y));
 
             cv::line(dest_image, p3, p4, cv::Scalar(0,255,0), 2, CV_AA);
-
         }
     }
 
@@ -841,15 +844,20 @@ std::vector<cv::RotatedRect> compute_grid(const std::vector<cv::Point2f>& hull, 
                 (p_br.x + p_tl.x) / 2.0f - cell_factor * 0.1f * right_vector.x,
                 (p_br.y + p_tl.y) / 2.0f);
 
+            if(SHOW_CELLS){
+                cv::line(dest_image, p_tl, p_tr, cv::Scalar(255,255,0));
+                cv::line(dest_image, p_tl, p_bl, cv::Scalar(255,255,0));
+                cv::line(dest_image, p_bl, p_br, cv::Scalar(255,255,0));
+                cv::line(dest_image, p_br, p_tr, cv::Scalar(255,255,0));
+            }
+
             auto diff_x = p_tr.x - p_tl.x;
             auto diff_y = p_tr.y - p_tl.y;
-            auto angle = atan(diff_x / diff_y);
+            float angle = atan(diff_x / diff_y);
 
             cv::Size p_size(p_tr.x - p_tl.x, p_br.y - p_tr.y);
 
-            cv::RotatedRect p(p_center, p_size, angle);
-
-            cells[i + j * 9] = p;
+            cells[i + j * 9] = {p_center, p_size, angle};
         }
     }
 
@@ -1029,7 +1037,7 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
     for(size_t n = 0; n < cells.size(); ++n){
 
         //TODO In case the angle is too big, just taking the bounding rect
-        //will not be enough
+        //will not be good enough
 
         auto bounding = cells[n].boundingRect();
 
@@ -1039,7 +1047,7 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
         bounding.width = std::min(source_image.cols - bounding.x, bounding.width);
         bounding.height = std::min(source_image.rows - bounding.y, bounding.height);
 
-        if(SHOW_CELLS){
+        if(SHOW_FINAL_CELLS){
             cv::rectangle(dest_image, bounding, cv::Scalar(0, 0, 255), 1, 8, 0);
         }
 
