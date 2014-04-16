@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <numeric>
+#include <array>
 
 #include "detector.hpp"
 #include "stop_watch.hpp"
@@ -24,7 +25,7 @@ constexpr const bool SHOW_CLUSTERED_INTERSECTIONS = false;
 constexpr const bool SHOW_SQUARES = false;
 constexpr const bool SHOW_MAX_SQUARES = false;
 constexpr const bool SHOW_FINAL_SQUARES = false;
-constexpr const bool SHOW_HULL = false;
+constexpr const bool SHOW_HULL = true;
 constexpr const bool SHOW_HULL_FILL = false;
 constexpr const bool SHOW_GRID = false;
 constexpr const bool SHOW_TL_BR = false;
@@ -33,6 +34,8 @@ constexpr const bool SHOW_REGRID = false;
 
 constexpr const bool SHOW_CELLS = false;
 constexpr const bool SHOW_FINAL_CELLS = true;
+
+constexpr const bool CLEAN_CORNERS = false;
 
 void sudoku_binarize(const cv::Mat& source_image, cv::Mat& dest_image){
     cv::Mat gray_image;
@@ -232,6 +235,14 @@ bool intersects(const cv::Vec4i& v1, const cv::Vec4i& v2){
     return
             std::min(x1, x2) < x0 && std::max(x1, x2) > x0
         &&  std::min(x3, x4) < x0 && std::max(x3, x4) > x0;
+}
+
+float angle_rad(const cv::Point2f& a, const cv::Point2f& b){
+    return acos(a.dot(b) / (norm(a) * norm(b)));
+}
+
+float angle_deg(const cv::Point2f& a, const cv::Point2f& b){
+    return angle_rad(a,b) * 180.0f / CV_PI;
 }
 
 float angle(const line_t& l){
@@ -749,11 +760,94 @@ std::vector<cv::Point2f> compute_hull(const std::vector<cv::Point2f>& points, cv
     return hull;
 }
 
-std::vector<cv::RotatedRect> compute_grid(const std::vector<cv::Point2f>& hull, cv::Mat& dest_image){
-    auto bounding = cv::minAreaRect(hull);
+const constexpr bool BOUNDING_RECT = false;
 
-    cv::Point2f bounding_v[4];
-    bounding.points(bounding_v);
+std::array<cv::Point2f, 4> bounding_rect(const std::vector<cv::Point2f>& hull){
+    std::array<cv::Point2f, 4> bounding_v;
+
+    if(BOUNDING_RECT){
+        auto bounding = cv::boundingRect(hull);
+
+        bounding_v[0] = cv::Point2f(bounding.x, bounding.y);
+        bounding_v[1] = cv::Point2f(bounding.x + bounding.width, bounding.y);
+        bounding_v[2] = cv::Point2f(bounding.x, bounding.y + bounding.height);
+        bounding_v[3] = cv::Point2f(bounding.x + bounding.width, bounding.y + bounding.height);
+    } else {
+        auto bounding = cv::minAreaRect(hull);
+
+        bounding.points(bounding_v.data());
+    }
+
+    return bounding_v;
+}
+
+std::vector<cv::Rect> compute_grid(const std::vector<cv::Point2f>& hull, cv::Mat& dest_image){
+    std::vector<cv::Point2f> corners;
+
+    for(std::size_t i = 0; i < hull.size(); ++i){
+        auto j = (i + 1) % hull.size();
+        auto k = (i + 2) % hull.size();
+
+        auto angle = angle_deg(hull[i] - hull[j], hull[j] - hull[k]);
+
+        if(angle > 85.0f && angle < 95.0f){
+            corners.push_back(hull[j]);
+        }
+    }
+
+    if(corners.size() != 4){
+        corners.clear();
+
+        auto bounding = bounding_rect(hull);
+
+        std::copy(bounding.begin(), bounding.end(), std::back_inserter(corners));
+    }
+
+    assert(corners.size() == 4);
+
+    cv::Point2f a = corners[0] - corners[1];
+    cv::Point2f b = corners[3] - corners[2];
+
+    std::array<line_t, 10> vectors;
+
+    for(std::size_t i = 0; i < 10; ++i){
+        auto a_a = corners[1] + a * ((1.0f / 9.0f) * i);
+        auto b_b = corners[2] + b * ((1.0f / 9.0f) * i);
+
+        vectors[i] = {a_a, b_b};
+    }
+
+    std::vector<cv::Rect> cells;
+
+    for(std::size_t i = 0; i < 9; ++i){
+        for(std::size_t j = 0; j < 9; ++j){
+            auto p1 = vectors[j].first + (vectors[j].second - vectors[j].first) * ((1.0f / 9.0f) * i);
+            auto p2 = vectors[j].first + (vectors[j].second - vectors[j].first) * ((1.0f / 9.0f) * (i + 1));
+
+            auto p3 = vectors[j+1].first + (vectors[j+1].second - vectors[j+1].first) * ((1.0f / 9.0f) * i);
+            auto p4 = vectors[j+1].first + (vectors[j+1].second - vectors[j+1].first) * ((1.0f / 9.0f) * (i + 1));
+
+            std::vector<cv::Point2f> pts({p1, p2, p3, p4});
+            cells.push_back(cv::boundingRect(pts));
+        }
+    }
+
+    if(SHOW_FINAL_CELLS){
+        for(auto& cell : cells){
+            cv::rectangle(dest_image, cell, cv::Scalar(0, 0, 255), 1, 8, 0);
+        }
+    }
+
+    return cells;
+
+
+
+
+
+
+
+
+    /*auto bounding_v = bounding_rect(hull);
 
     if(SHOW_GRID){
         for(std::size_t i = 0; i < 4; ++i){
@@ -867,7 +961,7 @@ std::vector<cv::RotatedRect> compute_grid(const std::vector<cv::Point2f>& hull, 
         }
     }
 
-    return cells;
+    return cells;*/
 }
 
 void intersects_test(){
@@ -927,7 +1021,7 @@ void intersects_test(){
 
 } //end of anonymous namespace
 
-std::vector<cv::RotatedRect> detect_grid(const cv::Mat& source_image, cv::Mat& dest_image){
+std::vector<cv::Rect> detect_grid(const cv::Mat& source_image, cv::Mat& dest_image){
     auto_stop_watch<std::chrono::microseconds> watch("sudoku_lines");
 
     dest_image = source_image.clone();
@@ -1027,7 +1121,7 @@ std::vector<cv::RotatedRect> detect_grid(const cv::Mat& source_image, cv::Mat& d
     }
 }
 
-std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, const std::vector<cv::RotatedRect>& cells){
+std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, const std::vector<cv::Rect>& cells){
     if(cells.empty()){
         std::cout << "No cell provided, no splitting" << std::endl;
         return {};
@@ -1039,17 +1133,13 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
         //TODO In case the angle is too big, just taking the bounding rect
         //will not be good enough
 
-        auto bounding = cells[n].boundingRect();
+        auto bounding = cells[n];
 
         bounding.x = std::max(0, bounding.x);
         bounding.y = std::max(0, bounding.y);
 
         bounding.width = std::min(source_image.cols - bounding.x, bounding.width);
         bounding.height = std::min(source_image.rows - bounding.y, bounding.height);
-
-        if(SHOW_FINAL_CELLS){
-            cv::rectangle(dest_image, bounding, cv::Scalar(0, 0, 255), 1, 8, 0);
-        }
 
         cv::Mat rect_mat(source_image, bounding);
 
@@ -1075,6 +1165,17 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
             cv::resize(rect_mat, resized_mat, cell_mat.size(), 0, 0, cv::INTER_CUBIC);
 
             cell_binarize(resized_mat, cell_mat);
+
+            if(CLEAN_CORNERS){
+                for(size_t i = 0; i < static_cast<size_t>(cell_mat.rows); ++i){
+                    for(size_t j = 0; j < static_cast<size_t>(cell_mat.cols); ++j){
+                        if(i <= 2 || j <= 2 || i >= cell_mat.rows - 2 || j >= cell_mat.cols){
+                            cell_mat.at<unsigned char>(i, j) = 255.0;
+                        }
+                    }
+                }
+
+            }
         }
 
         cell_mats.emplace_back(std::move(cell_mat));
