@@ -29,7 +29,7 @@ constexpr const bool SHOW_HULL = true;
 constexpr const bool SHOW_HULL_FILL = false;
 constexpr const bool SHOW_TL_BR = true;
 constexpr const bool SHOW_GRID_NUMBERS= true;
-constexpr const bool SHOW_REGRID = false;
+constexpr const bool SHOW_REGRID = true;
 constexpr const bool SHOW_CELLS = true;
 
 void sudoku_binarize(const cv::Mat& source_image, cv::Mat& dest_image){
@@ -1045,9 +1045,6 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
     std::vector<cv::Mat> cell_mats;
     for(size_t n = 0; n < cells.size(); ++n){
 
-        //TODO In case the angle is too big, just taking the bounding rect
-        //will not be good enough
-
         auto bounding = cells[n];
 
         bounding.x = std::max(0, bounding.x);
@@ -1059,6 +1056,90 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
         cv::Mat rect_mat(source_image, bounding);
 
         cv::Mat cell_mat(cv::Size(CELL_SIZE, CELL_SIZE), CV_8U);
+        cell_mat = cv::Scalar(255, 255, 255);
+
+        //cv::Mat gray_rect_mat;
+        //cv::cvtColor(rect_mat, gray_rect_mat,CV_RGB2GRAY);
+
+        cv::Mat binary_rect_mat;
+        cell_binarize(rect_mat, binary_rect_mat);
+
+        cv::Mat binary_rect_mat_bak = binary_rect_mat.clone();
+
+        cv::Canny(binary_rect_mat, binary_rect_mat, 4, 12);
+
+        std::vector<cv::Vec4i> hierarchy;
+        std::vector<std::vector<cv::Point>> contours;
+        //cv::findContours(binary_rect_mat, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, cv::Point(0, 0));
+        cv::findContours(binary_rect_mat, contours, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE);
+
+        cv::RNG rng;
+
+        for(std::size_t i = 0; i < contours.size(); ++i){
+            cv::Scalar c(rng.uniform(0, 255), rng.uniform(0, 255), rng.uniform(0, 255));
+        //    cv::drawContours(cell_mat, contours, i, c, 2, 8, hierarchy, 0, cv::Point());
+            //cv::drawContours(cell_mat, contours, i, c, 2, 8);
+        }
+
+        if(contours.empty()){
+            std::cout << "Empty contours" << std::endl;
+        } else {
+            std::cout << "Countours: " << contours.size() << std::endl;
+
+            //if(n == 0){
+            std::size_t max_i = 0;
+            std::size_t max = 0;
+
+            auto width = rect_mat.cols * 0.75f;
+            auto height = rect_mat.rows * 0.75f;
+
+            for(std::size_t i = 1; i < contours.size(); ++i){
+                auto rect = cv::boundingRect(contours[i]);
+                auto area = rect.area();
+
+                if(rect.height < 5 || rect.width < 5 || rect.height > height || rect.width > width){
+                    continue;
+                }
+
+
+                if(area > max){
+                    max_i = i;
+                    max = area;
+                }
+            }
+
+            if(max > 0){
+                auto rect = cv::boundingRect(contours[max_i]);
+                //cv::rectangle(cell_mat, rect, cv::Scalar(255, 0, 0), 3);
+
+                auto dim = std::max(rect.width, rect.height);
+
+                cv::Mat last_rect_mat(binary_rect_mat_bak, rect);
+
+                cv::Mat last_mat(cv::Size(dim, dim), last_rect_mat.type());
+                last_mat = cv::Scalar(255,255,255);
+
+                last_rect_mat.copyTo(last_mat(cv::Rect((dim - rect.width) / 2, (dim - rect.height) / 2, rect.width, rect.height)));
+
+                cv::resize(last_mat, cell_mat, cell_mat.size(), 0, 0, cv::INTER_CUBIC);
+            }
+
+
+            //cv::drawContours(cell_mat, contours, max_i, cv::Scalar(0, 255, 255), 2, 8, hierarchy, 0, cv::Point());
+            //cv::drawContours(cell_mat, contours, max_i, cv::Scalar(0, 0, 255));
+            //}
+        }
+
+
+        //cv::resize(binary_rect_mat, cell_mat, cell_mat.size(), 0, 0, cv::INTER_CUBIC);
+
+        cell_mats.emplace_back(std::move(cell_mat));
+
+
+
+
+
+        /*cv::Mat cell_mat(cv::Size(CELL_SIZE, CELL_SIZE), CV_8U);
 
         if(CELL_EXPAND){
             cv::Mat binary_rect_mat;
@@ -1082,7 +1163,7 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
             cell_binarize(resized_mat, cell_mat);
         }
 
-        cell_mats.emplace_back(std::move(cell_mat));
+        cell_mats.emplace_back(std::move(cell_mat));*/
     }
 
     if(SHOW_REGRID){
@@ -1091,14 +1172,11 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
         for(size_t n = 0; n < cells.size(); ++n){
             const auto& mat = cell_mats[n];
 
-            size_t ni = n / 9;
-            size_t nj = n % 9;
+            size_t ni = n % 9;
+            size_t nj = n / 9;
 
-            for(size_t i = 0; i < CELL_SIZE; ++i){
-                for(size_t j = 0; j < CELL_SIZE; ++j){
-                    remat.at<char>(i+ni * CELL_SIZE,j+nj * CELL_SIZE) = mat.at<char>(i, j);
-                }
-            }
+            mat.copyTo(remat(cv::Rect(ni * CELL_SIZE, nj * CELL_SIZE, CELL_SIZE, CELL_SIZE)));
+
         }
 
         cv::namedWindow("Sudoku Final", cv::WINDOW_AUTOSIZE);

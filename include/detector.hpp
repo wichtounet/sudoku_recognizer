@@ -5,7 +5,7 @@
 
 #include <opencv2/opencv.hpp>
 
-constexpr const size_t CELL_SIZE = 48;
+constexpr const size_t CELL_SIZE = 32;
 constexpr const bool CELL_EXPAND = false;
 
 std::vector<cv::Rect> detect_grid(const cv::Mat& source_image, cv::Mat& dest_image);
