@@ -27,15 +27,10 @@ constexpr const bool SHOW_MAX_SQUARES = false;
 constexpr const bool SHOW_FINAL_SQUARES = false;
 constexpr const bool SHOW_HULL = true;
 constexpr const bool SHOW_HULL_FILL = false;
-constexpr const bool SHOW_GRID = false;
-constexpr const bool SHOW_TL_BR = false;
-constexpr const bool SHOW_GRID_NUMBERS= false;
+constexpr const bool SHOW_TL_BR = true;
+constexpr const bool SHOW_GRID_NUMBERS= true;
 constexpr const bool SHOW_REGRID = false;
-
-constexpr const bool SHOW_CELLS = false;
-constexpr const bool SHOW_FINAL_CELLS = true;
-
-constexpr const bool CLEAN_CORNERS = false;
+constexpr const bool SHOW_CELLS = true;
 
 void sudoku_binarize(const cv::Mat& source_image, cv::Mat& dest_image){
     cv::Mat gray_image;
@@ -805,87 +800,13 @@ std::vector<cv::Rect> compute_grid(const std::vector<cv::Point2f>& hull, cv::Mat
 
     assert(corners.size() == 4);
 
-    cv::Point2f a = corners[0] - corners[1];
-    cv::Point2f b = corners[3] - corners[2];
-
-    std::array<line_t, 10> vectors;
-
-    for(std::size_t i = 0; i < 10; ++i){
-        auto a_a = corners[1] + a * ((1.0f / 9.0f) * i);
-        auto b_b = corners[2] + b * ((1.0f / 9.0f) * i);
-
-        vectors[i] = {a_a, b_b};
-    }
-
-    std::vector<cv::Rect> cells;
-
-    for(std::size_t i = 0; i < 9; ++i){
-        for(std::size_t j = 0; j < 9; ++j){
-            auto p1 = vectors[j].first + (vectors[j].second - vectors[j].first) * ((1.0f / 9.0f) * i);
-            auto p2 = vectors[j].first + (vectors[j].second - vectors[j].first) * ((1.0f / 9.0f) * (i + 1));
-
-            auto p3 = vectors[j+1].first + (vectors[j+1].second - vectors[j+1].first) * ((1.0f / 9.0f) * i);
-            auto p4 = vectors[j+1].first + (vectors[j+1].second - vectors[j+1].first) * ((1.0f / 9.0f) * (i + 1));
-
-            std::vector<cv::Point2f> pts({p1, p2, p3, p4});
-            cells.push_back(cv::boundingRect(pts));
-        }
-    }
-
-    if(SHOW_FINAL_CELLS){
-        for(auto& cell : cells){
-            cv::rectangle(dest_image, cell, cv::Scalar(0, 0, 255), 1, 8, 0);
-        }
-    }
-
-    return cells;
-
-
-
-
-
-
-
-
-    /*auto bounding_v = bounding_rect(hull);
-
-    if(SHOW_GRID){
-        for(std::size_t i = 0; i < 4; ++i){
-            cv::line(dest_image, bounding_v[i], bounding_v[(i+1)%4], cv::Scalar(0,0,255), 2, CV_AA);
-        }
-
-        for(std::size_t i = 1; i < 9; ++i){
-            auto mul = (1.0f / 9.0f) * i;
-
-            cv::Point2f p1(
-                bounding_v[0].x + mul * (bounding_v[1].x - bounding_v[0].x),
-                bounding_v[0].y + mul * (bounding_v[1].y - bounding_v[0].y));
-
-            cv::Point2f p2(
-                bounding_v[3].x + mul * (bounding_v[2].x - bounding_v[3].x),
-                bounding_v[3].y + mul * (bounding_v[2].y - bounding_v[3].y));
-
-            cv::line(dest_image, p1, p2, cv::Scalar(0,255,0), 2, CV_AA);
-
-            cv::Point2f p3(
-                bounding_v[1].x + mul * (bounding_v[2].x - bounding_v[1].x),
-                bounding_v[1].y + mul * (bounding_v[2].y - bounding_v[1].y));
-
-            cv::Point2f p4(
-                bounding_v[0].x + mul * (bounding_v[3].x - bounding_v[0].x),
-                bounding_v[0].y + mul * (bounding_v[3].y - bounding_v[0].y));
-
-            cv::line(dest_image, p3, p4, cv::Scalar(0,255,0), 2, CV_AA);
-        }
-    }
-
     std::size_t tl = 0;
     cv::Point2f origin(0.0f, 0.0f);
-    float min_dist = euclidean_distance(bounding_v[tl], origin);
+    float min_dist = euclidean_distance(corners[tl], origin);
 
     for(std::size_t i = 1; i < 4; ++i){
-        if(euclidean_distance(bounding_v[i], origin) < min_dist){
-            min_dist = euclidean_distance(bounding_v[i], origin);
+        if(euclidean_distance(corners[i], origin) < min_dist){
+            min_dist = euclidean_distance(corners[i], origin);
             tl = i;
         }
     }
@@ -893,75 +814,69 @@ std::vector<cv::Rect> compute_grid(const std::vector<cv::Point2f>& hull, cv::Mat
     std::size_t br = (tl + 2) % 4;
 
     if(SHOW_TL_BR){
-        cv::putText(dest_image, "TL", bounding_v[tl], cv::FONT_HERSHEY_PLAIN, 0.5f, cv::Scalar(0,255,25));
-        cv::putText(dest_image, "BR", bounding_v[br], cv::FONT_HERSHEY_PLAIN, 0.5f, cv::Scalar(0,255,25));
+        cv::putText(dest_image, "TL", corners[tl], cv::FONT_HERSHEY_PLAIN, 0.5f, cv::Scalar(0,255,25));
+        cv::putText(dest_image, "BR", corners[br], cv::FONT_HERSHEY_PLAIN, 0.5f, cv::Scalar(0,255,25));
     }
 
-    cv::Point2f down_vector;
-    cv::Point2f right_vector;
+    cv::Point2f a_vec;
+    cv::Point2f b_vec;
+    cv::Point2f a_p;
+    cv::Point2f b_p;
 
-    if(std::fabs(bounding_v[tl].y - bounding_v[(tl+1) % 4].y) > std::fabs(bounding_v[tl].y - bounding_v[(tl+3)%4].y)){
-        down_vector.x = bounding_v[(tl+1)%4].x - bounding_v[tl].x;
-        down_vector.y = bounding_v[(tl+1)%4].y - bounding_v[tl].y;
-        right_vector.x = bounding_v[(tl+3)%4].x - bounding_v[tl].x;
-        right_vector.y = bounding_v[(tl+3)%4].y - bounding_v[tl].y;
+    if(std::fabs(corners[tl].y - corners[(tl+1) % 4].y) > std::fabs(corners[tl].y - corners[(tl+3)%4].y)){
+        a_p = corners[(tl+1) % 4];
+        b_p = corners[(tl+2) % 4];
+        a_vec = corners[(tl+0) % 4] - corners[(tl + 1) % 4];
+        b_vec = corners[(tl+3) % 4] - corners[(tl + 2) % 4];
     } else {
-        down_vector.x = bounding_v[(tl+3)%4].x - bounding_v[tl].x;
-        down_vector.y = bounding_v[(tl+3)%4].y - bounding_v[tl].y;
-        right_vector.x = bounding_v[(tl+1)%4].x - bounding_v[tl].x;
-        right_vector.y = bounding_v[(tl+1)%4].y - bounding_v[tl].y;
+        a_p = corners[(tl+0) % 4];
+        b_p = corners[(tl+1) % 4];
+        a_vec = corners[(tl + 3) % 4] - corners[(tl+0) % 4];
+        b_vec = corners[(tl + 2) % 4] - corners[(tl + 1) % 4];
     }
+
+    std::array<line_t, 10> vectors;
 
     auto cell_factor = 1.0f / 9.0f;
 
-    std::vector<cv::RotatedRect> cells(9 * 9);
+    for(std::size_t i = 0; i < 10; ++i){
+        auto a_a = a_p + a_vec * (cell_factor * i);
+        auto b_b = b_p + b_vec * (cell_factor * i);
+
+        vectors[i] = {a_a, b_b};
+    }
+
+    std::vector<cv::Rect> cells(9 * 9);
 
     for(std::size_t i = 0; i < 9; ++i){
         for(std::size_t j = 0; j < 9; ++j){
-            cv::Point2f p_tl(
-                bounding_v[tl].x + cell_factor * (j * down_vector.x + i * right_vector.x),
-                bounding_v[tl].y + cell_factor * (j * down_vector.y + i * right_vector.y));
+            auto p1 = vectors[j].first + (vectors[j].second - vectors[j].first) * (cell_factor * i);
+            auto p2 = vectors[j].first + (vectors[j].second - vectors[j].first) * (cell_factor * (i + 1));
 
-            cv::Point2f p_tr(
-                bounding_v[tl].x + cell_factor * (j * down_vector.x + (i+1) * right_vector.x),
-                bounding_v[tl].y + cell_factor * (j * down_vector.y + (i+1) * right_vector.y));
+            auto p3 = vectors[j+1].first + (vectors[j+1].second - vectors[j+1].first) * (cell_factor * i);
+            auto p4 = vectors[j+1].first + (vectors[j+1].second - vectors[j+1].first) * (cell_factor * (i + 1));
 
-            cv::Point2f p_bl(
-                bounding_v[tl].x + cell_factor * ((j+1) * down_vector.x + i * right_vector.x),
-                bounding_v[tl].y + cell_factor * ((j+1) * down_vector.y + i * right_vector.y));
+            std::vector<cv::Point2f> pts({p1, p2, p3, p4});
+            cells[i + j * 9] = cv::boundingRect(pts);
+        }
+    }
 
-            cv::Point2f p_br(
-                bounding_v[tl].x + cell_factor * ((j+1) * down_vector.x + (i+1) * right_vector.x),
-                bounding_v[tl].y + cell_factor * ((j+1) * down_vector.y + (i+1) * right_vector.y));
-
-            if(SHOW_CELLS){
-                cv::line(dest_image, p_tl, p_tr, cv::Scalar(255,255,0));
-                cv::line(dest_image, p_tl, p_bl, cv::Scalar(255,255,0));
-                cv::line(dest_image, p_bl, p_br, cv::Scalar(255,255,0));
-                cv::line(dest_image, p_br, p_tr, cv::Scalar(255,255,0));
-            }
-
-            cv::Point2f p_center(
-                (p_br.x + p_tl.x) / 2.0f - cell_factor * 0.1f * right_vector.x,
-                (p_br.y + p_tl.y) / 2.0f);
-
-            auto diff_x = p_tr.x - p_tl.x;
-            auto diff_y = p_tr.y - p_tl.y;
-            float angle = atan(diff_x / diff_y);
-
-            cv::Size p_size(p_tr.x - p_tl.x, p_br.y - p_tr.y);
-
-            cells[i + j * 9] = {p_center, p_size, angle};
+    if(SHOW_CELLS){
+        for(auto& cell : cells){
+            cv::rectangle(dest_image, cell, cv::Scalar(0, 0, 255), 1, 8, 0);
         }
     }
 
     if(SHOW_GRID_NUMBERS){
         for(size_t i = 0; i < cells.size(); ++i){
-            cv::putText(dest_image, std::to_string(i + 1), cells[i].center, cv::FONT_HERSHEY_PLAIN, 0.7f, cv::Scalar(0,255,25));
+            auto center_x = cells[i].x + cells[i].width / 2.0f;
+            auto center_y = cells[i].y + cells[i].height / 2.0f;
+            cv::putText(dest_image, std::to_string(i + 1), cv::Point2f(center_x, center_y),
+                cv::FONT_HERSHEY_PLAIN, 0.7f, cv::Scalar(0,255,25));
         }
     }
 
-    return cells;*/
+    return cells;
 }
 
 void intersects_test(){
@@ -1165,17 +1080,6 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
             cv::resize(rect_mat, resized_mat, cell_mat.size(), 0, 0, cv::INTER_CUBIC);
 
             cell_binarize(resized_mat, cell_mat);
-
-            if(CLEAN_CORNERS){
-                for(size_t i = 0; i < static_cast<size_t>(cell_mat.rows); ++i){
-                    for(size_t j = 0; j < static_cast<size_t>(cell_mat.cols); ++j){
-                        if(i <= 2 || j <= 2 || i >= cell_mat.rows - 2 || j >= cell_mat.cols){
-                            cell_mat.at<unsigned char>(i, j) = 255.0;
-                        }
-                    }
-                }
-
-            }
         }
 
         cell_mats.emplace_back(std::move(cell_mat));
