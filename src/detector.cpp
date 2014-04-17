@@ -1039,8 +1039,10 @@ std::vector<cv::Rect> detect_grid(const cv::Mat& source_image, cv::Mat& dest_ima
 
 bool overlap(const cv::Rect& a, const cv::Rect& b){
     return
-        a.contains({b.x, b.y}) || a.contains({b.x + b.width, b.y}) || a.contains({b.x, b.y + b.height}) || a.contains({b.x + b.width, b.y + b.height}) ||
-        b.contains({a.x, a.y}) || b.contains({a.x + a.width, a.y}) || b.contains({a.x, a.y + a.height}) || b.contains({a.x + a.width, a.y + a.height});
+            a.contains({b.x, b.y}) || a.contains({b.x + b.width, b.y})
+        ||  a.contains({b.x, b.y + b.height}) || a.contains({b.x + b.width, b.y + b.height})
+        ||  b.contains({a.x, a.y}) || b.contains({a.x + a.width, a.y})
+        ||  b.contains({a.x, a.y + a.height}) || b.contains({a.x + a.width, a.y + a.height});
 }
 
 std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, const std::vector<cv::Rect>& cells){
