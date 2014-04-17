@@ -28,8 +28,8 @@ constexpr const bool SHOW_FINAL_SQUARES = false;
 constexpr const bool SHOW_HULL = false;
 constexpr const bool SHOW_HULL_FILL = false;
 constexpr const bool SHOW_TL_BR = false;
-constexpr const bool SHOW_GRID_NUMBERS= false;
-constexpr const bool SHOW_REGRID = true;
+constexpr const bool SHOW_GRID_NUMBERS= true;
+constexpr const bool SHOW_REGRID = false;
 constexpr const bool SHOW_CELLS = true;
 constexpr const bool SHOW_CHAR_CELLS = true;
 
@@ -58,7 +58,7 @@ void cell_binarize(const cv::Mat& source_image, cv::Mat& dest_image){
     cv::medianBlur(dest_image, dest_image, 5);
 
     auto structure_elem = cv::getStructuringElement(cv::MORPH_CROSS, cv::Size(3, 3));
-    cv::morphologyEx(dest_image, dest_image, cv::MORPH_DILATE, structure_elem);
+//    cv::morphologyEx(dest_image, dest_image, cv::MORPH_DILATE, structure_elem);
 }
 
 constexpr bool almost_equals(float a, float b, float epsilon){
@@ -1037,6 +1037,12 @@ std::vector<cv::Rect> detect_grid(const cv::Mat& source_image, cv::Mat& dest_ima
     }
 }
 
+bool overlap(const cv::Rect& a, const cv::Rect& b){
+    return
+        a.contains({b.x, b.y}) || a.contains({b.x + b.width, b.y}) || a.contains({b.x, b.y + b.height}) || a.contains({b.x + b.width, b.y + b.height}) ||
+        b.contains({a.x, a.y}) || b.contains({a.x + a.width, a.y}) || b.contains({a.x, a.y + a.height}) || b.contains({a.x + a.width, a.y + a.height});
+}
+
 std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, const std::vector<cv::Rect>& cells){
     if(cells.empty()){
         std::cout << "No cell provided, no splitting" << std::endl;
@@ -1063,55 +1069,173 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
 
         cv::Mat binary_rect_mat_bak = binary_rect_mat.clone();
 
+        //if(n == 48){
+        /*
+            binary_rect_mat.at<uint8_t>(rect_mat.cols/2+1, 0) = 255;
+            binary_rect_mat.at<uint8_t>(rect_mat.cols/2+1, 1) = 255;
+            binary_rect_mat.at<uint8_t>(rect_mat.cols/2+1, 2) = 255;
+            binary_rect_mat.at<uint8_t>(rect_mat.cols/2, 0) = 255;
+            binary_rect_mat.at<uint8_t>(rect_mat.cols/2, 1) = 255;
+            binary_rect_mat.at<uint8_t>(rect_mat.cols/2, 2) = 255;
+            binary_rect_mat.at<uint8_t>(rect_mat.cols/2-1, 0) = 255;
+            binary_rect_mat.at<uint8_t>(rect_mat.cols/2-1, 1) = 255;
+            binary_rect_mat.at<uint8_t>(rect_mat.cols/2-1, 2) = 255;
+            */
+        //}
+
         cv::Canny(binary_rect_mat, binary_rect_mat, 4, 12);
 
         std::vector<std::vector<cv::Point>> contours;
-        cv::findContours(binary_rect_mat, contours, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE);
+        cv::findContours(binary_rect_mat, contours, CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE);
 
-        if(contours.empty()){
-            std::cout << "Empty contours" << std::endl;
-        } else {
-            std::cout << "Countours: " << contours.size() << std::endl;
+        for(std::size_t i = 0; i < contours.size(); ++i){
+            auto rect = cv::boundingRect(contours[i]);
 
-            std::size_t max_i = 0;
-            decltype(bounding.area()) max = 0;
+            if(rect.area() >= 0.90f * bounding.area()){
+                std::cout << "God damn problem" << std::endl;
+            }
+        }
 
+        std::cout << "n=" << n << std::endl;
+        std::cout << contours.size() << " contours found" << std::endl;
+
+        if(!contours.empty()){
             auto width = rect_mat.cols * 0.75f;
             auto height = rect_mat.rows * 0.75f;
 
-            for(std::size_t i = 1; i < contours.size(); ++i){
+            std::vector<cv::Rect> filtered_rects;
+
+            for(std::size_t i = 0; i < contours.size(); ++i){
                 auto rect = cv::boundingRect(contours[i]);
-                auto area = rect.area();
-
-                if(rect.height < 8 || rect.width < 8 || rect.height > height || rect.width > width){
-                    continue;
-                }
-
-                if(area > max){
-                    max_i = i;
-                    max = area;
-                }
-            }
-
-            if(max > 50){
-                auto rect = cv::boundingRect(contours[max_i]);
-
-                auto dim = std::max(rect.width, rect.height);
-
-                cv::Mat last_rect_mat(binary_rect_mat_bak, rect);
-
-                cv::Mat last_mat(cv::Size(dim, dim), last_rect_mat.type());
-                last_mat = cv::Scalar(255,255,255);
-
-                last_rect_mat.copyTo(last_mat(cv::Rect((dim - rect.width) / 2, (dim - rect.height) / 2, rect.width, rect.height)));
-
-                cv::resize(last_mat, cell_mat, cell_mat.size(), 0, 0, cv::INTER_CUBIC);
-
-                if(SHOW_CHAR_CELLS){
+                if(n == 1000){
                     auto big_rect = rect;
                     big_rect.x += bounding.x;
                     big_rect.y += bounding.y;
                     cv::rectangle(dest_image, big_rect, cv::Scalar(255, 0, 0), 2);
+                }
+                if(rect.height < 8 || rect.width < 8 || rect.height > height || rect.width > width){
+                    //continue;
+                }
+
+                //TODO This is quite dangerous
+                if(rect.x < 3 || rect.y < 3 || rect.x + rect.width > rect_mat.cols - 3 || rect.y + rect.height > rect_mat.rows - 3){
+                    continue;
+                }
+
+
+                if(rect.height > height || rect.width > width/* || rect.width > 1.33f * rect.height*/){
+                    continue;
+                }
+
+                if(rect.area() < 150){
+//                    continue;
+                }
+                if(n == 1000){
+                    auto big_rect = rect;
+                    big_rect.x += bounding.x;
+                    big_rect.y += bounding.y;
+                    cv::rectangle(dest_image, big_rect, cv::Scalar(255, 0, 0), 2);
+                }
+
+
+                if(std::find(filtered_rects.begin(), filtered_rects.end(), rect) == filtered_rects.end()){
+                    filtered_rects.push_back(rect);
+                }
+            }
+
+            std::cout << filtered_rects.size() << " filtered bounding rect found" << std::endl;
+
+            if(!filtered_rects.empty()){
+                bool merged;
+                do {
+                    merged = false;
+                    for(std::size_t i = 0; i < filtered_rects.size() && !merged; ++i){
+                        auto& a = filtered_rects[i];
+
+                        for(std::size_t j = i + 1; j < filtered_rects.size() && !merged; ++j){
+                            auto& b = filtered_rects[j];
+
+                            if(overlap(a, b)){
+                                std::vector<cv::Point2i> all_points({
+                                    {a.x, a.y},{a.x + a.width, a.y},{a.x,a.y + a.height},{a.x + a.width, a.y + a.height},
+                                    {b.x, b.y},{b.x + b.width, b.y},{b.x, b.y + b.height},{b.x + b.width, b.y + b.height}});
+
+                                auto result = cv::boundingRect(all_points);
+
+                                if(result.height > height || result.width > width || result.width > 2.0 * result.height){
+                                    continue;
+                                }
+
+                                a = result;
+
+                                filtered_rects.erase(filtered_rects.begin() + j);
+
+                                merged = true;
+                            }
+                        }
+                    }
+                } while(merged);
+
+                std::cout << filtered_rects.size() << " merged  bounding rect found" << std::endl;
+
+                filtered_rects.erase(std::remove_if(filtered_rects.begin(), filtered_rects.end(), [height,width](auto& rect){
+                    if(rect.height < 8 || rect.width < 8 || rect.height > height || rect.width > width){
+                        return true;
+                    }
+
+                    return false;
+                }), filtered_rects.end());
+
+                std::cout << filtered_rects.size() << " filtered  bounding rect found" << std::endl;
+
+                std::size_t max_i = 0;
+                decltype(bounding.area()) max = 0;
+
+                for(std::size_t i = 0; i < filtered_rects.size(); ++i){
+                    auto& rect = filtered_rects[i];
+                    auto area = rect.area();
+
+                    std::cout << rect << std::endl;
+
+                    if(area > max){
+                        max_i = i;
+                        max = area;
+                    }
+                }
+
+                if(max > 150){
+                    auto& rect = filtered_rects[max_i];
+
+                    std::cout << "Final rect " << rect << std::endl;
+
+                    //TODO Ideally, the cleaning should not be necessary if
+                    //post filtering steps were done correctly
+
+                    rect.x = std::max(0, rect.x);
+                    rect.y = std::max(0, rect.y);
+
+                    rect.width = std::min(binary_rect_mat_bak.cols - rect.x, rect.width);
+                    rect.height = std::min(binary_rect_mat_bak.rows - rect.y, rect.height);
+
+                    std::cout << "Clean final rect " << rect << std::endl;
+
+                    auto dim = std::max(rect.width, rect.height);
+
+                    cv::Mat last_rect_mat(binary_rect_mat_bak, rect);
+
+                    cv::Mat last_mat(cv::Size(dim, dim), last_rect_mat.type());
+                    last_mat = cv::Scalar(255,255,255);
+
+                    last_rect_mat.copyTo(last_mat(cv::Rect((dim - rect.width) / 2, (dim - rect.height) / 2, rect.width, rect.height)));
+
+                    cv::resize(last_mat, cell_mat, cell_mat.size(), 0, 0, cv::INTER_CUBIC);
+
+                    if(SHOW_CHAR_CELLS){
+                        auto big_rect = rect;
+                        big_rect.x += bounding.x;
+                        big_rect.y += bounding.y;
+                        cv::rectangle(dest_image, big_rect, cv::Scalar(255, 0, 0), 2);
+                    }
                 }
             }
         }
