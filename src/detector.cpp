@@ -29,7 +29,7 @@ constexpr const bool SHOW_HULL = false;
 constexpr const bool SHOW_HULL_FILL = false;
 constexpr const bool SHOW_TL_BR = false;
 constexpr const bool SHOW_GRID_NUMBERS= true;
-constexpr const bool SHOW_REGRID = false;
+constexpr const bool SHOW_REGRID = true;
 constexpr const bool SHOW_CELLS = true;
 constexpr const bool SHOW_CHAR_CELLS = true;
 
@@ -1069,32 +1069,10 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
 
         cv::Mat binary_rect_mat_bak = binary_rect_mat.clone();
 
-        //if(n == 48){
-        /*
-            binary_rect_mat.at<uint8_t>(rect_mat.cols/2+1, 0) = 255;
-            binary_rect_mat.at<uint8_t>(rect_mat.cols/2+1, 1) = 255;
-            binary_rect_mat.at<uint8_t>(rect_mat.cols/2+1, 2) = 255;
-            binary_rect_mat.at<uint8_t>(rect_mat.cols/2, 0) = 255;
-            binary_rect_mat.at<uint8_t>(rect_mat.cols/2, 1) = 255;
-            binary_rect_mat.at<uint8_t>(rect_mat.cols/2, 2) = 255;
-            binary_rect_mat.at<uint8_t>(rect_mat.cols/2-1, 0) = 255;
-            binary_rect_mat.at<uint8_t>(rect_mat.cols/2-1, 1) = 255;
-            binary_rect_mat.at<uint8_t>(rect_mat.cols/2-1, 2) = 255;
-            */
-        //}
-
         cv::Canny(binary_rect_mat, binary_rect_mat, 4, 12);
 
         std::vector<std::vector<cv::Point>> contours;
         cv::findContours(binary_rect_mat, contours, CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE);
-
-        for(std::size_t i = 0; i < contours.size(); ++i){
-            auto rect = cv::boundingRect(contours[i]);
-
-            if(rect.area() >= 0.90f * bounding.area()){
-                std::cout << "God damn problem" << std::endl;
-            }
-        }
 
         std::cout << "n=" << n << std::endl;
         std::cout << contours.size() << " contours found" << std::endl;
@@ -1105,38 +1083,18 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
 
             std::vector<cv::Rect> filtered_rects;
 
+            //TODO Use copy_if
             for(std::size_t i = 0; i < contours.size(); ++i){
                 auto rect = cv::boundingRect(contours[i]);
-                if(n == 1000){
-                    auto big_rect = rect;
-                    big_rect.x += bounding.x;
-                    big_rect.y += bounding.y;
-                    cv::rectangle(dest_image, big_rect, cv::Scalar(255, 0, 0), 2);
-                }
-                if(rect.height < 8 || rect.width < 8 || rect.height > height || rect.width > width){
-                    //continue;
-                }
 
                 //TODO This is quite dangerous
                 if(rect.x < 3 || rect.y < 3 || rect.x + rect.width > rect_mat.cols - 3 || rect.y + rect.height > rect_mat.rows - 3){
                     continue;
                 }
 
-
-                if(rect.height > height || rect.width > width/* || rect.width > 1.33f * rect.height*/){
+                if(rect.height > height || rect.width > width){
                     continue;
                 }
-
-                if(rect.area() < 150){
-//                    continue;
-                }
-                if(n == 1000){
-                    auto big_rect = rect;
-                    big_rect.x += bounding.x;
-                    big_rect.y += bounding.y;
-                    cv::rectangle(dest_image, big_rect, cv::Scalar(255, 0, 0), 2);
-                }
-
 
                 if(std::find(filtered_rects.begin(), filtered_rects.end(), rect) == filtered_rects.end()){
                     filtered_rects.push_back(rect);
@@ -1221,6 +1179,7 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
 
                     auto dim = std::max(rect.width, rect.height);
 
+                    //TODO Perhaps we can do better binarize at this last point
                     cv::Mat last_rect_mat(binary_rect_mat_bak, rect);
 
                     cv::Mat last_mat(cv::Size(dim, dim), last_rect_mat.type());
@@ -1253,7 +1212,6 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
             size_t nj = n / 9;
 
             mat.copyTo(remat(cv::Rect(ni * CELL_SIZE, nj * CELL_SIZE, CELL_SIZE, CELL_SIZE)));
-
         }
 
         cv::namedWindow("Sudoku Final", cv::WINDOW_AUTOSIZE);
