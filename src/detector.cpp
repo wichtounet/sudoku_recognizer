@@ -8,6 +8,7 @@
 #include "stop_watch.hpp"
 #include "algo.hpp"
 #include "data.hpp"
+#include "trig_utils.hpp"
 
 namespace {
 
@@ -61,30 +62,6 @@ constexpr bool almost_equals(float a, float b, float epsilon){
     return a >= (1.0f - epsilon) * b && a <= (1.0f + epsilon) * b;
 }
 
-//Manhattan distance between two points
-float manhattan_distance(const cv::Point2f& p1, const cv::Point2f& p2){
-    auto dx = p1.x - p2.x;
-    auto dy = p1.y - p2.y;
-    return dx * dx + dy * dy;
-}
-
-//Euclidean distance between two points
-float euclidean_distance(const cv::Point2f& p1, const cv::Point2f& p2){
-    return sqrt(manhattan_distance(p1, p2));
-}
-
-float manhattan_distance(const cv::Point2f& p, const line_t& line){
-    //Vector perpendicular to the line
-    //cv::Point2f v(line.second.y - line.first.y, -(line.second.x - line.first.x));
-
-    //Vector from the point to the first point on the line
-    //cv::Point2f r(line.first.x - p.x, line.first.y - p.y);
-
-    return
-        std::fabs((line.second.x - line.first.x) * (line.first.y - p.y) - (line.first.x - p.x) * (line.second.y - line.first.y))
-        / sqrt((line.second.x - line.first.x) * (line.second.x - line.first.x) + (line.second.y - line.first.y) * (line.second.y - line.first.y));
-}
-
 void draw_square(cv::Mat& dest_image, const cv::Point2f& p1, const cv::Point2f& p2, const cv::Point2f& p3, const cv::Point2f& p4){
     cv::line(dest_image, p1, p2, cv::Scalar(255, 0, 0), 3);
     cv::line(dest_image, p1, p3, cv::Scalar(255, 0, 0), 3);
@@ -92,26 +69,6 @@ void draw_square(cv::Mat& dest_image, const cv::Point2f& p1, const cv::Point2f& 
     cv::line(dest_image, p2, p3, cv::Scalar(255, 0, 0), 3);
     cv::line(dest_image, p2, p4, cv::Scalar(255, 0, 0), 3);
     cv::line(dest_image, p3, p4, cv::Scalar(255, 0, 0), 3);
-}
-
-cv::Point2f gravity(const std::vector<cv::Point2f>& vec){
-    if(vec.size() == 1){
-        return vec.front();
-    }
-
-    float x = 0.0;
-    float y = 0.0;
-
-    for(auto& v : vec){
-        x += v.x;
-        y += v.y;
-    }
-
-    return cv::Point2f(x / vec.size(), y / vec.size());
-}
-
-float distance_to_gravity(const cv::Point2f& p, const std::vector<cv::Point2f>& vec){
-    return euclidean_distance(p, gravity(vec));
 }
 
 bool is_square(const cv::Point2f& p1, const cv::Point2f& p2, const cv::Point2f& p3, const cv::Point2f& p4){
@@ -617,10 +574,6 @@ std::vector<std::vector<cv::Point2f>> cluster(const std::vector<cv::Point2f>& in
     return clusters;
 }
 
-std::vector<cv::Point2f> gravity_points(const std::vector<std::vector<cv::Point2f>>& clusters){
-    return vector_transform(begin(clusters), end(clusters), [](auto& cluster) -> cv::Point2f {return gravity(cluster);});
-}
-
 void draw_points(cv::Mat& dest_image, const std::vector<cv::Point2f>& points, const cv::Scalar& color){
     for(auto& point : points){
         cv::circle(dest_image, point, 1, color, 3);
@@ -1041,22 +994,6 @@ std::vector<cv::Rect> detect_grid(const cv::Mat& source_image, cv::Mat& dest_ima
 
         return compute_grid(hull, dest_image);
     }
-}
-
-bool overlap(const cv::Rect& a, const cv::Rect& b){
-    return
-            a.contains({b.x, b.y}) || a.contains({b.x + b.width, b.y})
-        ||  a.contains({b.x, b.y + b.height}) || a.contains({b.x + b.width, b.y + b.height})
-        ||  b.contains({a.x, a.y}) || b.contains({a.x + a.width, a.y})
-        ||  b.contains({a.x, a.y + a.height}) || b.contains({a.x + a.width, a.y + a.height});
-}
-
-void ensure_inside(const cv::Mat& image, cv::Rect& rect){
-    rect.x = std::max(0, rect.x);
-    rect.y = std::max(0, rect.y);
-
-    rect.width = std::min(image.cols - rect.x, rect.width);
-    rect.height = std::min(image.rows - rect.y, rect.height);
 }
 
 std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, const std::vector<cv::Rect>& cells, std::vector<line_t>& lines){
