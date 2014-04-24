@@ -80,37 +80,46 @@ int main(int argc, char** argv ){
 
             auto data = read_data(image_source_path);
 
-            for(size_t i = 0; i < 9; ++i){
-                for(size_t j = 0; j < 9; ++j){
-                    training_labels.push_back(data.results[i][j]);
-                }
-            }
-
             cv::Mat dest_image;
             auto mats = detect(source_image, dest_image);
 
-            for(auto& mat : mats){
-                vector<double> image(CELL_SIZE * CELL_SIZE);
+            for(size_t i = 0; i < 9; ++i){
+                for(size_t j = 0; j < 9; ++j){
+                    if(data.results[i][j]){
+                        auto n = i * 9 + j;
 
-                for(size_t i = 0; i < static_cast<size_t>(mat.rows); ++i){
-                    for(size_t j = 0; j < static_cast<size_t>(mat.cols); ++j){
-                        auto value_c = mat.at<unsigned char>(i, j);
+                        auto& mat = mats[n];
 
-                        double value_d;
-                        if(value_c == 255){
-                            value_d = 0.0;
-                        } else {
-                            assert(value_c == 0);
-                            value_d = 1.0;
+                        vector<double> image(CELL_SIZE * CELL_SIZE);
+
+                        assert(mat.rows == CELL_SIZE);
+                        assert(mat.cols == CELL_SIZE);
+
+                        for(size_t i = 0; i < static_cast<size_t>(mat.rows); ++i){
+                            for(size_t j = 0; j < static_cast<size_t>(mat.cols); ++j){
+                                auto value_c = static_cast<std::size_t>(mat.at<uint8_t>(i, j));
+
+                                //TODO Rebinarize after resize
+
+                                double value_d;
+                                if(value_c > 200){
+                                    value_d = 0.0;
+                                } else {
+                                    value_d = 1.0;
+                                }
+
+                                image[i * mat.cols + j] = value_d;
+                            }
                         }
 
-                        image[i * mat.cols + j] = value_d;
+                        training_labels.push_back(data.results[i][j]);
+                        training_images.emplace_back(std::move(image));
                     }
                 }
-
-                training_images.emplace_back(std::move(image));
             }
         }
+
+        std::cout << "Train with " << training_images.size() << " images" << std::endl;
 
         assert(training_labels.size() == training_images.size());
 
@@ -136,7 +145,7 @@ int main(int argc, char** argv ){
         dbn->store(os);
 
         auto error_rate = dbn::test_set(dbn, training_images, training_labels, dbn::predictor());
-        std::cout << "\tError rate (normal): " << 100.0 * error_rate << std::endl;
+        std::cout << "\tRaw Error rate (normal): " << 100.0 * error_rate << std::endl;
     } else {
         std::cout << "Invalid command \"" << command << "\"" << std::endl;
         return -1;

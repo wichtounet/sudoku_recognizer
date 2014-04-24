@@ -1130,12 +1130,14 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
                             if(min_distance < 50.0f){
                                 cell_mat = cv::Scalar(255,255,255);
                             } else {
+                                cell_mat = cv::Scalar(255);
+
                                 cv::Mat final_rect(source_image, big_rect);
                                 cv::Mat final_rect_binary;
                                 cell_binarize(final_rect, final_rect_binary);
 
                                 cv::Mat final_rect_mat(cv::Size(dim, dim), final_rect_binary.type());
-                                final_rect_mat = cv::Scalar(255,255,255);
+                                final_rect_mat = cv::Scalar(255);
 
                                 final_rect_binary.copyTo(final_rect_mat(cv::Rect((dim - rect.width) / 2, (dim - rect.height) / 2, rect.width, rect.height)));
 
