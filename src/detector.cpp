@@ -841,61 +841,6 @@ std::vector<cv::Rect> compute_grid(const std::vector<cv::Point2f>& hull, cv::Mat
     return cells;
 }
 
-void intersects_test(){
-    cv::Vec4i a;
-    cv::Vec4i b;
-
-    a[0] = 199; a[1] = 277; a[2] = 267; a[3] = 275;
-    b[0] = 0; b[1] = 318; b[2] = 0; b[3] = 197;
-    std::cout << "Returns: " << intersects(a, b) << std::endl;
-    std::cout << "Should:  " << 0 << std::endl;
-
-    a[0] = 0; a[1] = 318; a[2] = 0; a[3] = 197;
-    b[0] = 199; b[1] = 277; b[2] = 267; b[3] = 275;
-    std::cout << "Returns: " << intersects(a, b) << std::endl;
-    std::cout << "Should:  " << 0 << std::endl;
-
-    a[0] = 199; a[1] = 277; a[2] = 267; a[3] = 275;
-    b[0] = 200; b[1] = 318; b[2] = 200; b[3] = 197;
-    std::cout << "Returns: " << intersects(a, b) << std::endl;
-    std::cout << "Should:  " << 1 << std::endl;
-
-    a[0] = 100; a[1] = 100; a[2] = 300; a[3] = 300;
-    b[0] = 100; b[1] = 300; b[2] = 300; b[3] = 100;
-    std::cout << "Returns: " << intersects(a, b) << std::endl;
-    std::cout << "Should:  " << 1 << std::endl;
-
-    a[0] = 30; a[1] = 242; a[2] = 451; a[3] = 242;
-    b[0] = 440; b[1] = 346; b[2] = 440; b[3] = 5;
-    std::cout << "Returns: " << intersects(a, b) << std::endl;
-    std::cout << "Should:  " << 1 << std::endl;
-
-    a[0] = 440; a[1] = 346; a[2] = 440; a[3] = 5;
-    b[0] = 30; b[1] = 242; b[2] = 451; b[3] = 242;
-    std::cout << "Returns: " << intersects(a, b) << std::endl;
-    std::cout << "Should:  " << 1 << std::endl;
-
-    a[0] = 440; a[1] = 5; a[2] = 440; a[3] = 346;
-    b[0] = 30; b[1] = 242; b[2] = 451; b[3] = 242;
-    std::cout << "Returns: " << intersects(a, b) << std::endl;
-    std::cout << "Should:  " << 1 << std::endl;
-
-    a[0] = 440; a[1] = 346; a[2] = 440; a[3] = 5;
-    b[0] = 451; b[1] = 242; b[2] = 30; b[3] = 242;
-    std::cout << "Returns: " << intersects(a, b) << std::endl;
-    std::cout << "Should:  " << 1 << std::endl;
-
-    a[0] = 30; a[1] = 242; a[2] = 431; a[3] = 242;
-    b[0] = 440; b[1] = 346; b[2] = 440; b[3] = 5;
-    std::cout << "Returns: " << intersects(a, b) << std::endl;
-    std::cout << "Should:  " << 0 << std::endl;
-
-    a[0] = 100; a[1] = 200; a[2] = 500; a[3] = 200;
-    b[0] = 80; b[1] = 346; b[2] = 450; b[3] = 346;
-    std::cout << "Returns: " << intersects(a, b) << std::endl;
-    std::cout << "Should:  " << 0 << std::endl;
-}
-
 std::vector<cv::Rect> detect_grid(const cv::Mat& source_image, cv::Mat& dest_image, std::vector<line_t>& lines){
     auto_stop_watch<std::chrono::microseconds> watch("sudoku_lines");
 
