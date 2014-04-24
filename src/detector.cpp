@@ -77,6 +77,18 @@ float euclidean_distance(const cv::Point2f& p1, const cv::Point2f& p2){
     return sqrt(manhattan_distance(p1, p2));
 }
 
+float manhattan_distance(const cv::Point2f& p, const line_t& line){
+    //Vector perpendicular to the line
+    //cv::Point2f v(line.second.y - line.first.y, -(line.second.x - line.first.x));
+
+    //Vector from the point to the first point on the line
+    //cv::Point2f r(line.first.x - p.x, line.first.y - p.y);
+
+    return
+        std::fabs((line.second.x - line.first.x) * (line.first.y - p.y) - (line.first.x - p.x) * (line.second.y - line.first.y))
+        / sqrt((line.second.x - line.first.x) * (line.second.x - line.first.x) + (line.second.y - line.first.y) * (line.second.y - line.first.y));
+}
+
 void draw_square(cv::Mat& dest_image, const cv::Point2f& p1, const cv::Point2f& p2, const cv::Point2f& p3, const cv::Point2f& p4){
     cv::line(dest_image, p1, p2, cv::Scalar(255, 0, 0), 3);
     cv::line(dest_image, p1, p3, cv::Scalar(255, 0, 0), 3);
@@ -935,14 +947,12 @@ void intersects_test(){
     std::cout << "Should:  " << 0 << std::endl;
 }
 
-} //end of anonymous namespace
-
-std::vector<cv::Rect> detect_grid(const cv::Mat& source_image, cv::Mat& dest_image){
+std::vector<cv::Rect> detect_grid(const cv::Mat& source_image, cv::Mat& dest_image, std::vector<line_t>& lines){
     auto_stop_watch<std::chrono::microseconds> watch("sudoku_lines");
 
     dest_image = source_image.clone();
 
-    auto lines = detect_lines(source_image, dest_image);
+    lines = detect_lines(source_image, dest_image);
 
     auto intersections = find_intersections(lines, source_image);
 
@@ -1045,11 +1055,38 @@ bool overlap(const cv::Rect& a, const cv::Rect& b){
         ||  b.contains({a.x, a.y + a.height}) || b.contains({a.x + a.width, a.y + a.height});
 }
 
-std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, const std::vector<cv::Rect>& cells){
+std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, const std::vector<cv::Rect>& cells, const std::vector<line_t>& lines){
     if(cells.empty()){
         std::cout << "No cell provided, no splitting" << std::endl;
         return {};
     }
+
+    cv::Mat source;
+    sudoku_binarize(source_image, source);
+
+    if(lines.size() == 20){
+        for(auto& line : lines){
+            cv::line(source, line.first, line.second, cv::Scalar(255, 255, 255), 7, CV_AA);
+        }
+    } else {
+        for(auto& line : lines){
+            std::size_t near = 0;
+            for(auto& rect : cells){
+                if(manhattan_distance(cv::Point2f(rect.x, rect.y), line) < 10.0f){
+                    ++near;
+                }
+            }
+
+            if(near){
+                cv::line(source, line.first, line.second, cv::Scalar(255, 255, 255), 7, CV_AA);
+            }
+        }
+    }
+
+    cv::namedWindow("Sudoku Test", cv::WINDOW_AUTOSIZE);
+    cv::imshow("Sudoku Test", source);
+
+    //TODO Clean
 
     std::vector<cv::Mat> cell_mats;
     for(size_t n = 0; n < cells.size(); ++n){
@@ -1058,16 +1095,16 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
         bounding.x = std::max(0, bounding.x);
         bounding.y = std::max(0, bounding.y);
 
-        bounding.width = std::min(source_image.cols - bounding.x, bounding.width);
-        bounding.height = std::min(source_image.rows - bounding.y, bounding.height);
+        bounding.width = std::min(source.cols - bounding.x, bounding.width);
+        bounding.height = std::min(source.rows - bounding.y, bounding.height);
 
-        cv::Mat rect_mat(source_image, bounding);
+        cv::Mat rect_mat(source, bounding);
 
         cv::Mat cell_mat(cv::Size(CELL_SIZE, CELL_SIZE), CV_8U);
         cell_mat = cv::Scalar(255, 255, 255);
 
-        cv::Mat binary_rect_mat;
-        cell_binarize(rect_mat, binary_rect_mat);
+        cv::Mat binary_rect_mat = rect_mat.clone();
+//        cell_binarize(rect_mat, binary_rect_mat);
 
         cv::Mat binary_rect_mat_bak = binary_rect_mat.clone();
 
@@ -1076,7 +1113,7 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
         std::vector<std::vector<cv::Point>> contours;
         cv::findContours(binary_rect_mat, contours, CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE);
 
-        std::cout << "n=" << n << std::endl;
+        std::cout << "n=" << (n+1) << std::endl;
         std::cout << contours.size() << " contours found" << std::endl;
 
         if(!contours.empty()){
@@ -1089,9 +1126,22 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
             for(std::size_t i = 0; i < contours.size(); ++i){
                 auto rect = cv::boundingRect(contours[i]);
 
+                //Horizontal
+                /*if(rect.width > 1.5 * rect.height){
+                    if(rect.y < 5 || rect.y + rect.height > rect_mat.rows - 5){
+                        continue;
+                    }
+                }
+
+                if(rect.height > 2.0 * rect.width && rect.width < 8){
+                    if(rect.x < 5 || rect.x + rect.width > rect_mat.cols - 5){
+                        continue;
+                    }
+                }*/
+
                 //TODO This is quite dangerous
                 if(rect.x < 3 || rect.y < 3 || rect.x + rect.width > rect_mat.cols - 3 || rect.y + rect.height > rect_mat.rows - 3){
-                    continue;
+            //        continue;
                 }
 
                 if(rect.height > height || rect.width > width){
@@ -1138,8 +1188,41 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
 
                 std::cout << filtered_rects.size() << " merged  bounding rect found" << std::endl;
 
-                filtered_rects.erase(std::remove_if(filtered_rects.begin(), filtered_rects.end(), [height,width](auto& rect){
-                    if(rect.height < 8 || rect.width < 8 || rect.height > height || rect.width > width){
+                for(auto rect : filtered_rects){
+                    rect.x = std::max(0, rect.x);
+                    rect.y = std::max(0, rect.y);
+
+                    rect.width = std::min(binary_rect_mat_bak.cols - rect.x, rect.width);
+                    rect.height = std::min(binary_rect_mat_bak.rows - rect.y, rect.height);
+
+                    cv::Mat tmp_mat(binary_rect_mat_bak, rect);
+
+                    auto non_zero = cv::countNonZero(tmp_mat);
+                    auto area = rect.width * rect.height;
+                    auto fill_factor = (static_cast<float>(non_zero) / area);
+                        std::cout << "rect " << rect << ", Fill factor " << fill_factor  << std::endl;
+                        std::cout << "non_zero=" << non_zero << std::endl;
+                        std::cout << "area=" << area << std::endl;
+                }
+
+                filtered_rects.erase(std::remove_if(filtered_rects.begin(), filtered_rects.end(), [&binary_rect_mat_bak,height,width](auto rect){
+                    rect.x = std::max(0, rect.x);
+                    rect.y = std::max(0, rect.y);
+
+                    rect.width = std::min(binary_rect_mat_bak.cols - rect.x, rect.width);
+                    rect.height = std::min(binary_rect_mat_bak.rows - rect.y, rect.height);
+
+                    cv::Mat tmp_mat(binary_rect_mat_bak, rect);
+
+                    auto non_zero = cv::countNonZero(tmp_mat);
+                    auto area = rect.width * rect.height;
+                    auto fill_factor = (static_cast<float>(non_zero) / area);
+
+                    if(fill_factor > 0.95f){
+                        return true;
+                    }
+
+                    if(rect.height < 5 || rect.width < 5 || rect.height > height || rect.width > width){
                         return true;
                     }
 
@@ -1147,6 +1230,8 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
                 }), filtered_rects.end());
 
                 std::cout << filtered_rects.size() << " filtered  bounding rect found" << std::endl;
+
+                if(!filtered_rects.empty()){
 
                 std::size_t max_i = 0;
                 decltype(bounding.area()) max = 0;
@@ -1163,7 +1248,9 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
                     }
                 }
 
-                if(max > 150){
+                std::cout << "max_area=" << max << " (" << filtered_rects[max_i] << ")" << std::endl;
+
+                if(max > 100){
                     auto& rect = filtered_rects[max_i];
 
                     std::cout << "Final rect " << rect << std::endl;
@@ -1198,6 +1285,7 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
                         cv::rectangle(dest_image, big_rect, cv::Scalar(255, 0, 0), 2);
                     }
                 }
+                }
             }
         }
 
@@ -1221,4 +1309,12 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
     }
 
     return cell_mats;
+}
+
+} //end of anonymous namespace
+
+std::vector<cv::Mat> detect(const cv::Mat& source_image, cv::Mat& dest_image){
+    std::vector<line_t> lines;
+    auto cells = detect_grid(source_image, dest_image, lines);
+    return split(source_image, dest_image, cells, lines);
 }

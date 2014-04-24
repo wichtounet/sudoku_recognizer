@@ -36,8 +36,7 @@ int main(int argc, char** argv ){
             }
 
             cv::Mat dest_image;
-            auto cells = detect_grid(source_image, dest_image);
-            split(source_image, dest_image, cells);
+            detect(source_image, dest_image);
 
             cv::namedWindow("Sudoku Grid", cv::WINDOW_AUTOSIZE);
             cv::imshow("Sudoku Grid", dest_image);
@@ -57,8 +56,7 @@ int main(int argc, char** argv ){
                 }
 
                 cv::Mat dest_image;
-                auto cells = detect_grid(source_image, dest_image);
-                split(source_image, dest_image, cells);
+                detect(source_image, dest_image);
 
                 image_source_path.insert(image_source_path.rfind('.'), ".lines");
                 imwrite(image_source_path.c_str(), dest_image);
@@ -89,8 +87,7 @@ int main(int argc, char** argv ){
             }
 
             cv::Mat dest_image;
-            auto cells = detect_grid(source_image, dest_image);
-            auto mats = split(source_image, dest_image, cells);
+            auto mats = detect(source_image, dest_image);
 
             for(auto& mat : mats){
                 vector<double> image(CELL_SIZE * CELL_SIZE);

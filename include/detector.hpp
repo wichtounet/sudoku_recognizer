@@ -8,7 +8,6 @@
 constexpr const size_t CELL_SIZE = 32;
 constexpr const bool CELL_EXPAND = false;
 
-std::vector<cv::Rect> detect_grid(const cv::Mat& source_image, cv::Mat& dest_image);
-std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, const std::vector<cv::Rect>& cells);
+std::vector<cv::Mat> detect(const cv::Mat& source_image, cv::Mat& dest_image);
 
 #endif
