@@ -9,6 +9,7 @@
 #include "algo.hpp"
 #include "data.hpp"
 #include "trig_utils.hpp"
+#include "image_utils.hpp"
 
 namespace {
 
@@ -974,9 +975,7 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
         cv::Mat cell_mat(cv::Size(CELL_SIZE, CELL_SIZE), CV_8U);
         cell_mat = cv::Scalar(255, 255, 255);
 
-        auto bounding = cells[n];
-
-        ensure_inside(source, bounding);
+        auto bounding = ensure_inside(source, cells[n]);
 
         cv::Mat rect_image(source, bounding);
         rect_image = rect_image.clone(); //Necessary to clone to avoid modifying source
@@ -993,32 +992,28 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
             auto width = rect_image.cols * 0.75f;
             auto height = rect_image.rows * 0.75f;
 
-            std::vector<cv::Rect> filtered_rects;
+            std::vector<cv::Rect> candidates;
 
-            //TODO Use copy_if
+            //Get all interesting candidates
             for(std::size_t i = 0; i < contours.size(); ++i){
                 auto rect = cv::boundingRect(contours[i]);
 
-                if(rect.height > height || rect.width > width){
-                    continue;
-                }
-
-                if(std::find(filtered_rects.begin(), filtered_rects.end(), rect) == filtered_rects.end()){
-                    filtered_rects.push_back(rect);
+                if(rect.height <= height && rect.width <= width && std::find(candidates.begin(), candidates.end(), rect) == candidates.end()){
+                    candidates.push_back(rect);
                 }
             }
 
-            std::cout << filtered_rects.size() << " filtered bounding rect found" << std::endl;
+            std::cout << candidates.size() << " filtered candidates found" << std::endl;
 
-            if(!filtered_rects.empty()){
+            if(!candidates.empty()){
                 bool merged;
                 do {
                     merged = false;
-                    for(std::size_t i = 0; i < filtered_rects.size() && !merged; ++i){
-                        auto& a = filtered_rects[i];
+                    for(std::size_t i = 0; i < candidates.size() && !merged; ++i){
+                        auto& a = candidates[i];
 
-                        for(std::size_t j = i + 1; j < filtered_rects.size() && !merged; ++j){
-                            auto& b = filtered_rects[j];
+                        for(std::size_t j = i + 1; j < candidates.size() && !merged; ++j){
+                            auto& b = candidates[j];
 
                             if(overlap(a, b)){
                                 std::vector<cv::Point2i> all_points({
@@ -1033,7 +1028,7 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
 
                                 a = result;
 
-                                filtered_rects.erase(filtered_rects.begin() + j);
+                                candidates.erase(candidates.begin() + j);
 
                                 merged = true;
                             }
@@ -1041,18 +1036,12 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
                     }
                 } while(merged);
 
-                std::cout << filtered_rects.size() << " merged  bounding rect found" << std::endl;
+                std::cout << candidates.size() << " merged candidates found" << std::endl;
 
-                filtered_rects.erase(std::remove_if(filtered_rects.begin(), filtered_rects.end(), [&rect_image,height,width](auto rect){
+                candidates.erase(std::remove_if(candidates.begin(), candidates.end(), [&rect_image,height,width](auto rect){
                     ensure_inside(rect_image, rect);
 
-                    cv::Mat tmp_mat(rect_image, rect);
-
-                    auto non_zero = cv::countNonZero(tmp_mat);
-                    auto area = tmp_mat.cols * tmp_mat.rows;
-                    auto fill_factor = (static_cast<float>(non_zero) / area);
-
-                    if(fill_factor > 0.95f){
+                    if(fill_factor(cv::Mat(rect_image, rect)) > 0.95f){
                         return true;
                     }
 
@@ -1075,19 +1064,17 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
                     }
 
                     return false;
-                }), filtered_rects.end());
+                }), candidates.end());
 
-                std::cout << filtered_rects.size() << " filtered  bounding rect found" << std::endl;
+                std::cout << candidates.size() << " filtered  bounding rect found" << std::endl;
 
-                if(!filtered_rects.empty()){
+                if(!candidates.empty()){
                     std::size_t max_i = 0;
                     decltype(bounding.area()) max = 0;
 
-                    for(std::size_t i = 0; i < filtered_rects.size(); ++i){
-                        auto& rect = filtered_rects[i];
+                    for(std::size_t i = 0; i < candidates.size(); ++i){
+                        auto& rect = candidates[i];
                         auto area = rect.area();
-
-                        std::cout << rect << std::endl;
 
                         if(area > max){
                             max_i = i;
@@ -1096,7 +1083,7 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
                     }
 
                     if(max > 100){
-                        auto& rect = filtered_rects[max_i];
+                        auto& rect = candidates[max_i];
 
                         rect.x -= 2;
                         rect.width += 4;
@@ -1113,7 +1100,6 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
 
                         auto dim = std::max(rect.width, rect.height);
 
-                        //TODO Perhaps we can do better binarize at this last point
                         cv::Mat last_rect_mat(source, big_rect);
 
                         cv::Mat last_mat(cv::Size(dim, dim), last_rect_mat.type());
@@ -1123,14 +1109,12 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
 
                         cv::resize(last_mat, cell_mat, cell_mat.size(), 0, 0, cv::INTER_CUBIC);
 
-                        auto non_zero = cv::countNonZero(cell_mat);
-                        auto area = cell_mat.rows * cell_mat.cols;
-                        auto fill_factor = (static_cast<float>(non_zero) / area);
+                        auto fill = fill_factor(cell_mat);
 
-                        if(fill_factor < 0.95f){
+                        if(fill < 0.95f){
                             auto min_distance = 1000000.0f;
 
-                            if(fill_factor > 0.85f){
+                            if(fill > 0.85f){
                                 for(auto& line : lines){
                                     auto local_distance = 0.0f;
 
@@ -1141,8 +1125,6 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
 
                                     min_distance = std::min(min_distance, local_distance);
                                 }
-
-                                std::cout << min_distance << std::endl;
                             }
 
                             if(min_distance < 50.0f){

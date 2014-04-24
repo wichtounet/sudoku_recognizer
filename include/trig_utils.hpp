@@ -59,12 +59,21 @@ bool overlap(const Rect& a, const Rect& b){
 }
 
 template<typename Rect>
-void ensure_inside(const cv::Mat& image, Rect& rect){
+Rect& ensure_inside(const cv::Mat& image, Rect& rect){
     rect.x = std::max(0, rect.x);
     rect.y = std::max(0, rect.y);
 
     rect.width = std::min(image.cols - rect.x, rect.width);
     rect.height = std::min(image.rows - rect.y, rect.height);
+
+    return rect;
+}
+
+template<typename Rect>
+Rect ensure_inside(const cv::Mat& image, const Rect& src_rect){
+    Rect rect = src_rect;
+
+    return ensure_inside(image, rect);
 }
 
 #endif
