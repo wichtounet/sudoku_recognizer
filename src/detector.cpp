@@ -1055,7 +1055,7 @@ bool overlap(const cv::Rect& a, const cv::Rect& b){
         ||  b.contains({a.x, a.y + a.height}) || b.contains({a.x + a.width, a.y + a.height});
 }
 
-std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, const std::vector<cv::Rect>& cells, const std::vector<line_t>& lines){
+std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, const std::vector<cv::Rect>& cells, std::vector<line_t>& lines){
     if(cells.empty()){
         std::cout << "No cell provided, no splitting" << std::endl;
         return {};
@@ -1064,12 +1064,8 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
     cv::Mat source;
     sudoku_binarize(source_image, source);
 
-    if(lines.size() == 20){
-        for(auto& line : lines){
-            cv::line(source, line.first, line.second, cv::Scalar(255, 255, 255), 7, CV_AA);
-        }
-    } else {
-        for(auto& line : lines){
+    if(lines.size() > 20){
+        lines.erase(std::remove_if(lines.begin(), lines.end(), [&cells](auto& line){
             std::size_t near = 0;
             for(auto& rect : cells){
                 if(manhattan_distance(cv::Point2f(rect.x, rect.y), line) < 10.0f){
@@ -1077,10 +1073,12 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
                 }
             }
 
-            if(near){
-                cv::line(source, line.first, line.second, cv::Scalar(255, 255, 255), 7, CV_AA);
-            }
-        }
+            return !near;
+        }), lines.end());
+    }
+
+    for(auto& line : lines){
+        cv::line(source, line.first, line.second, cv::Scalar(255, 255, 255), 7, CV_AA);
     }
 
     //TODO Clean
@@ -1227,6 +1225,11 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
                 if(max > 100){
                     auto& rect = filtered_rects[max_i];
 
+                    rect.x -= 2;
+                    rect.width += 4;
+                    rect.y += 1;
+                    rect.height += 2;
+
                     //TODO Ideally, the cleaning should not be necessary if
                     //post filtering steps were done correctly
 
@@ -1250,11 +1253,45 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
 
                     cv::resize(last_mat, cell_mat, cell_mat.size(), 0, 0, cv::INTER_CUBIC);
 
-                    if(SHOW_CHAR_CELLS){
-                        auto big_rect = rect;
-                        big_rect.x += bounding.x;
-                        big_rect.y += bounding.y;
-                        cv::rectangle(dest_image, big_rect, cv::Scalar(255, 0, 0), 2);
+                    auto non_zero = cv::countNonZero(cell_mat);
+                    auto area = cell_mat.rows * cell_mat.cols;
+                    auto fill_factor = (static_cast<float>(non_zero) / area);
+                    std::cout << fill_factor << std::endl;
+
+                    if(fill_factor < 0.95f){
+                        auto min_distance = 1000000.0f;
+
+                        if(fill_factor > 0.85f){
+                            auto big_rect = rect;
+                            big_rect.x += bounding.x;
+                            big_rect.y += bounding.y;
+
+                            for(auto& line : lines){
+                                auto local_distance = 0.0f;
+
+                                local_distance += manhattan_distance(cv::Point2f(big_rect.x, big_rect.y), line);
+                                local_distance += manhattan_distance(cv::Point2f(big_rect.x + big_rect.width, big_rect.y), line);
+                                local_distance += manhattan_distance(cv::Point2f(big_rect.x, big_rect.y + big_rect.height), line);
+                                local_distance += manhattan_distance(cv::Point2f(big_rect.x + big_rect.width, big_rect.y + big_rect.height), line);
+
+                                min_distance = std::min(min_distance, local_distance);
+                            }
+
+                            std::cout << min_distance << std::endl;
+                        }
+
+                        if(min_distance < 50.0f){
+                            cell_mat = cv::Scalar(255,255,255);
+                        } else {
+                            if(SHOW_CHAR_CELLS){
+                                auto big_rect = rect;
+                                big_rect.x += bounding.x;
+                                big_rect.y += bounding.y;
+                                cv::rectangle(dest_image, big_rect, cv::Scalar(255, 0, 0), 2);
+                            }
+                        }
+                    } else {
+                        cell_mat = cv::Scalar(255,255,255);
                     }
                 }
                 }
