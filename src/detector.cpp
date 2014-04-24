@@ -977,8 +977,8 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
 
         auto bounding = ensure_inside(source, cells[n]);
 
-        cv::Mat rect_image(source, bounding);
-        rect_image = rect_image.clone(); //Necessary to clone to avoid modifying source
+        cv::Mat rect_image_clean(source, bounding);
+        cv::Mat rect_image = rect_image_clean.clone();
 
         cv::Canny(rect_image, rect_image, 4, 12);
 
@@ -1038,10 +1038,10 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
 
                 std::cout << candidates.size() << " merged candidates found" << std::endl;
 
-                candidates.erase(std::remove_if(candidates.begin(), candidates.end(), [&rect_image,height,width](auto rect){
-                    ensure_inside(rect_image, rect);
+                candidates.erase(std::remove_if(candidates.begin(), candidates.end(), [&rect_image_clean,height,width](auto rect){
+                    ensure_inside(rect_image_clean, rect);
 
-                    if(fill_factor(cv::Mat(rect_image, rect)) > 0.95f){
+                    if(fill_factor(cv::Mat(rect_image_clean, rect)) > 0.95f){
                         return true;
                     }
 
@@ -1051,14 +1051,14 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
 
                     //Horizontal
                     if(rect.width > 1.5 * rect.height){
-                        if(rect.y < 5 || rect.y + rect.height > rect_image.rows - 5){
+                        if(rect.y < 5 || rect.y + rect.height > rect_image_clean.rows - 5){
                             return true;
                         }
                     }
 
                     //Vertical
                     if(rect.height > 2.0 * rect.width && rect.width < 8){
-                        if(rect.x < 5 || rect.x + rect.width > rect_image.cols - 5){
+                        if(rect.x < 5 || rect.x + rect.width > rect_image_clean.cols - 5){
                             return true;
                         }
                     }
