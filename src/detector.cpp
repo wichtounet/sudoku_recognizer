@@ -1083,9 +1083,6 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
         }
     }
 
-    cv::namedWindow("Sudoku Test", cv::WINDOW_AUTOSIZE);
-    cv::imshow("Sudoku Test", source);
-
     //TODO Clean
 
     std::vector<cv::Mat> cell_mats;
@@ -1125,24 +1122,6 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
             //TODO Use copy_if
             for(std::size_t i = 0; i < contours.size(); ++i){
                 auto rect = cv::boundingRect(contours[i]);
-
-                //Horizontal
-                /*if(rect.width > 1.5 * rect.height){
-                    if(rect.y < 5 || rect.y + rect.height > rect_mat.rows - 5){
-                        continue;
-                    }
-                }
-
-                if(rect.height > 2.0 * rect.width && rect.width < 8){
-                    if(rect.x < 5 || rect.x + rect.width > rect_mat.cols - 5){
-                        continue;
-                    }
-                }*/
-
-                //TODO This is quite dangerous
-                if(rect.x < 3 || rect.y < 3 || rect.x + rect.width > rect_mat.cols - 3 || rect.y + rect.height > rect_mat.rows - 3){
-            //        continue;
-                }
 
                 if(rect.height > height || rect.width > width){
                     continue;
@@ -1188,23 +1167,6 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
 
                 std::cout << filtered_rects.size() << " merged  bounding rect found" << std::endl;
 
-                for(auto rect : filtered_rects){
-                    rect.x = std::max(0, rect.x);
-                    rect.y = std::max(0, rect.y);
-
-                    rect.width = std::min(binary_rect_mat_bak.cols - rect.x, rect.width);
-                    rect.height = std::min(binary_rect_mat_bak.rows - rect.y, rect.height);
-
-                    cv::Mat tmp_mat(binary_rect_mat_bak, rect);
-
-                    auto non_zero = cv::countNonZero(tmp_mat);
-                    auto area = rect.width * rect.height;
-                    auto fill_factor = (static_cast<float>(non_zero) / area);
-                        std::cout << "rect " << rect << ", Fill factor " << fill_factor  << std::endl;
-                        std::cout << "non_zero=" << non_zero << std::endl;
-                        std::cout << "area=" << area << std::endl;
-                }
-
                 filtered_rects.erase(std::remove_if(filtered_rects.begin(), filtered_rects.end(), [&binary_rect_mat_bak,height,width](auto rect){
                     rect.x = std::max(0, rect.x);
                     rect.y = std::max(0, rect.y);
@@ -1222,8 +1184,22 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
                         return true;
                     }
 
-                    if(rect.height < 5 || rect.width < 5 || rect.height > height || rect.width > width){
+                    if(rect.height < 10 || rect.width < 5 || rect.height > height || rect.width > width){
                         return true;
+                    }
+
+                    //Horizontal
+                    if(rect.width > 1.5 * rect.height){
+                        if(rect.y < 5 || rect.y + rect.height > binary_rect_mat_bak.rows - 5){
+                            return true;
+                        }
+                    }
+
+                    //Vertical
+                    if(rect.height > 2.0 * rect.width && rect.width < 8){
+                        if(rect.x < 5 || rect.x + rect.width > binary_rect_mat_bak.cols - 5){
+                            return true;
+                        }
                     }
 
                     return false;
@@ -1248,12 +1224,8 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
                     }
                 }
 
-                std::cout << "max_area=" << max << " (" << filtered_rects[max_i] << ")" << std::endl;
-
                 if(max > 100){
                     auto& rect = filtered_rects[max_i];
-
-                    std::cout << "Final rect " << rect << std::endl;
 
                     //TODO Ideally, the cleaning should not be necessary if
                     //post filtering steps were done correctly
@@ -1264,7 +1236,7 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
                     rect.width = std::min(binary_rect_mat_bak.cols - rect.x, rect.width);
                     rect.height = std::min(binary_rect_mat_bak.rows - rect.y, rect.height);
 
-                    std::cout << "Clean final rect " << rect << std::endl;
+                    std::cout << "Final rect " << rect << std::endl;
 
                     auto dim = std::max(rect.width, rect.height);
 
