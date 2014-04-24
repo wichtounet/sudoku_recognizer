@@ -47,18 +47,14 @@ void sudoku_binarize(const cv::Mat& source_image, cv::Mat& dest_image){
     cv::morphologyEx(dest_image, dest_image, cv::MORPH_DILATE, structure_elem);
 }
 
-//TODO This should be improved
 void cell_binarize(const cv::Mat& source_image, cv::Mat& dest_image){
     cv::Mat gray_image;
     cv::cvtColor(source_image, gray_image, CV_RGB2GRAY);
 
     dest_image = gray_image.clone();
-    cv::adaptiveThreshold(gray_image, dest_image, 255, CV_ADAPTIVE_THRESH_MEAN_C, CV_THRESH_BINARY, 11, 2);
+    cv::adaptiveThreshold(gray_image, dest_image, 255, CV_ADAPTIVE_THRESH_MEAN_C, CV_THRESH_BINARY, 7, 2);
 
-    cv::medianBlur(dest_image, dest_image, 5);
-
-    auto structure_elem = cv::getStructuringElement(cv::MORPH_CROSS, cv::Size(3, 3));
-//    cv::morphologyEx(dest_image, dest_image, cv::MORPH_DILATE, structure_elem);
+    cv::medianBlur(dest_image, dest_image, 3);
 }
 
 constexpr bool almost_equals(float a, float b, float epsilon){
@@ -1055,6 +1051,14 @@ bool overlap(const cv::Rect& a, const cv::Rect& b){
         ||  b.contains({a.x, a.y + a.height}) || b.contains({a.x + a.width, a.y + a.height});
 }
 
+void ensure_inside(const cv::Mat& image, cv::Rect& rect){
+    rect.x = std::max(0, rect.x);
+    rect.y = std::max(0, rect.y);
+
+    rect.width = std::min(image.cols - rect.x, rect.width);
+    rect.height = std::min(image.rows - rect.y, rect.height);
+}
+
 std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, const std::vector<cv::Rect>& cells, std::vector<line_t>& lines){
     if(cells.empty()){
         std::cout << "No cell provided, no splitting" << std::endl;
@@ -1085,35 +1089,27 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
 
     std::vector<cv::Mat> cell_mats;
     for(size_t n = 0; n < cells.size(); ++n){
-        auto bounding = cells[n];
-
-        bounding.x = std::max(0, bounding.x);
-        bounding.y = std::max(0, bounding.y);
-
-        bounding.width = std::min(source.cols - bounding.x, bounding.width);
-        bounding.height = std::min(source.rows - bounding.y, bounding.height);
-
-        cv::Mat rect_mat(source, bounding);
-
         cv::Mat cell_mat(cv::Size(CELL_SIZE, CELL_SIZE), CV_8U);
         cell_mat = cv::Scalar(255, 255, 255);
 
-        cv::Mat binary_rect_mat = rect_mat.clone();
-//        cell_binarize(rect_mat, binary_rect_mat);
+        auto bounding = cells[n];
 
-        cv::Mat binary_rect_mat_bak = binary_rect_mat.clone();
+        ensure_inside(source, bounding);
 
-        cv::Canny(binary_rect_mat, binary_rect_mat, 4, 12);
+        cv::Mat rect_image(source, bounding);
+        rect_image = rect_image.clone(); //Necessary to clone to avoid modifying source
+
+        cv::Canny(rect_image, rect_image, 4, 12);
 
         std::vector<std::vector<cv::Point>> contours;
-        cv::findContours(binary_rect_mat, contours, CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE);
+        cv::findContours(rect_image, contours, CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE);
 
         std::cout << "n=" << (n+1) << std::endl;
         std::cout << contours.size() << " contours found" << std::endl;
 
         if(!contours.empty()){
-            auto width = rect_mat.cols * 0.75f;
-            auto height = rect_mat.rows * 0.75f;
+            auto width = rect_image.cols * 0.75f;
+            auto height = rect_image.rows * 0.75f;
 
             std::vector<cv::Rect> filtered_rects;
 
@@ -1165,17 +1161,13 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
 
                 std::cout << filtered_rects.size() << " merged  bounding rect found" << std::endl;
 
-                filtered_rects.erase(std::remove_if(filtered_rects.begin(), filtered_rects.end(), [&binary_rect_mat_bak,height,width](auto rect){
-                    rect.x = std::max(0, rect.x);
-                    rect.y = std::max(0, rect.y);
+                filtered_rects.erase(std::remove_if(filtered_rects.begin(), filtered_rects.end(), [&rect_image,height,width](auto rect){
+                    ensure_inside(rect_image, rect);
 
-                    rect.width = std::min(binary_rect_mat_bak.cols - rect.x, rect.width);
-                    rect.height = std::min(binary_rect_mat_bak.rows - rect.y, rect.height);
-
-                    cv::Mat tmp_mat(binary_rect_mat_bak, rect);
+                    cv::Mat tmp_mat(rect_image, rect);
 
                     auto non_zero = cv::countNonZero(tmp_mat);
-                    auto area = rect.width * rect.height;
+                    auto area = tmp_mat.cols * tmp_mat.rows;
                     auto fill_factor = (static_cast<float>(non_zero) / area);
 
                     if(fill_factor > 0.95f){
@@ -1188,14 +1180,14 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
 
                     //Horizontal
                     if(rect.width > 1.5 * rect.height){
-                        if(rect.y < 5 || rect.y + rect.height > binary_rect_mat_bak.rows - 5){
+                        if(rect.y < 5 || rect.y + rect.height > rect_image.rows - 5){
                             return true;
                         }
                     }
 
                     //Vertical
                     if(rect.height > 2.0 * rect.width && rect.width < 8){
-                        if(rect.x < 5 || rect.x + rect.width > binary_rect_mat_bak.cols - 5){
+                        if(rect.x < 5 || rect.x + rect.width > rect_image.cols - 5){
                             return true;
                         }
                     }
@@ -1206,94 +1198,93 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
                 std::cout << filtered_rects.size() << " filtered  bounding rect found" << std::endl;
 
                 if(!filtered_rects.empty()){
+                    std::size_t max_i = 0;
+                    decltype(bounding.area()) max = 0;
 
-                std::size_t max_i = 0;
-                decltype(bounding.area()) max = 0;
+                    for(std::size_t i = 0; i < filtered_rects.size(); ++i){
+                        auto& rect = filtered_rects[i];
+                        auto area = rect.area();
 
-                for(std::size_t i = 0; i < filtered_rects.size(); ++i){
-                    auto& rect = filtered_rects[i];
-                    auto area = rect.area();
+                        std::cout << rect << std::endl;
 
-                    std::cout << rect << std::endl;
-
-                    if(area > max){
-                        max_i = i;
-                        max = area;
+                        if(area > max){
+                            max_i = i;
+                            max = area;
+                        }
                     }
-                }
 
-                if(max > 100){
-                    auto& rect = filtered_rects[max_i];
+                    if(max > 100){
+                        auto& rect = filtered_rects[max_i];
 
-                    rect.x -= 2;
-                    rect.width += 4;
-                    rect.y += 1;
-                    rect.height += 2;
+                        rect.x -= 2;
+                        rect.width += 4;
+                        rect.y += 1;
+                        rect.height += 2;
 
-                    //TODO Ideally, the cleaning should not be necessary if
-                    //post filtering steps were done correctly
+                        ensure_inside(rect_image, rect);
 
-                    rect.x = std::max(0, rect.x);
-                    rect.y = std::max(0, rect.y);
+                        std::cout << "Final rect " << rect << std::endl;
 
-                    rect.width = std::min(binary_rect_mat_bak.cols - rect.x, rect.width);
-                    rect.height = std::min(binary_rect_mat_bak.rows - rect.y, rect.height);
+                        auto big_rect = rect;
+                        big_rect.x += bounding.x;
+                        big_rect.y += bounding.y;
 
-                    std::cout << "Final rect " << rect << std::endl;
+                        auto dim = std::max(rect.width, rect.height);
 
-                    auto dim = std::max(rect.width, rect.height);
+                        //TODO Perhaps we can do better binarize at this last point
+                        cv::Mat last_rect_mat(source, big_rect);
 
-                    //TODO Perhaps we can do better binarize at this last point
-                    cv::Mat last_rect_mat(binary_rect_mat_bak, rect);
+                        cv::Mat last_mat(cv::Size(dim, dim), last_rect_mat.type());
+                        last_mat = cv::Scalar(255,255,255);
 
-                    cv::Mat last_mat(cv::Size(dim, dim), last_rect_mat.type());
-                    last_mat = cv::Scalar(255,255,255);
+                        last_rect_mat.copyTo(last_mat(cv::Rect((dim - rect.width) / 2, (dim - rect.height) / 2, rect.width, rect.height)));
 
-                    last_rect_mat.copyTo(last_mat(cv::Rect((dim - rect.width) / 2, (dim - rect.height) / 2, rect.width, rect.height)));
+                        cv::resize(last_mat, cell_mat, cell_mat.size(), 0, 0, cv::INTER_CUBIC);
 
-                    cv::resize(last_mat, cell_mat, cell_mat.size(), 0, 0, cv::INTER_CUBIC);
+                        auto non_zero = cv::countNonZero(cell_mat);
+                        auto area = cell_mat.rows * cell_mat.cols;
+                        auto fill_factor = (static_cast<float>(non_zero) / area);
 
-                    auto non_zero = cv::countNonZero(cell_mat);
-                    auto area = cell_mat.rows * cell_mat.cols;
-                    auto fill_factor = (static_cast<float>(non_zero) / area);
-                    std::cout << fill_factor << std::endl;
+                        if(fill_factor < 0.95f){
+                            auto min_distance = 1000000.0f;
 
-                    if(fill_factor < 0.95f){
-                        auto min_distance = 1000000.0f;
+                            if(fill_factor > 0.85f){
+                                for(auto& line : lines){
+                                    auto local_distance = 0.0f;
 
-                        if(fill_factor > 0.85f){
-                            auto big_rect = rect;
-                            big_rect.x += bounding.x;
-                            big_rect.y += bounding.y;
+                                    local_distance += manhattan_distance(cv::Point2f(big_rect.x, big_rect.y), line);
+                                    local_distance += manhattan_distance(cv::Point2f(big_rect.x + big_rect.width, big_rect.y), line);
+                                    local_distance += manhattan_distance(cv::Point2f(big_rect.x, big_rect.y + big_rect.height), line);
+                                    local_distance += manhattan_distance(cv::Point2f(big_rect.x + big_rect.width, big_rect.y + big_rect.height), line);
 
-                            for(auto& line : lines){
-                                auto local_distance = 0.0f;
+                                    min_distance = std::min(min_distance, local_distance);
+                                }
 
-                                local_distance += manhattan_distance(cv::Point2f(big_rect.x, big_rect.y), line);
-                                local_distance += manhattan_distance(cv::Point2f(big_rect.x + big_rect.width, big_rect.y), line);
-                                local_distance += manhattan_distance(cv::Point2f(big_rect.x, big_rect.y + big_rect.height), line);
-                                local_distance += manhattan_distance(cv::Point2f(big_rect.x + big_rect.width, big_rect.y + big_rect.height), line);
-
-                                min_distance = std::min(min_distance, local_distance);
+                                std::cout << min_distance << std::endl;
                             }
 
-                            std::cout << min_distance << std::endl;
-                        }
+                            if(min_distance < 50.0f){
+                                cell_mat = cv::Scalar(255,255,255);
+                            } else {
+                                cv::Mat final_rect(source_image, big_rect);
+                                cv::Mat final_rect_binary;
+                                cell_binarize(final_rect, final_rect_binary);
 
-                        if(min_distance < 50.0f){
-                            cell_mat = cv::Scalar(255,255,255);
+                                cv::Mat final_rect_mat(cv::Size(dim, dim), final_rect_binary.type());
+                                final_rect_mat = cv::Scalar(255,255,255);
+
+                                final_rect_binary.copyTo(final_rect_mat(cv::Rect((dim - rect.width) / 2, (dim - rect.height) / 2, rect.width, rect.height)));
+
+                                cv::resize(final_rect_mat, cell_mat, cell_mat.size(), 0, 0, cv::INTER_CUBIC);
+
+                                if(SHOW_CHAR_CELLS){
+                                    cv::rectangle(dest_image, big_rect, cv::Scalar(255, 0, 0), 2);
+                                }
+                            }
                         } else {
-                            if(SHOW_CHAR_CELLS){
-                                auto big_rect = rect;
-                                big_rect.x += bounding.x;
-                                big_rect.y += bounding.y;
-                                cv::rectangle(dest_image, big_rect, cv::Scalar(255, 0, 0), 2);
-                            }
+                            cell_mat = cv::Scalar(255,255,255);
                         }
-                    } else {
-                        cell_mat = cv::Scalar(255,255,255);
                     }
-                }
                 }
             }
         }
