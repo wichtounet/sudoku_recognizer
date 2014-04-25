@@ -17,6 +17,8 @@ typedef std::pair<cv::Point2f, cv::Point2f> line_t;
 typedef std::tuple<std::size_t,std::size_t,std::size_t,std::size_t> square_t;
 typedef std::pair<cv::Point2f, cv::Point2f> grid_cell;
 
+constexpr const bool DEBUG = false;
+
 constexpr const bool SHOW_LINE_SEGMENTS = false;
 constexpr const bool SHOW_MERGED_LINE_SEGMENTS = false;
 constexpr const bool SHOW_LONG_LINES = false;
@@ -34,6 +36,8 @@ constexpr const bool SHOW_GRID_NUMBERS= true;
 constexpr const bool SHOW_REGRID = true;
 constexpr const bool SHOW_CELLS = true;
 constexpr const bool SHOW_CHAR_CELLS = true;
+
+#define IF_DEBUG if(DEBUG)
 
 void sudoku_binarize(const cv::Mat& source_image, cv::Mat& dest_image){
     cv::Mat gray_image;
@@ -226,7 +230,7 @@ std::vector<line_t> detect_lines(const cv::Mat& source_image, cv::Mat& dest_imag
     std::vector<cv::Vec4i> lines;
     cv::HoughLinesP(lines_image, lines, 1, CV_PI/180, 50, 50, 12);
 
-    std::cout << lines.size() << " lines found" << std::endl;
+    IF_DEBUG std::cout << lines.size() << " lines found" << std::endl;
 
     //2. Cluster lines
 
@@ -276,7 +280,7 @@ std::vector<line_t> detect_lines(const cv::Mat& source_image, cv::Mat& dest_imag
         }
     }
 
-    std::cout << "Cluster of " << max_cluster.size() << " lines found" << std::endl;
+    IF_DEBUG std::cout << "Cluster of " << max_cluster.size() << " lines found" << std::endl;
 
     //3. Merge line segments into bigger segments
 
@@ -349,7 +353,7 @@ std::vector<line_t> detect_lines(const cv::Mat& source_image, cv::Mat& dest_imag
         }
     }
 
-    std::cout << "Cluster reduced to " << max_cluster.size() << " lines" << std::endl;
+    IF_DEBUG std::cout << "Cluster reduced to " << max_cluster.size() << " lines" << std::endl;
 
     //4. Transform segments into lines
 
@@ -496,7 +500,7 @@ std::vector<line_t> detect_lines(const cv::Mat& source_image, cv::Mat& dest_imag
         }
     }
 
-    std::cout << "Final lines: " << final_lines.size() << std::endl;
+    IF_DEBUG std::cout << "Final lines: " << final_lines.size() << std::endl;
 
     if(SHOW_FINAL_LINES){
         for(auto& l : final_lines){
@@ -632,7 +636,7 @@ std::vector<square_t> detect_squares(const cv::Mat& source_image, const std::vec
         }
     }
 
-    std::cout << "Found " << squares.size() << " squares" << std::endl;
+    IF_DEBUG std::cout << "Found " << squares.size() << " squares" << std::endl;
 
     return squares;
 }
@@ -668,7 +672,7 @@ std::vector<square_t> find_max_square(const std::vector<square_t>& squares, cons
 
     auto max_square = *std::max_element(square_set.begin(), square_set.end(), [](auto& lhs, auto& rhs){return lhs.size() < rhs.size();});
 
-    std::cout << "Biggest square set size: " << max_square.size() << std::endl;
+    IF_DEBUG std::cout << "Biggest square set size: " << max_square.size() << std::endl;
 
     return max_square;
 }
@@ -700,7 +704,7 @@ std::vector<cv::Point2f> compute_hull(const std::vector<cv::Point2f>& points, cv
     std::vector<cv::Point2f> hull;
     cv::convexHull(points, hull, false);
 
-    std::cout << "Hull of size " << hull.size() << " found" << std::endl;
+    IF_DEBUG std::cout << "Hull of size " << hull.size() << " found" << std::endl;
 
     if(SHOW_HULL){
         for(std::size_t i = 0; i < hull.size(); ++i){
@@ -843,7 +847,7 @@ std::vector<cv::Rect> compute_grid(const std::vector<cv::Point2f>& hull, cv::Mat
 }
 
 std::vector<cv::Rect> detect_grid(const cv::Mat& source_image, cv::Mat& dest_image, std::vector<line_t>& lines){
-    auto_stop_watch<std::chrono::microseconds> watch("sudoku_lines");
+    auto_stop_watch<std::chrono::microseconds> watch("detect_grid");
 
     dest_image = source_image.clone();
 
@@ -855,7 +859,7 @@ std::vector<cv::Rect> detect_grid(const cv::Mat& source_image, cv::Mat& dest_ima
         draw_points(dest_image, intersections, cv::Scalar(0,0,255));
     }
 
-    std::cout << intersections.size() << " intersections found" << std::endl;
+    IF_DEBUG std::cout << intersections.size() << " intersections found" << std::endl;
 
     auto clusters = cluster(intersections);
     auto points = gravity_points(clusters);
@@ -864,7 +868,7 @@ std::vector<cv::Rect> detect_grid(const cv::Mat& source_image, cv::Mat& dest_ima
         draw_points(dest_image, points, cv::Scalar(255,0,0));
     }
 
-    std::cout << points.size() << " clustered intersections found" << std::endl;
+    IF_DEBUG std::cout << points.size() << " clustered intersections found" << std::endl;
 
     //If the detected lines are optimal, the number of intersection is 100
     //In that case, no need to more post processing, just get the grid around
@@ -891,7 +895,7 @@ std::vector<cv::Rect> detect_grid(const cv::Mat& source_image, cv::Mat& dest_ima
             return {};
         }
 
-        std::cout << squares.size() << " squares found" << std::endl;
+        IF_DEBUG std::cout << squares.size() << " squares found" << std::endl;
 
         auto max_square = find_max_square(squares, points);
 
@@ -904,7 +908,7 @@ std::vector<cv::Rect> detect_grid(const cv::Mat& source_image, cv::Mat& dest_ima
             }
         }
 
-        std::cout << "cluster of " << max_square.size() << " squares found" << std::endl;
+        IF_DEBUG std::cout << "cluster of " << max_square.size() << " squares found" << std::endl;
 
         remove_unsquare(max_square, points);
 
@@ -917,7 +921,7 @@ std::vector<cv::Rect> detect_grid(const cv::Mat& source_image, cv::Mat& dest_ima
             }
         }
 
-        std::cout << "Final max_square size: " << max_square.size() << std::endl;
+        IF_DEBUG std::cout << "Final max_square size: " << max_square.size() << std::endl;
 
         //Get all the points of the squares
         std::vector<std::size_t> max_square_i;
@@ -943,6 +947,8 @@ std::vector<cv::Rect> detect_grid(const cv::Mat& source_image, cv::Mat& dest_ima
 }
 
 std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, const std::vector<cv::Rect>& cells, std::vector<line_t>& lines){
+    auto_stop_watch<std::chrono::microseconds> watch("split");
+
     if(cells.empty()){
         std::cout << "No cell provided, no splitting" << std::endl;
         return {};
@@ -985,8 +991,8 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
         std::vector<std::vector<cv::Point>> contours;
         cv::findContours(rect_image, contours, CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE);
 
-        std::cout << "n=" << (n+1) << std::endl;
-        std::cout << contours.size() << " contours found" << std::endl;
+        IF_DEBUG std::cout << "n=" << (n+1) << std::endl;
+        IF_DEBUG std::cout << contours.size() << " contours found" << std::endl;
 
         if(!contours.empty()){
             auto width = rect_image.cols * 0.75f;
@@ -1003,7 +1009,7 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
                 }
             }
 
-            std::cout << candidates.size() << " filtered candidates found" << std::endl;
+            IF_DEBUG std::cout << candidates.size() << " filtered candidates found" << std::endl;
 
             if(!candidates.empty()){
                 bool merged;
@@ -1036,7 +1042,7 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
                     }
                 } while(merged);
 
-                std::cout << candidates.size() << " merged candidates found" << std::endl;
+                IF_DEBUG std::cout << candidates.size() << " merged candidates found" << std::endl;
 
                 candidates.erase(std::remove_if(candidates.begin(), candidates.end(), [&rect_image_clean,height,width](auto rect){
                     ensure_inside(rect_image_clean, rect);
@@ -1066,7 +1072,7 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
                     return false;
                 }), candidates.end());
 
-                std::cout << candidates.size() << " filtered  bounding rect found" << std::endl;
+                IF_DEBUG std::cout << candidates.size() << " filtered  bounding rect found" << std::endl;
 
                 if(!candidates.empty()){
                     std::size_t max_i = 0;
@@ -1092,7 +1098,7 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
 
                         ensure_inside(rect_image, rect);
 
-                        std::cout << "Final rect " << rect << std::endl;
+                        IF_DEBUG std::cout << "Final rect " << rect << std::endl;
 
                         auto big_rect = rect;
                         big_rect.x += bounding.x;
