@@ -10,6 +10,33 @@
 
 #include "detector.hpp"
 #include "data.hpp"
+#include "image_utils.hpp"
+
+vector<double> mat_to_image(const cv::Mat& mat){
+    vector<double> image(CELL_SIZE * CELL_SIZE);
+
+    assert(mat.rows == CELL_SIZE);
+    assert(mat.cols == CELL_SIZE);
+
+    for(size_t i = 0; i < static_cast<size_t>(mat.rows); ++i){
+        for(size_t j = 0; j < static_cast<size_t>(mat.cols); ++j){
+            auto value_c = static_cast<std::size_t>(mat.at<uint8_t>(i, j));
+
+            //TODO Rebinarize after resize
+
+            double value_d;
+            if(value_c > 200){
+                value_d = 0.0;
+            } else {
+                value_d = 1.0;
+            }
+
+            image[i * mat.cols + j] = value_d;
+        }
+    }
+
+    return image;
+}
 
 int main(int argc, char** argv ){
     if(argc < 2){
@@ -66,6 +93,9 @@ int main(int argc, char** argv ){
         std::vector<vector<double>> training_images;
         std::vector<uint8_t> training_labels;
 
+        std::vector<std::vector<cv::Mat>> source_images;
+        std::vector<gt_data> source_data;
+
         for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
             std::string image_source_path(argv[i]);
 
@@ -86,50 +116,29 @@ int main(int argc, char** argv ){
             for(size_t i = 0; i < 9; ++i){
                 for(size_t j = 0; j < 9; ++j){
                     if(data.results[i][j]){
-                        auto n = i * 9 + j;
-
-                        auto& mat = mats[n];
-
-                        vector<double> image(CELL_SIZE * CELL_SIZE);
-
-                        assert(mat.rows == CELL_SIZE);
-                        assert(mat.cols == CELL_SIZE);
-
-                        for(size_t i = 0; i < static_cast<size_t>(mat.rows); ++i){
-                            for(size_t j = 0; j < static_cast<size_t>(mat.cols); ++j){
-                                auto value_c = static_cast<std::size_t>(mat.at<uint8_t>(i, j));
-
-                                //TODO Rebinarize after resize
-
-                                double value_d;
-                                if(value_c > 200){
-                                    value_d = 0.0;
-                                } else {
-                                    value_d = 1.0;
-                                }
-
-                                image[i * mat.cols + j] = value_d;
-                            }
-                        }
-
                         training_labels.push_back(data.results[i][j]);
-                        training_images.emplace_back(std::move(image));
+                        training_images.emplace_back(mat_to_image(mats[i * 9 + j]));
                     }
                 }
             }
+
+            source_images.push_back(std::move(mats));
+            source_data.push_back(std::move(data));
         }
 
-        std::cout << "Train with " << training_images.size() << " images" << std::endl;
+        std::cout << "Train with " << source_images.size() << " sudokus" << std::endl;
+        std::cout << "Train with " << training_images.size() << " cells" << std::endl;
 
         assert(training_labels.size() == training_images.size());
+        assert(source_images.size() == source_data.size());
 
         auto labels = dbn::make_fake(training_labels);
 
         typedef dbn::dbn<
-            dbn::layer<dbn::conf<true, 50, true, true>, CELL_SIZE * CELL_SIZE, 100>,
-            //dbn::layer<dbn::conf<true, 50, false, true>, 300, 300>,
-            dbn::layer<dbn::conf<true, 50, false, true>, 100, 100>,
-            dbn::layer<dbn::conf<true, 50, false, true, true, dbn::Type::EXP>, 100, 10>> dbn_t;
+            dbn::layer<dbn::conf<true, 50, true, true>, CELL_SIZE * CELL_SIZE, 300>,
+            dbn::layer<dbn::conf<true, 50, false, true>, 300, 500>,
+            //dbn::layer<dbn::conf<true, 50, false, true>, 500, 500>,
+            dbn::layer<dbn::conf<true, 50, false, true, true, dbn::Type::EXP>, 500, 10>> dbn_t;
 
         auto dbn = std::make_unique<dbn_t>();
 
@@ -141,11 +150,55 @@ int main(int argc, char** argv ){
         std::cout << "Start fine-tuning" << std::endl;
         dbn->fine_tune(training_images, labels, 5, 1000);
 
-        std::ofstream os("dbn.dat", std::ofstream::binary);
-        dbn->store(os);
+//        std::ofstream os("dbn.dat", std::ofstream::binary);
+//        dbn->store(os);
 
         auto error_rate = dbn::test_set(dbn, training_images, training_labels, dbn::predictor());
-        std::cout << "\tRaw Error rate (normal): " << 100.0 * error_rate << std::endl;
+
+        std::cout << std::endl;
+        std::cout << "DBN Error rate (normal): " << 100.0 * error_rate << "%" << std::endl;
+
+        std::size_t sudoku_hits = 0;
+        std::size_t cell_hits = 0;
+
+        for(std::size_t i = 0; i < source_images.size(); ++i){
+            const auto& image = source_images[i];
+            const auto& data = source_data[i];
+
+            std::size_t local_hits = 0;
+
+            for(size_t i = 0; i < 9; ++i){
+                for(size_t j = 0; j < 9; ++j){
+                    uint8_t answer;
+
+                    auto& cell_mat = image[i * 9 + j];
+
+                    auto fill = fill_factor(cell_mat);
+
+                    if(fill == 1.0f){
+                        answer = 0;
+                    } else {
+                        answer = dbn->predict(mat_to_image(cell_mat));
+                    }
+
+                    if(answer == data.results[i][j]){
+                        ++local_hits;
+                    }
+                }
+            }
+
+            if(local_hits == 81){
+                ++sudoku_hits;
+            }
+
+            cell_hits += local_hits;
+        }
+
+        auto total_s = static_cast<float>(source_images.size());
+        auto total_c = total_s * 81.0f;
+
+        std::cout << "Cell Error Rate " << 100.0 * (total_c - cell_hits) / total_c << "%" << std::endl;
+        std::cout << "Sudoku Error Rate " << 100.0 * (total_s - sudoku_hits) / total_s << "%" << std::endl;
     } else {
         std::cout << "Invalid command \"" << command << "\"" << std::endl;
         return -1;
