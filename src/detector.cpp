@@ -32,10 +32,10 @@ constexpr const bool SHOW_FINAL_SQUARES = false;
 constexpr const bool SHOW_HULL = false;
 constexpr const bool SHOW_HULL_FILL = false;
 constexpr const bool SHOW_TL_BR = false;
-constexpr const bool SHOW_GRID_NUMBERS= true;
-constexpr const bool SHOW_REGRID = true;
-constexpr const bool SHOW_CELLS = true;
-constexpr const bool SHOW_CHAR_CELLS = true;
+constexpr const bool SHOW_GRID_NUMBERS= false;
+constexpr const bool SHOW_REGRID = false;
+constexpr const bool SHOW_CELLS = false;
+constexpr const bool SHOW_CHAR_CELLS = false;
 
 #define IF_DEBUG if(DEBUG)
 
