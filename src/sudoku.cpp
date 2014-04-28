@@ -12,6 +12,8 @@
 #include "data.hpp"
 #include "image_utils.hpp"
 
+namespace {
+
 vector<double> mat_to_image(const cv::Mat& mat){
     vector<double> image(CELL_SIZE * CELL_SIZE);
 
@@ -37,6 +39,55 @@ vector<double> mat_to_image(const cv::Mat& mat){
 
     return image;
 }
+
+struct dataset {
+    std::vector<vector<double>> training_images;
+    std::vector<uint8_t> training_labels;
+
+    std::vector<std::vector<cv::Mat>> source_images;
+    std::vector<gt_data> source_data;
+};
+
+dataset get_dataset(int argc, char** argv){
+    dataset ds;
+
+    for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
+        std::string image_source_path(argv[i]);
+
+        std::cout << image_source_path << std::endl;
+
+        auto source_image = cv::imread(image_source_path.c_str(), 1);
+
+        if (!source_image.data){
+            std::cout << "Invalid source_image" << std::endl;
+            continue;
+        }
+
+        auto data = read_data(image_source_path);
+
+        cv::Mat dest_image;
+        auto mats = detect(source_image, dest_image);
+
+        for(size_t i = 0; i < 9; ++i){
+            for(size_t j = 0; j < 9; ++j){
+                if(data.results[i][j]){
+                    ds.training_labels.push_back(data.results[i][j]-1);
+                    ds.training_images.emplace_back(mat_to_image(mats[i * 9 + j]));
+                }
+            }
+        }
+
+        ds.source_images.push_back(std::move(mats));
+        ds.source_data.push_back(std::move(data));
+    }
+
+    assert(ds.training_labels.size() == ds.training_images.size());
+    assert(ds.source_images.size() == ds.source_data.size());
+
+    return ds;
+}
+
+} //end of anonymous namespace
 
 int main(int argc, char** argv ){
     if(argc < 2){
@@ -90,49 +141,12 @@ int main(int argc, char** argv ){
             }
         }
     } else if(command == "train"){
-        std::vector<vector<double>> training_images;
-        std::vector<uint8_t> training_labels;
+        auto ds = get_dataset(argc, argv);
 
-        std::vector<std::vector<cv::Mat>> source_images;
-        std::vector<gt_data> source_data;
+        std::cout << "Train with " << ds.source_images.size() << " sudokus" << std::endl;
+        std::cout << "Train with " << ds.training_images.size() << " cells" << std::endl;
 
-        for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
-            std::string image_source_path(argv[i]);
-
-            std::cout << image_source_path << std::endl;
-
-            auto source_image = cv::imread(image_source_path.c_str(), 1);
-
-            if (!source_image.data){
-                std::cout << "Invalid source_image" << std::endl;
-                continue;
-            }
-
-            auto data = read_data(image_source_path);
-
-            cv::Mat dest_image;
-            auto mats = detect(source_image, dest_image);
-
-            for(size_t i = 0; i < 9; ++i){
-                for(size_t j = 0; j < 9; ++j){
-                    if(data.results[i][j]){
-                        training_labels.push_back(data.results[i][j]-1);
-                        training_images.emplace_back(mat_to_image(mats[i * 9 + j]));
-                    }
-                }
-            }
-
-            source_images.push_back(std::move(mats));
-            source_data.push_back(std::move(data));
-        }
-
-        assert(training_labels.size() == training_images.size());
-        assert(source_images.size() == source_data.size());
-
-        std::cout << "Train with " << source_images.size() << " sudokus" << std::endl;
-        std::cout << "Train with " << training_images.size() << " cells" << std::endl;
-
-        auto labels = dbn::make_fake(training_labels);
+        auto labels = dbn::make_fake(ds.training_labels);
 
         typedef dbn::dbn<
             dbn::layer<dbn::conf<true, 50, true, true>, CELL_SIZE * CELL_SIZE, 500>,
@@ -145,15 +159,15 @@ int main(int argc, char** argv ){
         dbn->display();
 
         std::cout << "Start pretraining" << std::endl;
-        dbn->pretrain(training_images, 10);
+        dbn->pretrain(ds.training_images, 10);
 
         std::cout << "Start fine-tuning" << std::endl;
-        dbn->fine_tune(training_images, labels, 10, 100);
+        dbn->fine_tune(ds.training_images, labels, 10, 100);
 
         std::ofstream os("dbn.dat", std::ofstream::binary);
         dbn->store(os);
 
-        auto error_rate = dbn::test_set(dbn, training_images, training_labels, dbn::predictor());
+        auto error_rate = dbn::test_set(dbn, ds.training_images, ds.training_labels, dbn::predictor());
 
         std::cout << std::endl;
         std::cout << "DBN Error rate (normal): " << 100.0 * error_rate << "%" << std::endl;
@@ -161,9 +175,9 @@ int main(int argc, char** argv ){
         std::size_t sudoku_hits = 0;
         std::size_t cell_hits = 0;
 
-        for(std::size_t i = 0; i < source_images.size(); ++i){
-            const auto& image = source_images[i];
-            const auto& data = source_data[i];
+        for(std::size_t i = 0; i < ds.source_images.size(); ++i){
+            const auto& image = ds.source_images[i];
+            const auto& data = ds.source_data[i];
 
             std::size_t local_hits = 0;
 
@@ -194,52 +208,13 @@ int main(int argc, char** argv ){
             cell_hits += local_hits;
         }
 
-        auto total_s = static_cast<float>(source_images.size());
+        auto total_s = static_cast<float>(ds.source_images.size());
         auto total_c = total_s * 81.0f;
 
         std::cout << "Cell Error Rate " << 100.0 * (total_c - cell_hits) / total_c << "%" << std::endl;
         std::cout << "Sudoku Error Rate " << 100.0 * (total_s - sudoku_hits) / total_s << "%" << std::endl;
     } else if(command == "test"){
-        std::vector<std::vector<cv::Mat>> source_images;
-        std::vector<gt_data> source_data;
-
-        std::vector<vector<double>> training_images;
-        std::vector<uint8_t> training_labels;
-
-        for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
-            std::string image_source_path(argv[i]);
-
-            std::cout << image_source_path << std::endl;
-
-            auto source_image = cv::imread(image_source_path.c_str(), 1);
-
-            if (!source_image.data){
-                std::cout << "Invalid source_image" << std::endl;
-                continue;
-            }
-
-            auto data = read_data(image_source_path);
-
-            cv::Mat dest_image;
-            auto mats = detect(source_image, dest_image);
-
-            for(size_t i = 0; i < 9; ++i){
-                for(size_t j = 0; j < 9; ++j){
-                    if(data.results[i][j]){
-                        training_labels.push_back(data.results[i][j]-1);
-                        training_images.emplace_back(mat_to_image(mats[i * 9 + j]));
-                    }
-                }
-            }
-
-            source_images.push_back(std::move(mats));
-            source_data.push_back(std::move(data));
-        }
-
-        assert(training_labels.size() == training_images.size());
-        assert(source_images.size() == source_data.size());
-
-        auto labels = dbn::make_fake(training_labels);
+        auto ds = get_dataset(argc, argv);
 
         typedef dbn::dbn<
             dbn::layer<dbn::conf<true, 50, true, true>, CELL_SIZE * CELL_SIZE, 500>,
@@ -254,7 +229,7 @@ int main(int argc, char** argv ){
         std::ifstream is("dbn_2000.dat", std::ofstream::binary);
         dbn->load(is);
 
-        auto error_rate = dbn::test_set(dbn, training_images, training_labels, dbn::predictor());
+        auto error_rate = dbn::test_set(dbn, ds.training_images, ds.training_labels, dbn::predictor());
 
         std::cout << std::endl;
         std::cout << "DBN Error rate (normal): " << 100.0 * error_rate << "%" << std::endl;
@@ -262,9 +237,9 @@ int main(int argc, char** argv ){
         std::size_t sudoku_hits = 0;
         std::size_t cell_hits = 0;
 
-        for(std::size_t i = 0; i < source_images.size(); ++i){
-            const auto& image = source_images[i];
-            const auto& data = source_data[i];
+        for(std::size_t i = 0; i < ds.source_images.size(); ++i){
+            const auto& image = ds.source_images[i];
+            const auto& data = ds.source_data[i];
 
             std::size_t local_hits = 0;
 
@@ -295,7 +270,7 @@ int main(int argc, char** argv ){
             cell_hits += local_hits;
         }
 
-        auto total_s = static_cast<float>(source_images.size());
+        auto total_s = static_cast<float>(ds.source_images.size());
         auto total_c = total_s * 81.0f;
 
         std::cout << "Cell Error Rate " << 100.0 * (total_c - cell_hits) / total_c << "%" << std::endl;
