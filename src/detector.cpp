@@ -29,12 +29,12 @@ constexpr const bool SHOW_CLUSTERED_INTERSECTIONS = false;
 constexpr const bool SHOW_SQUARES = false;
 constexpr const bool SHOW_MAX_SQUARES = false;
 constexpr const bool SHOW_FINAL_SQUARES = false;
-constexpr const bool SHOW_HULL = false;
+constexpr const bool SHOW_HULL = true;
 constexpr const bool SHOW_HULL_FILL = false;
 constexpr const bool SHOW_TL_BR = false;
 constexpr const bool SHOW_GRID_NUMBERS= false;
-constexpr const bool SHOW_REGRID = true;
-constexpr const bool SHOW_CELLS = false;
+constexpr const bool SHOW_REGRID = false;
+constexpr const bool SHOW_CELLS = true;
 constexpr const bool SHOW_CHAR_CELLS = true;
 
 #define IF_DEBUG if(DEBUG)
@@ -502,6 +502,10 @@ std::vector<line_t> detect_lines(const cv::Mat& source_image, cv::Mat& dest_imag
 
     IF_DEBUG std::cout << "Final lines: " << final_lines.size() << std::endl;
 
+    if(final_lines.size() == 20){
+        IF_DEBUG std::cout << "LINES PERFECT" << std::endl;
+    }
+
     if(SHOW_FINAL_LINES){
         for(auto& l : final_lines){
             cv::line(dest_image, l.first, l.second, cv::Scalar(0, 255, 0), 2, CV_AA);
@@ -846,10 +850,17 @@ std::vector<cv::Rect> compute_grid(const std::vector<cv::Point2f>& hull, cv::Mat
     return cells;
 }
 
+std::vector<cv::Point2f> to_float_points(const std::vector<cv::Point>& vec){
+    return vector_transform(vec.begin(), vec.end(), [](auto& i){return cv::Point2f(i.x, i.y);});
+}
+
 std::vector<cv::Rect> detect_grid(const cv::Mat& source_image, cv::Mat& dest_image, std::vector<line_t>& lines){
     auto_stop_watch<std::chrono::microseconds> watch("detect_grid");
 
     dest_image = source_image.clone();
+
+    cv::Mat dest_image_gray;
+    sudoku_binarize(source_image, dest_image_gray);
 
     lines = detect_lines(source_image, dest_image);
 
@@ -874,73 +885,28 @@ std::vector<cv::Rect> detect_grid(const cv::Mat& source_image, cv::Mat& dest_ima
     //In that case, no need to more post processing, just get the grid around
     //the points
     if(points.size() == 100){
+        IF_DEBUG std::cout << "POINTS PERFECT" << std::endl;
+
         auto hull = compute_hull(points, dest_image);
 
         return compute_grid(hull, dest_image);
     } else {
-        auto squares = detect_squares(source_image, points);
+        std::size_t CANNY = 150;
+        cv::Canny(dest_image_gray, dest_image_gray, CANNY, CANNY * 4, 5);
 
-        if(SHOW_SQUARES){
-            for(auto& square : squares){
-                draw_square(dest_image,
-                    points[std::get<0>(square)], points[std::get<1>(square)],
-                    points[std::get<2>(square)], points[std::get<3>(square)]
-                    );
+        std::vector<std::vector<cv::Point>> contours;
+        std::vector<cv::Vec4i> hierarchy;
+        cv::findContours(dest_image_gray, contours, hierarchy, CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE, cv::Point(0,0));
+
+        std::size_t max_c = 0;
+
+        for(std::size_t i = 1; i < contours.size(); ++i){
+            if(cv::contourArea(contours[i]) > cv::contourArea(contours[max_c])){
+                max_c = i;
             }
         }
 
-        if(squares.empty()){
-            std::cout << " No square found" << std::endl;
-
-            return {};
-        }
-
-        IF_DEBUG std::cout << squares.size() << " squares found" << std::endl;
-
-        auto max_square = find_max_square(squares, points);
-
-        if(SHOW_MAX_SQUARES){
-            for(auto& square : max_square){
-                draw_square(dest_image,
-                    points[std::get<0>(square)], points[std::get<1>(square)],
-                    points[std::get<2>(square)], points[std::get<3>(square)]
-                    );
-            }
-        }
-
-        IF_DEBUG std::cout << "cluster of " << max_square.size() << " squares found" << std::endl;
-
-        remove_unsquare(max_square, points);
-
-        if(SHOW_FINAL_SQUARES){
-            for(auto& square : max_square){
-                draw_square(dest_image,
-                    points[std::get<0>(square)], points[std::get<1>(square)],
-                    points[std::get<2>(square)], points[std::get<3>(square)]
-                    );
-            }
-        }
-
-        IF_DEBUG std::cout << "Final max_square size: " << max_square.size() << std::endl;
-
-        //Get all the points of the squares
-        std::vector<std::size_t> max_square_i;
-        for(auto& square : max_square){
-            max_square_i.push_back(std::get<0>(square));
-            max_square_i.push_back(std::get<1>(square));
-            max_square_i.push_back(std::get<2>(square));
-            max_square_i.push_back(std::get<3>(square));
-        }
-
-        //Removes similar points
-        std::sort(max_square_i.begin(), max_square_i.end());
-        max_square_i.erase(std::unique(max_square_i.begin(), max_square_i.end()), max_square_i.end());
-
-        //Transform indexes into real points
-        auto max_square_points = vector_transform(max_square_i.begin(), max_square_i.end(),
-            [&points](auto& i){return points[i];});
-
-        auto hull = compute_hull(max_square_points, dest_image);
+        auto hull = compute_hull(to_float_points(contours[max_c]), dest_image);
 
         return compute_grid(hull, dest_image);
     }
