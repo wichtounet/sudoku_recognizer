@@ -126,11 +126,11 @@ int main(int argc, char** argv ){
             source_data.push_back(std::move(data));
         }
 
-        std::cout << "Train with " << source_images.size() << " sudokus" << std::endl;
-        std::cout << "Train with " << training_images.size() << " cells" << std::endl;
-
         assert(training_labels.size() == training_images.size());
         assert(source_images.size() == source_data.size());
+
+        std::cout << "Train with " << source_images.size() << " sudokus" << std::endl;
+        std::cout << "Train with " << training_images.size() << " cells" << std::endl;
 
         auto labels = dbn::make_fake(training_labels);
 
@@ -152,6 +152,107 @@ int main(int argc, char** argv ){
 
         std::ofstream os("dbn.dat", std::ofstream::binary);
         dbn->store(os);
+
+        auto error_rate = dbn::test_set(dbn, training_images, training_labels, dbn::predictor());
+
+        std::cout << std::endl;
+        std::cout << "DBN Error rate (normal): " << 100.0 * error_rate << "%" << std::endl;
+
+        std::size_t sudoku_hits = 0;
+        std::size_t cell_hits = 0;
+
+        for(std::size_t i = 0; i < source_images.size(); ++i){
+            const auto& image = source_images[i];
+            const auto& data = source_data[i];
+
+            std::size_t local_hits = 0;
+
+            for(size_t i = 0; i < 9; ++i){
+                for(size_t j = 0; j < 9; ++j){
+                    uint8_t answer;
+
+                    auto& cell_mat = image[i * 9 + j];
+
+                    auto fill = fill_factor(cell_mat);
+
+                    if(fill == 1.0f){
+                        answer = 0;
+                    } else {
+                        answer = dbn->predict(mat_to_image(cell_mat))+1;
+                    }
+
+                    if(answer == data.results[i][j]){
+                        ++local_hits;
+                    }
+                }
+            }
+
+            if(local_hits == 81){
+                ++sudoku_hits;
+            }
+
+            cell_hits += local_hits;
+        }
+
+        auto total_s = static_cast<float>(source_images.size());
+        auto total_c = total_s * 81.0f;
+
+        std::cout << "Cell Error Rate " << 100.0 * (total_c - cell_hits) / total_c << "%" << std::endl;
+        std::cout << "Sudoku Error Rate " << 100.0 * (total_s - sudoku_hits) / total_s << "%" << std::endl;
+    } else if(command == "test"){
+        std::vector<std::vector<cv::Mat>> source_images;
+        std::vector<gt_data> source_data;
+
+        std::vector<vector<double>> training_images;
+        std::vector<uint8_t> training_labels;
+
+        for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
+            std::string image_source_path(argv[i]);
+
+            std::cout << image_source_path << std::endl;
+
+            auto source_image = cv::imread(image_source_path.c_str(), 1);
+
+            if (!source_image.data){
+                std::cout << "Invalid source_image" << std::endl;
+                continue;
+            }
+
+            auto data = read_data(image_source_path);
+
+            cv::Mat dest_image;
+            auto mats = detect(source_image, dest_image);
+
+            for(size_t i = 0; i < 9; ++i){
+                for(size_t j = 0; j < 9; ++j){
+                    if(data.results[i][j]){
+                        training_labels.push_back(data.results[i][j]-1);
+                        training_images.emplace_back(mat_to_image(mats[i * 9 + j]));
+                    }
+                }
+            }
+
+            source_images.push_back(std::move(mats));
+            source_data.push_back(std::move(data));
+        }
+
+        assert(training_labels.size() == training_images.size());
+        assert(source_images.size() == source_data.size());
+
+        auto labels = dbn::make_fake(training_labels);
+
+        typedef dbn::dbn<
+            dbn::layer<dbn::conf<true, 50, true, true>, CELL_SIZE * CELL_SIZE, 500>,
+            dbn::layer<dbn::conf<true, 50, false, true>, 500, 500>,
+            dbn::layer<dbn::conf<true, 50, false, true>, 500, 2000>,
+            dbn::layer<dbn::conf<true, 50, false, true, true, dbn::Type::EXP>, 2000, 9>> dbn_t;
+
+        auto dbn = std::make_unique<dbn_t>();
+
+        dbn->display();
+
+        std::ifstream is("dbn_2000.dat", std::ofstream::binary);
+        dbn->load(is);
 
         auto error_rate = dbn::test_set(dbn, training_images, training_labels, dbn::predictor());
 
