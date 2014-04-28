@@ -116,7 +116,7 @@ int main(int argc, char** argv ){
             for(size_t i = 0; i < 9; ++i){
                 for(size_t j = 0; j < 9; ++j){
                     if(data.results[i][j]){
-                        training_labels.push_back(data.results[i][j]);
+                        training_labels.push_back(data.results[i][j]-1);
                         training_images.emplace_back(mat_to_image(mats[i * 9 + j]));
                     }
                 }
@@ -135,23 +135,23 @@ int main(int argc, char** argv ){
         auto labels = dbn::make_fake(training_labels);
 
         typedef dbn::dbn<
-            dbn::layer<dbn::conf<true, 50, true, true>, CELL_SIZE * CELL_SIZE, 300>,
-            dbn::layer<dbn::conf<true, 50, false, true>, 300, 500>,
-            //dbn::layer<dbn::conf<true, 50, false, true>, 500, 500>,
-            dbn::layer<dbn::conf<true, 50, false, true, true, dbn::Type::EXP>, 500, 10>> dbn_t;
+            dbn::layer<dbn::conf<true, 50, true, true>, CELL_SIZE * CELL_SIZE, 500>,
+            dbn::layer<dbn::conf<true, 50, false, true>, 500, 500>,
+            dbn::layer<dbn::conf<true, 50, false, true>, 500, 2000>,
+            dbn::layer<dbn::conf<true, 50, false, true, true, dbn::Type::EXP>, 2000, 9>> dbn_t;
 
         auto dbn = std::make_unique<dbn_t>();
 
         dbn->display();
 
         std::cout << "Start pretraining" << std::endl;
-        dbn->pretrain(training_images, 5);
+        dbn->pretrain(training_images, 10);
 
         std::cout << "Start fine-tuning" << std::endl;
-        dbn->fine_tune(training_images, labels, 5, 1000);
+        dbn->fine_tune(training_images, labels, 10, 100);
 
-//        std::ofstream os("dbn.dat", std::ofstream::binary);
-//        dbn->store(os);
+        std::ofstream os("dbn.dat", std::ofstream::binary);
+        dbn->store(os);
 
         auto error_rate = dbn::test_set(dbn, training_images, training_labels, dbn::predictor());
 
@@ -178,7 +178,7 @@ int main(int argc, char** argv ){
                     if(fill == 1.0f){
                         answer = 0;
                     } else {
-                        answer = dbn->predict(mat_to_image(cell_mat));
+                        answer = dbn->predict(mat_to_image(cell_mat))+1;
                     }
 
                     if(answer == data.results[i][j]){
