@@ -44,6 +44,7 @@ struct dataset {
     std::vector<vector<double>> training_images;
     std::vector<uint8_t> training_labels;
 
+    std::vector<std::string> source_files;
     std::vector<std::vector<cv::Mat>> source_images;
     std::vector<gt_data> source_data;
 };
@@ -77,6 +78,7 @@ dataset get_dataset(int argc, char** argv){
             }
         }
 
+        ds.source_files.push_back(std::move(image_source_path));
         ds.source_images.push_back(std::move(mats));
         ds.source_data.push_back(std::move(data));
     }
@@ -236,10 +238,14 @@ int main(int argc, char** argv ){
 
         std::size_t sudoku_hits = 0;
         std::size_t cell_hits = 0;
+        std::size_t zero_errors = 0;
+        std::size_t dbn_errors = 0;
 
         for(std::size_t i = 0; i < ds.source_images.size(); ++i){
             const auto& image = ds.source_images[i];
             const auto& data = ds.source_data[i];
+
+            std::cout << ds.source_files[i] << std::endl;
 
             std::size_t local_hits = 0;
 
@@ -259,6 +265,19 @@ int main(int argc, char** argv ){
 
                     if(answer == data.results[i][j]){
                         ++local_hits;
+                    } else {
+                        if(!answer || !data.results[i][j]){
+                            ++zero_errors;
+                        } else {
+                            ++dbn_errors;
+                        }
+
+                        std::cout << "ERROR: " << static_cast<size_t>(answer) << std::endl;
+                        std::cout << "\t was: " << static_cast<size_t>(data.results[i][j]) << std::endl;
+                        std::cout << "\t fill_factor=" << fill << std::endl;
+
+                        std::cout << i << ":" << j << std::endl;
+//                        std::cout << cell_mat << std::endl;
                     }
                 }
             }
@@ -275,6 +294,12 @@ int main(int argc, char** argv ){
 
         std::cout << "Cell Error Rate " << 100.0 * (total_c - cell_hits) / total_c << "%" << std::endl;
         std::cout << "Sudoku Error Rate " << 100.0 * (total_s - sudoku_hits) / total_s << "%" << std::endl;
+
+        if(zero_errors || dbn_errors){
+            std::cout << "Cell Errors: " << zero_errors + dbn_errors << std::endl;
+            std::cout << "Zero errors: " << 100.0 * zero_errors / static_cast<double>(zero_errors + dbn_errors) << std::endl;
+            std::cout << "DBN errors: " << 100.0 * dbn_errors / static_cast<double>(zero_errors + dbn_errors) << std::endl;
+        }
     } else {
         std::cout << "Invalid command \"" << command << "\"" << std::endl;
         return -1;
