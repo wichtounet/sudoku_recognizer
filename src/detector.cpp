@@ -31,7 +31,7 @@ constexpr const bool SHOW_MAX_SQUARES = false;
 constexpr const bool SHOW_FINAL_SQUARES = false;
 constexpr const bool SHOW_HULL = true;
 constexpr const bool SHOW_HULL_FILL = false;
-constexpr const bool SHOW_TL_BR = false;
+constexpr const bool SHOW_TL_BR = true;
 constexpr const bool SHOW_GRID_NUMBERS= false;
 constexpr const bool SHOW_REGRID = false;
 constexpr const bool SHOW_CELLS = true;
@@ -515,17 +515,22 @@ std::vector<line_t> detect_lines(const cv::Mat& source_image, cv::Mat& dest_imag
     return final_lines;
 }
 
+cv::Point2f find_intersection(const line_t& p1, const line_t& p2){
+    float denom = (p1.first.x - p1.second.x)*(p2.first.y - p2.second.y) - (p1.first.y - p1.second.y)*(p2.first.x - p2.second.x);
+    return {
+            ((p1.first.x*p1.second.y - p1.first.y*p1.second.x)*(p2.first.x - p2.second.x) -
+                (p1.first.x - p1.second.x)*(p2.first.x*p2.second.y - p2.first.y*p2.second.x)) / denom,
+            ((p1.first.x*p1.second.y - p1.first.y*p1.second.x)*(p2.first.y - p2.second.y) -
+                (p1.first.y - p1.second.y)*(p2.first.x*p2.second.y - p2.first.y*p2.second.x)) / denom
+        };
+}
+
 std::vector<cv::Point2f> find_intersections(const std::vector<line_t>& lines, const cv::Mat& source_image){
     std::vector<cv::Point2f> intersections;
 
     //Detect intersections
     pairwise_foreach(lines.begin(), lines.end(), [&intersections](auto& p1, auto& p2){
-        float denom = (p1.first.x - p1.second.x)*(p2.first.y - p2.second.y) - (p1.first.y - p1.second.y)*(p2.first.x - p2.second.x);
-        intersections.emplace_back(
-            ((p1.first.x*p1.second.y - p1.first.y*p1.second.x)*(p2.first.x - p2.second.x) -
-                (p1.first.x - p1.second.x)*(p2.first.x*p2.second.y - p2.first.y*p2.second.x)) / denom,
-            ((p1.first.x*p1.second.y - p1.first.y*p1.second.x)*(p2.first.y - p2.second.y) -
-                (p1.first.y - p1.second.y)*(p2.first.x*p2.second.y - p2.first.y*p2.second.x)) / denom);
+        intersections.emplace_back(find_intersection(p1, p2));
     });
 
     constexpr const float CLOSE_INTERSECTION_THRESHOLD = 15.0f;
@@ -726,47 +731,27 @@ std::vector<cv::Point2f> compute_hull(const std::vector<cv::Point2f>& points, cv
     return hull;
 }
 
-const constexpr bool BOUNDING_RECT = false;
-
-std::array<cv::Point2f, 4> bounding_rect(const std::vector<cv::Point2f>& hull){
-    std::array<cv::Point2f, 4> bounding_v;
-
-    if(BOUNDING_RECT){
-        auto bounding = cv::boundingRect(hull);
-
-        bounding_v[0] = cv::Point2f(bounding.x, bounding.y);
-        bounding_v[1] = cv::Point2f(bounding.x + bounding.width, bounding.y);
-        bounding_v[2] = cv::Point2f(bounding.x, bounding.y + bounding.height);
-        bounding_v[3] = cv::Point2f(bounding.x + bounding.width, bounding.y + bounding.height);
-    } else {
-        auto bounding = cv::minAreaRect(hull);
-
-        bounding.points(bounding_v.data());
-    }
-
-    return bounding_v;
-}
-
 std::vector<cv::Rect> compute_grid(const std::vector<cv::Point2f>& hull, cv::Mat& dest_image){
     std::vector<cv::Point2f> corners;
 
+    float prev = 0.0;
     for(std::size_t i = 0; i < hull.size(); ++i){
         auto j = (i + 1) % hull.size();
         auto k = (i + 2) % hull.size();
 
         auto angle = angle_deg(hull[i] - hull[j], hull[j] - hull[k]);
 
-        if(angle > 85.0f && angle < 95.0f){
+        if(angle > 70.0f && angle < 110.0f){
             corners.push_back(hull[j]);
+            prev = 0.0f;
+        } else {
+            if((angle+prev) > 70.0f && (angle+prev) < 110.0f){
+                corners.push_back(find_intersection({hull[(i-1)%hull.size()], hull[i]}, {hull[j], hull[k]}));
+                prev = 0.0f;
+            } else {
+                prev = angle;
+            }
         }
-    }
-
-    if(corners.size() != 4){
-        corners.clear();
-
-        auto bounding = bounding_rect(hull);
-
-        std::copy(bounding.begin(), bounding.end(), std::back_inserter(corners));
     }
 
     assert(corners.size() == 4);
@@ -784,7 +769,7 @@ std::vector<cv::Rect> compute_grid(const std::vector<cv::Point2f>& hull, cv::Mat
 
     std::size_t br = (tl + 2) % 4;
 
-    if(SHOW_TL_BR){
+    if(true || SHOW_TL_BR){
         cv::putText(dest_image, "TL", corners[tl], cv::FONT_HERSHEY_PLAIN, 0.5f, cv::Scalar(0,255,25));
         cv::putText(dest_image, "BR", corners[br], cv::FONT_HERSHEY_PLAIN, 0.5f, cv::Scalar(0,255,25));
     }
@@ -906,7 +891,10 @@ std::vector<cv::Rect> detect_grid(const cv::Mat& source_image, cv::Mat& dest_ima
             }
         }
 
-        auto hull = compute_hull(to_float_points(contours[max_c]), dest_image);
+        auto clusters = cluster(to_float_points(contours[max_c]));
+        auto points = gravity_points(clusters);
+
+        auto hull = compute_hull(points, dest_image);
 
         return compute_grid(hull, dest_image);
     }
