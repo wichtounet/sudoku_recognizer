@@ -227,6 +227,12 @@ float angle(const line_t& l){
     return std::fabs(atan((l.second.y - l.first.y) / (l.second.x - l.first.x)) * 180 / CV_PI);
 }
 
+//Only here for convenience, it is not an efficient way to create vector
+template<typename T>
+std::vector<T> make_vector(std::initializer_list<T> list){
+    return {list};
+}
+
 std::vector<line_t> detect_lines(const cv::Mat& source_image, cv::Mat& dest_image){
     std::vector<line_t> final_lines;
 
@@ -497,8 +503,8 @@ std::vector<line_t> detect_lines(const cv::Mat& source_image, cv::Mat& dest_imag
                             auto inter = find_intersection(first, second);
 
                             if(inter.x > 0 && inter.y > 0 && inter.x < source_image.cols && inter.y < source_image.rows){
-                                second.first = gravity(std::vector<cv::Point2f>({first.first, second.first}));
-                                second.second = gravity(std::vector<cv::Point2f>({first.second, second.second}));
+                                second.first = gravity(make_vector({first.first, second.first}));
+                                second.second = gravity(make_vector({first.second, second.second}));
 
                                 if(horizontal){
                                     second.first.y *= 0.95;
@@ -524,8 +530,8 @@ std::vector<line_t> detect_lines(const cv::Mat& source_image, cv::Mat& dest_imag
                                 auto inter = find_intersection(pen, last);
 
                                 if(inter.x > 0 && inter.y > 0 && inter.x < source_image.cols && inter.y < source_image.rows){
-                                    pen.first = gravity(std::vector<cv::Point2f>({last.first, pen.first}));
-                                    pen.second = gravity(std::vector<cv::Point2f>({last.second, pen.second}));
+                                    pen.first = gravity(make_vector({last.first, pen.first}));
+                                    pen.second = gravity(make_vector({last.second, pen.second}));
 
                                     if(horizontal){
                                         pen.first.y *= 1.005;
