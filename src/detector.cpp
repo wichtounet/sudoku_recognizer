@@ -60,13 +60,6 @@ void cell_binarize_direct(const cv::Mat& gray_image, cv::Mat& dest_image){
     cv::medianBlur(dest_image, dest_image, 3);
 }
 
-void cell_binarize(const cv::Mat& source_image, cv::Mat& dest_image){
-    cv::Mat gray_image;
-    cv::cvtColor(source_image, gray_image, CV_RGB2GRAY);
-
-    cell_binarize_direct(gray_image, dest_image);
-}
-
 constexpr bool almost_equals(float a, float b, float epsilon){
     return a >= (1.0f - epsilon) * b && a <= (1.0f + epsilon) * b;
 }
@@ -936,7 +929,10 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
 
     std::vector<cv::Mat> cell_mats;
     for(size_t n = 0; n < cells.size(); ++n){
-        cv::Mat cell_mat(cv::Size(CELL_SIZE, CELL_SIZE), source.type());
+        cell_mats.emplace_back(cv::Size(CELL_SIZE, CELL_SIZE), source.type());
+
+        auto& cell_mat = cell_mats.back();
+
         cell_mat = cv::Scalar(255);
 
         auto bounding = ensure_inside(source, cells[n]);
@@ -952,163 +948,155 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
         IF_DEBUG std::cout << "n=" << (n+1) << std::endl;
         IF_DEBUG std::cout << contours.size() << " contours found" << std::endl;
 
-        if(!contours.empty()){
-            auto width = rect_image.cols * 0.75f;
-            auto height = rect_image.rows * 0.75f;
+        auto width = rect_image.cols * 0.75f;
+        auto height = rect_image.rows * 0.75f;
 
-            std::vector<cv::Rect> candidates;
+        std::vector<cv::Rect> candidates;
 
-            //Get all interesting candidates
-            for(std::size_t i = 0; i < contours.size(); ++i){
-                auto rect = cv::boundingRect(contours[i]);
+        //Get all interesting candidates
+        for(std::size_t i = 0; i < contours.size(); ++i){
+            auto rect = cv::boundingRect(contours[i]);
 
-                if(rect.height <= height && rect.width <= width && std::find(candidates.begin(), candidates.end(), rect) == candidates.end()){
-                    candidates.push_back(rect);
+            if(rect.height <= height && rect.width <= width && std::find(candidates.begin(), candidates.end(), rect) == candidates.end()){
+                candidates.push_back(rect);
+            }
+        }
+
+        IF_DEBUG std::cout << candidates.size() << " filtered candidates found" << std::endl;
+
+        bool merged;
+        do {
+            merged = false;
+            for(std::size_t i = 0; i < candidates.size() && !merged; ++i){
+                auto& a = candidates[i];
+
+                for(std::size_t j = i + 1; j < candidates.size() && !merged; ++j){
+                    auto& b = candidates[j];
+
+                    if(overlap(a, b)){
+                        std::vector<cv::Point2i> all_points({
+                            {a.x, a.y},{a.x + a.width, a.y},{a.x,a.y + a.height},{a.x + a.width, a.y + a.height},
+                            {b.x, b.y},{b.x + b.width, b.y},{b.x, b.y + b.height},{b.x + b.width, b.y + b.height}});
+
+                        auto result = cv::boundingRect(all_points);
+
+                        if(result.height > height || result.width > width || result.width > 2.0 * result.height){
+                            continue;
+                        }
+
+                        a = result;
+
+                        candidates.erase(candidates.begin() + j);
+
+                        merged = true;
+                    }
+                }
+            }
+        } while(merged);
+
+        IF_DEBUG std::cout << candidates.size() << " merged candidates found" << std::endl;
+
+        candidates.erase(std::remove_if(candidates.begin(), candidates.end(), [&rect_image_clean,height,width](auto rect){
+            ensure_inside(rect_image_clean, rect);
+
+            if(fill_factor(cv::Mat(rect_image_clean, rect)) > 0.95f){
+                return true;
+            }
+
+            if(rect.height < 10 || rect.width < 5 || rect.height > height || rect.width > width){
+                return true;
+            }
+
+            //Horizontal
+            if(rect.width > 1.5 * rect.height){
+                if(rect.y < 5 || rect.y + rect.height > rect_image_clean.rows - 5){
+                    return true;
                 }
             }
 
-            IF_DEBUG std::cout << candidates.size() << " filtered candidates found" << std::endl;
+            //Vertical
+            if(rect.height > 2.0 * rect.width && rect.width < 8){
+                if(rect.x < 5 || rect.x + rect.width > rect_image_clean.cols - 5){
+                    return true;
+                }
+            }
 
-            if(!candidates.empty()){
-                bool merged;
-                do {
-                    merged = false;
-                    for(std::size_t i = 0; i < candidates.size() && !merged; ++i){
-                        auto& a = candidates[i];
+            return false;
+        }), candidates.end());
 
-                        for(std::size_t j = i + 1; j < candidates.size() && !merged; ++j){
-                            auto& b = candidates[j];
+        IF_DEBUG std::cout << candidates.size() << " filtered  bounding rect found" << std::endl;
 
-                            if(overlap(a, b)){
-                                std::vector<cv::Point2i> all_points({
-                                    {a.x, a.y},{a.x + a.width, a.y},{a.x,a.y + a.height},{a.x + a.width, a.y + a.height},
-                                    {b.x, b.y},{b.x + b.width, b.y},{b.x, b.y + b.height},{b.x + b.width, b.y + b.height}});
+        std::size_t max_i = 0;
+        decltype(bounding.area()) max = 0;
 
-                                auto result = cv::boundingRect(all_points);
+        for(std::size_t i = 0; i < candidates.size(); ++i){
+            auto& rect = candidates[i];
+            auto area = rect.area();
 
-                                if(result.height > height || result.width > width || result.width > 2.0 * result.height){
-                                    continue;
-                                }
+            if(area > max){
+                max_i = i;
+                max = area;
+            }
+        }
 
-                                a = result;
+        if(max > 100){
+            auto& rect = candidates[max_i];
 
-                                candidates.erase(candidates.begin() + j);
+            rect.x -= 2;
+            rect.width += 4;
+            rect.y += 1;
+            rect.height += 2;
 
-                                merged = true;
-                            }
-                        }
+            ensure_inside(rect_image, rect);
+
+            IF_DEBUG std::cout << "Final rect " << rect << std::endl;
+
+            auto big_rect = rect;
+            big_rect.x += bounding.x;
+            big_rect.y += bounding.y;
+
+            auto dim = std::max(rect.width, rect.height);
+
+            //Extract the cell from the source image (binary)
+            const cv::Mat final_rect(source, big_rect);
+
+            //Make the image square
+            cv::Mat final_square(cv::Size(dim, dim), final_rect.type());
+            final_square = cv::Scalar(255,255,255);
+            final_rect.copyTo(final_square(cv::Rect((dim - rect.width) / 2, (dim - rect.height) / 2, rect.width, rect.height)));
+
+            auto fill = fill_factor(final_square);
+
+            if(fill < 0.95f){
+                auto min_distance = 1000000.0f;
+
+                if(fill > 0.85f){
+                    for(auto& line : lines){
+                        auto local_distance = 0.0f;
+
+                        local_distance += manhattan_distance(cv::Point2f(big_rect.x, big_rect.y), line);
+                        local_distance += manhattan_distance(cv::Point2f(big_rect.x + big_rect.width, big_rect.y), line);
+                        local_distance += manhattan_distance(cv::Point2f(big_rect.x, big_rect.y + big_rect.height), line);
+                        local_distance += manhattan_distance(cv::Point2f(big_rect.x + big_rect.width, big_rect.y + big_rect.height), line);
+
+                        min_distance = std::min(min_distance, local_distance);
                     }
-                } while(merged);
+                }
 
-                IF_DEBUG std::cout << candidates.size() << " merged candidates found" << std::endl;
+                if(min_distance >= 50.0f){
+                    //Resize the square to the cell size
+                    cv::Mat big_square(cv::Size(CELL_SIZE, CELL_SIZE), final_square.type());
+                    cv::resize(final_square, big_square, big_square.size(), 0, 0, cv::INTER_CUBIC);
 
-                candidates.erase(std::remove_if(candidates.begin(), candidates.end(), [&rect_image_clean,height,width](auto rect){
-                    ensure_inside(rect_image_clean, rect);
+                    //Binarize again because resize goes back to GRAY
+                    cell_binarize_direct(big_square, cell_mat);
 
-                    if(fill_factor(cv::Mat(rect_image_clean, rect)) > 0.95f){
-                        return true;
-                    }
-
-                    if(rect.height < 10 || rect.width < 5 || rect.height > height || rect.width > width){
-                        return true;
-                    }
-
-                    //Horizontal
-                    if(rect.width > 1.5 * rect.height){
-                        if(rect.y < 5 || rect.y + rect.height > rect_image_clean.rows - 5){
-                            return true;
-                        }
-                    }
-
-                    //Vertical
-                    if(rect.height > 2.0 * rect.width && rect.width < 8){
-                        if(rect.x < 5 || rect.x + rect.width > rect_image_clean.cols - 5){
-                            return true;
-                        }
-                    }
-
-                    return false;
-                }), candidates.end());
-
-                IF_DEBUG std::cout << candidates.size() << " filtered  bounding rect found" << std::endl;
-
-                if(!candidates.empty()){
-                    std::size_t max_i = 0;
-                    decltype(bounding.area()) max = 0;
-
-                    for(std::size_t i = 0; i < candidates.size(); ++i){
-                        auto& rect = candidates[i];
-                        auto area = rect.area();
-
-                        if(area > max){
-                            max_i = i;
-                            max = area;
-                        }
-                    }
-
-                    if(max > 100){
-                        auto& rect = candidates[max_i];
-
-                        rect.x -= 2;
-                        rect.width += 4;
-                        rect.y += 1;
-                        rect.height += 2;
-
-                        ensure_inside(rect_image, rect);
-
-                        IF_DEBUG std::cout << "Final rect " << rect << std::endl;
-
-                        auto big_rect = rect;
-                        big_rect.x += bounding.x;
-                        big_rect.y += bounding.y;
-
-                        auto dim = std::max(rect.width, rect.height);
-
-                        //Extract the cell from the source image (binary)
-                        const cv::Mat final_rect(source, big_rect);
-
-                        //Make the image square
-                        cv::Mat final_square(cv::Size(dim, dim), final_rect.type());
-                        final_square = cv::Scalar(255,255,255);
-                        final_rect.copyTo(final_square(cv::Rect((dim - rect.width) / 2, (dim - rect.height) / 2, rect.width, rect.height)));
-
-                        auto fill = fill_factor(final_square);
-
-                        if(fill < 0.95f){
-                            auto min_distance = 1000000.0f;
-
-                            if(fill > 0.85f){
-                                for(auto& line : lines){
-                                    auto local_distance = 0.0f;
-
-                                    local_distance += manhattan_distance(cv::Point2f(big_rect.x, big_rect.y), line);
-                                    local_distance += manhattan_distance(cv::Point2f(big_rect.x + big_rect.width, big_rect.y), line);
-                                    local_distance += manhattan_distance(cv::Point2f(big_rect.x, big_rect.y + big_rect.height), line);
-                                    local_distance += manhattan_distance(cv::Point2f(big_rect.x + big_rect.width, big_rect.y + big_rect.height), line);
-
-                                    min_distance = std::min(min_distance, local_distance);
-                                }
-                            }
-
-                            if(min_distance >= 50.0f){
-                                //Resize the square to the cell size
-                                cv::Mat big_square(cv::Size(CELL_SIZE, CELL_SIZE), final_square.type());
-                                cv::resize(final_square, big_square, big_square.size(), 0, 0, cv::INTER_CUBIC);
-
-                                //Binarize again because resize goes back to GRAY
-                                cell_binarize_direct(big_square, cell_mat);
-
-                                if(SHOW_CHAR_CELLS){
-                                    cv::rectangle(dest_image, big_rect, cv::Scalar(255, 0, 0), 2);
-                                }
-                            }
-                        }
+                    if(SHOW_CHAR_CELLS){
+                        cv::rectangle(dest_image, big_rect, cv::Scalar(255, 0, 0), 2);
                     }
                 }
             }
         }
-
-        cell_mats.emplace_back(std::move(cell_mat));
     }
 
     if(SHOW_REGRID){
