@@ -33,7 +33,7 @@ constexpr const bool SHOW_HULL = false;
 constexpr const bool SHOW_HULL_FILL = false;
 constexpr const bool SHOW_TL_BR = false;
 constexpr const bool SHOW_GRID_NUMBERS= false;
-constexpr const bool SHOW_REGRID = true;
+constexpr const bool SHOW_REGRID = false;
 constexpr const bool SHOW_CELLS = true;
 constexpr const bool SHOW_CHAR_CELLS = true;
 
@@ -58,6 +58,61 @@ void cell_binarize_direct(const cv::Mat& gray_image, cv::Mat& dest_image){
     cv::adaptiveThreshold(gray_image, dest_image, 255, CV_ADAPTIVE_THRESH_MEAN_C, CV_THRESH_BINARY, 7, 2);
 
     cv::medianBlur(dest_image, dest_image, 3);
+}
+
+cv::Point2f find_intersection(const line_t& p1, const line_t& p2){
+    float denom = (p1.first.x - p1.second.x)*(p2.first.y - p2.second.y) - (p1.first.y - p1.second.y)*(p2.first.x - p2.second.x);
+    return {
+            ((p1.first.x*p1.second.y - p1.first.y*p1.second.x)*(p2.first.x - p2.second.x) -
+                (p1.first.x - p1.second.x)*(p2.first.x*p2.second.y - p2.first.y*p2.second.x)) / denom,
+            ((p1.first.x*p1.second.y - p1.first.y*p1.second.x)*(p2.first.y - p2.second.y) -
+                (p1.first.y - p1.second.y)*(p2.first.x*p2.second.y - p2.first.y*p2.second.x)) / denom
+        };
+}
+
+std::vector<cv::Point2f> find_intersections(const std::vector<line_t>& lines, const cv::Mat& source_image){
+    std::vector<cv::Point2f> intersections;
+
+    //Detect intersections
+    pairwise_foreach(lines.begin(), lines.end(), [&intersections](auto& p1, auto& p2){
+        intersections.emplace_back(find_intersection(p1, p2));
+    });
+
+    constexpr const float CLOSE_INTERSECTION_THRESHOLD = 15.0f;
+    constexpr const float CLOSE_INNER_MARGIN = 0.1f;
+
+    //Put the points out of the image but very close to it inside the image
+    for(auto& i : intersections){
+        if(i.x >= -CLOSE_INTERSECTION_THRESHOLD && i.x < CLOSE_INNER_MARGIN){
+            i.x = CLOSE_INNER_MARGIN;
+        }
+
+        if(i.y >= -CLOSE_INTERSECTION_THRESHOLD && i.y < CLOSE_INNER_MARGIN){
+            i.y = CLOSE_INNER_MARGIN;
+        }
+
+        if(i.x >= source_image.cols - CLOSE_INNER_MARGIN && i.x <= source_image.cols + CLOSE_INTERSECTION_THRESHOLD){
+            i.x = source_image.cols - CLOSE_INNER_MARGIN;
+        }
+
+        if(i.y >= source_image.rows - CLOSE_INNER_MARGIN && i.y <= source_image.rows + CLOSE_INTERSECTION_THRESHOLD){
+            i.y = source_image.rows - CLOSE_INNER_MARGIN;
+        }
+    }
+
+    //Filter bad points
+    intersections.erase(std::remove_if(intersections.begin(), intersections.end(), [&source_image](const auto& p){
+        return
+                std::isnan(p.x) || std::isnan(p.y) || std::isinf(p.x) || std::isinf(p.y)
+            ||  p.x < 0 || p.y < 0
+            ||  p.x > source_image.cols || p.y > source_image.rows;
+    }), intersections.end());
+
+    //Make sure there are no duplicates
+    std::sort(intersections.begin(), intersections.end(), [](auto& a, auto& b){ return a.x < b.x && a.y < b.y; });
+    intersections.erase(std::unique(intersections.begin(), intersections.end()), intersections.end());
+
+    return intersections;
 }
 
 constexpr bool almost_equals(float a, float b, float epsilon){
@@ -439,8 +494,11 @@ std::vector<line_t> detect_lines(const cv::Mat& source_image, cv::Mat& dest_imag
                 if(cluster.size() > 10){
                     auto theta = angle(cluster.front());
 
+                    bool vertical = std::fabs(theta - 90.0f) < 5.0f;
+                    bool horizontal = std::fabs(theta - 0.0f) < 5.0f;
+
                     bool sorted = false;
-                    if(std::fabs(theta - 90.0f) < 5.0f){
+                    if(vertical){
                         line_t base_line(cv::Point2f(0,0), cv::Point2f(0,100));
 
                         std::sort(cluster.begin(), cluster.end(), [&base_line](const auto& lhs, const auto& rhs){
@@ -448,7 +506,7 @@ std::vector<line_t> detect_lines(const cv::Mat& source_image, cv::Mat& dest_imag
                         });
 
                         sorted = true;
-                    } else if(std::fabs(theta - 0.0f) < 5.0f){
+                    } else if(horizontal){
                         line_t base_line(cv::Point2f(0,0), cv::Point2f(100,0));
 
                         std::sort(cluster.begin(), cluster.end(), [&base_line](const auto& lhs, const auto& rhs){
@@ -467,20 +525,60 @@ std::vector<line_t> detect_lines(const cv::Mat& source_image, cv::Mat& dest_imag
                             total += approximate_parallel_distance(cluster[i], cluster[i+1]);
                         }
 
-                        auto d_first = approximate_parallel_distance(cluster[0], cluster[1]);
-                        auto d_first_next = approximate_parallel_distance(cluster[1], cluster[2]);
-                        auto mean_first = (total - d_first) / (cluster.size() - 1);
+                        auto& first = cluster[0];
+                        auto& second = cluster[1];
+                        auto& third = cluster[2];
 
-                        auto d_last = approximate_parallel_distance(cluster[cluster.size() - 2], cluster[cluster.size() - 1]);
-                        auto d_last_prev = approximate_parallel_distance(cluster[cluster.size() - 3], cluster[cluster.size() - 2]);
-                        auto mean_last = (total - d_last) / (cluster.size() - 1);
+                        auto d12 = approximate_parallel_distance(first, second);
+                        auto d23 = approximate_parallel_distance(second, third);
+                        auto mean_first = (total - d12) / (cluster.size() - 1);
 
-                        if((d_first < 0.6f * mean_first || d_first < 0.40f * d_first_next) && almost_equals(d_first_next, mean_first, 0.25f)){
+                        if((d12 < 0.6f * mean_first || d12 < 0.40f * d23) && almost_equals(d23, mean_first, 0.25f)){
+                            auto inter = find_intersection(first, second);
+
+                            if(inter.x > 0 && inter.y > 0 && inter.x < source_image.cols && inter.y < source_image.rows){
+                                second.first = gravity(std::vector<cv::Point2f>({first.first, second.first}));
+                                second.second = gravity(std::vector<cv::Point2f>({first.second, second.second}));
+
+                                if(horizontal){
+                                    second.first.y *= 0.95;
+                                    second.second.y *= 0.95;
+                                } else if(vertical){
+                                    second.first.x *= 0.95;
+                                    second.second.x *= 0.95;
+                                }
+                            }
+
                             cluster.erase(cluster.begin(), std::next(cluster.begin()));
                             cleaned_once = cleaned = true;
-                        } else if((d_last < 0.6f * mean_last || d_last < 0.40f * d_last_prev) && almost_equals(d_last_prev, mean_last, 0.20f)){
-                            cluster.erase(std::prev(cluster.end()), cluster.end());
-                            cleaned_once = cleaned = true;
+                        } else {
+                            auto& last = cluster.back();
+                            auto& pen = cluster[cluster.size() - 2];
+                            auto& ante = cluster[cluster.size() - 3];
+
+                            auto dlp = approximate_parallel_distance(pen, last);
+                            auto dpa = approximate_parallel_distance(ante, pen);
+                            auto mean_last = (total - dlp) / (cluster.size() - 1);
+
+                            if((dlp < 0.6f * mean_last || dlp < 0.40f * dpa) && almost_equals(dpa, mean_last, 0.20f)){
+                                auto inter = find_intersection(pen, last);
+
+                                if(inter.x > 0 && inter.y > 0 && inter.x < source_image.cols && inter.y < source_image.rows){
+                                    pen.first = gravity(std::vector<cv::Point2f>({last.first, pen.first}));
+                                    pen.second = gravity(std::vector<cv::Point2f>({last.second, pen.second}));
+
+                                    if(horizontal){
+                                        pen.first.y *= 1.005;
+                                        pen.second.y *= 1.005;
+                                    } else if(vertical){
+                                        pen.first.x *= 1.005;
+                                        pen.second.x *= 1.005;
+                                    }
+                                }
+
+                                cluster.erase(std::prev(cluster.end()), cluster.end());
+                                cleaned_once = cleaned = true;
+                            }
                         }
                     } else {
                         std::cout << "Failed to sort" << std::endl;
@@ -510,61 +608,6 @@ std::vector<line_t> detect_lines(const cv::Mat& source_image, cv::Mat& dest_imag
     }
 
     return final_lines;
-}
-
-cv::Point2f find_intersection(const line_t& p1, const line_t& p2){
-    float denom = (p1.first.x - p1.second.x)*(p2.first.y - p2.second.y) - (p1.first.y - p1.second.y)*(p2.first.x - p2.second.x);
-    return {
-            ((p1.first.x*p1.second.y - p1.first.y*p1.second.x)*(p2.first.x - p2.second.x) -
-                (p1.first.x - p1.second.x)*(p2.first.x*p2.second.y - p2.first.y*p2.second.x)) / denom,
-            ((p1.first.x*p1.second.y - p1.first.y*p1.second.x)*(p2.first.y - p2.second.y) -
-                (p1.first.y - p1.second.y)*(p2.first.x*p2.second.y - p2.first.y*p2.second.x)) / denom
-        };
-}
-
-std::vector<cv::Point2f> find_intersections(const std::vector<line_t>& lines, const cv::Mat& source_image){
-    std::vector<cv::Point2f> intersections;
-
-    //Detect intersections
-    pairwise_foreach(lines.begin(), lines.end(), [&intersections](auto& p1, auto& p2){
-        intersections.emplace_back(find_intersection(p1, p2));
-    });
-
-    constexpr const float CLOSE_INTERSECTION_THRESHOLD = 15.0f;
-    constexpr const float CLOSE_INNER_MARGIN = 0.1f;
-
-    //Put the points out of the image but very close to it inside the image
-    for(auto& i : intersections){
-        if(i.x >= -CLOSE_INTERSECTION_THRESHOLD && i.x < CLOSE_INNER_MARGIN){
-            i.x = CLOSE_INNER_MARGIN;
-        }
-
-        if(i.y >= -CLOSE_INTERSECTION_THRESHOLD && i.y < CLOSE_INNER_MARGIN){
-            i.y = CLOSE_INNER_MARGIN;
-        }
-
-        if(i.x >= source_image.cols - CLOSE_INNER_MARGIN && i.x <= source_image.cols + CLOSE_INTERSECTION_THRESHOLD){
-            i.x = source_image.cols - CLOSE_INNER_MARGIN;
-        }
-
-        if(i.y >= source_image.rows - CLOSE_INNER_MARGIN && i.y <= source_image.rows + CLOSE_INTERSECTION_THRESHOLD){
-            i.y = source_image.rows - CLOSE_INNER_MARGIN;
-        }
-    }
-
-    //Filter bad points
-    intersections.erase(std::remove_if(intersections.begin(), intersections.end(), [&source_image](const auto& p){
-        return
-                std::isnan(p.x) || std::isnan(p.y) || std::isinf(p.x) || std::isinf(p.y)
-            ||  p.x < 0 || p.y < 0
-            ||  p.x > source_image.cols || p.y > source_image.rows;
-    }), intersections.end());
-
-    //Make sure there are no duplicates
-    std::sort(intersections.begin(), intersections.end(), [](auto& a, auto& b){ return a.x < b.x && a.y < b.y; });
-    intersections.erase(std::unique(intersections.begin(), intersections.end()), intersections.end());
-
-    return intersections;
 }
 
 std::vector<std::vector<cv::Point2f>> cluster(const std::vector<cv::Point2f>& intersections){
