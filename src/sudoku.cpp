@@ -24,16 +24,9 @@ vector<double> mat_to_image(const cv::Mat& mat){
         for(size_t j = 0; j < static_cast<size_t>(mat.cols); ++j){
             auto value_c = static_cast<std::size_t>(mat.at<uint8_t>(i, j));
 
-            //TODO Rebinarize after resize
+            assert(value_c == 0 || value_c == 255);
 
-            double value_d;
-            if(value_c > 200){
-                value_d = 0.0;
-            } else {
-                value_d = 1.0;
-            }
-
-            image[i * mat.cols + j] = value_d;
+            image[i * mat.cols + j] = value_c == 0 ? 1.0 : 0.0;
         }
     }
 

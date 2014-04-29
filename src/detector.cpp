@@ -29,11 +29,11 @@ constexpr const bool SHOW_CLUSTERED_INTERSECTIONS = false;
 constexpr const bool SHOW_SQUARES = false;
 constexpr const bool SHOW_MAX_SQUARES = false;
 constexpr const bool SHOW_FINAL_SQUARES = false;
-constexpr const bool SHOW_HULL = true;
+constexpr const bool SHOW_HULL = false;
 constexpr const bool SHOW_HULL_FILL = false;
-constexpr const bool SHOW_TL_BR = true;
+constexpr const bool SHOW_TL_BR = false;
 constexpr const bool SHOW_GRID_NUMBERS= false;
-constexpr const bool SHOW_REGRID = false;
+constexpr const bool SHOW_REGRID = true;
 constexpr const bool SHOW_CELLS = true;
 constexpr const bool SHOW_CHAR_CELLS = true;
 
@@ -53,14 +53,18 @@ void sudoku_binarize(const cv::Mat& source_image, cv::Mat& dest_image){
     cv::morphologyEx(dest_image, dest_image, cv::MORPH_DILATE, structure_elem);
 }
 
-void cell_binarize(const cv::Mat& source_image, cv::Mat& dest_image){
-    cv::Mat gray_image;
-    cv::cvtColor(source_image, gray_image, CV_RGB2GRAY);
-
+void cell_binarize_direct(const cv::Mat& gray_image, cv::Mat& dest_image){
     dest_image = gray_image.clone();
     cv::adaptiveThreshold(gray_image, dest_image, 255, CV_ADAPTIVE_THRESH_MEAN_C, CV_THRESH_BINARY, 7, 2);
 
     cv::medianBlur(dest_image, dest_image, 3);
+}
+
+void cell_binarize(const cv::Mat& source_image, cv::Mat& dest_image){
+    cv::Mat gray_image;
+    cv::cvtColor(source_image, gray_image, CV_RGB2GRAY);
+
+    cell_binarize_direct(gray_image, dest_image);
 }
 
 constexpr bool almost_equals(float a, float b, float epsilon){
@@ -932,8 +936,8 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
 
     std::vector<cv::Mat> cell_mats;
     for(size_t n = 0; n < cells.size(); ++n){
-        cv::Mat cell_mat(cv::Size(CELL_SIZE, CELL_SIZE), CV_8U);
-        cell_mat = cv::Scalar(255, 255, 255);
+        cv::Mat cell_mat(cv::Size(CELL_SIZE, CELL_SIZE), source.type());
+        cell_mat = cv::Scalar(255);
 
         auto bounding = ensure_inside(source, cells[n]);
 
@@ -1067,9 +1071,10 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
 
                         last_rect_mat.copyTo(last_mat(cv::Rect((dim - rect.width) / 2, (dim - rect.height) / 2, rect.width, rect.height)));
 
-                        cv::resize(last_mat, cell_mat, cell_mat.size(), 0, 0, cv::INTER_CUBIC);
+                        cv::Mat tmp_mat(cv::Size(CELL_SIZE, CELL_SIZE), last_mat.type());
+                        cv::resize(last_mat, tmp_mat, tmp_mat.size(), 0, 0, cv::INTER_CUBIC);
 
-                        auto fill = fill_factor(cell_mat);
+                        auto fill = fill_factor(tmp_mat);
 
                         if(fill < 0.95f){
                             auto min_distance = 1000000.0f;
@@ -1087,28 +1092,25 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
                                 }
                             }
 
-                            if(min_distance < 50.0f){
-                                cell_mat = cv::Scalar(255,255,255);
-                            } else {
-                                cell_mat = cv::Scalar(255);
+                            if(min_distance >= 50.0f){
+                                //Extract the cell from the source image (binary)
+                                cv::Mat final_rect(source, big_rect);
 
-                                cv::Mat final_rect(source_image, big_rect);
-                                cv::Mat final_rect_binary;
-                                cell_binarize(final_rect, final_rect_binary);
+                                //Make the image square
+                                cv::Mat final_square(cv::Size(dim, dim), final_rect.type());
+                                final_square = cv::Scalar(255,255,255);
+                                final_rect.copyTo(final_square(cv::Rect((dim - rect.width) / 2, (dim - rect.height) / 2, rect.width, rect.height)));
 
-                                cv::Mat final_rect_mat(cv::Size(dim, dim), final_rect_binary.type());
-                                final_rect_mat = cv::Scalar(255);
+                                //Resize the square to the cell size
+                                cv::Mat big_square(cv::Size(CELL_SIZE, CELL_SIZE), final_square.type());
+                                cv::resize(final_square, big_square, big_square.size(), 0, 0, cv::INTER_CUBIC);
 
-                                final_rect_binary.copyTo(final_rect_mat(cv::Rect((dim - rect.width) / 2, (dim - rect.height) / 2, rect.width, rect.height)));
-
-                                cv::resize(final_rect_mat, cell_mat, cell_mat.size(), 0, 0, cv::INTER_CUBIC);
+                                cell_binarize_direct(big_square, cell_mat);
 
                                 if(SHOW_CHAR_CELLS){
                                     cv::rectangle(dest_image, big_rect, cv::Scalar(255, 0, 0), 2);
                                 }
                             }
-                        } else {
-                            cell_mat = cv::Scalar(255,255,255);
                         }
                     }
                 }
@@ -1119,7 +1121,7 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
     }
 
     if(SHOW_REGRID){
-        cv::Mat remat(cv::Size(CELL_SIZE * 9, CELL_SIZE * 9), CV_8U);
+        cv::Mat remat(cv::Size(CELL_SIZE * 9, CELL_SIZE * 9), cell_mats.front().type());
 
         for(size_t n = 0; n < cells.size(); ++n){
             const auto& mat = cell_mats[n];
