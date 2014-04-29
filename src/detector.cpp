@@ -773,7 +773,7 @@ std::vector<cv::Rect> compute_grid(const std::vector<cv::Point2f>& hull, cv::Mat
 
     std::size_t br = (tl + 2) % 4;
 
-    if(true || SHOW_TL_BR){
+    if(SHOW_TL_BR){
         cv::putText(dest_image, "TL", corners[tl], cv::FONT_HERSHEY_PLAIN, 0.5f, cv::Scalar(0,255,25));
         cv::putText(dest_image, "BR", corners[br], cv::FONT_HERSHEY_PLAIN, 0.5f, cv::Scalar(0,255,25));
     }
@@ -1064,17 +1064,15 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
 
                         auto dim = std::max(rect.width, rect.height);
 
-                        cv::Mat last_rect_mat(source, big_rect);
+                        //Extract the cell from the source image (binary)
+                        const cv::Mat final_rect(source, big_rect);
 
-                        cv::Mat last_mat(cv::Size(dim, dim), last_rect_mat.type());
-                        last_mat = cv::Scalar(255,255,255);
+                        //Make the image square
+                        cv::Mat final_square(cv::Size(dim, dim), final_rect.type());
+                        final_square = cv::Scalar(255,255,255);
+                        final_rect.copyTo(final_square(cv::Rect((dim - rect.width) / 2, (dim - rect.height) / 2, rect.width, rect.height)));
 
-                        last_rect_mat.copyTo(last_mat(cv::Rect((dim - rect.width) / 2, (dim - rect.height) / 2, rect.width, rect.height)));
-
-                        cv::Mat tmp_mat(cv::Size(CELL_SIZE, CELL_SIZE), last_mat.type());
-                        cv::resize(last_mat, tmp_mat, tmp_mat.size(), 0, 0, cv::INTER_CUBIC);
-
-                        auto fill = fill_factor(tmp_mat);
+                        auto fill = fill_factor(final_square);
 
                         if(fill < 0.95f){
                             auto min_distance = 1000000.0f;
@@ -1093,18 +1091,11 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
                             }
 
                             if(min_distance >= 50.0f){
-                                //Extract the cell from the source image (binary)
-                                cv::Mat final_rect(source, big_rect);
-
-                                //Make the image square
-                                cv::Mat final_square(cv::Size(dim, dim), final_rect.type());
-                                final_square = cv::Scalar(255,255,255);
-                                final_rect.copyTo(final_square(cv::Rect((dim - rect.width) / 2, (dim - rect.height) / 2, rect.width, rect.height)));
-
                                 //Resize the square to the cell size
                                 cv::Mat big_square(cv::Size(CELL_SIZE, CELL_SIZE), final_square.type());
                                 cv::resize(final_square, big_square, big_square.size(), 0, 0, cv::INTER_CUBIC);
 
+                                //Binarize again because resize goes back to GRAY
                                 cell_binarize_direct(big_square, cell_mat);
 
                                 if(SHOW_CHAR_CELLS){
