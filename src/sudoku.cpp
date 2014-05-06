@@ -144,13 +144,12 @@ int main(int argc, char** argv ){
         auto labels = dbn::make_fake(ds.training_labels);
 
         typedef dbn::dbn<
-            dbn::layer<dbn::conf<true, 50, true, true>, CELL_SIZE * CELL_SIZE, 500>,
-            dbn::layer<dbn::conf<true, 50, false, true>, 500, 500>,
-            dbn::layer<dbn::conf<true, 50, false, true>, 500, 2000>,
-            dbn::layer<dbn::conf<true, 50, false, true, true, dbn::Type::EXP>, 2000, 9>> dbn_t;
+            dbn::layer<dbn::conf<true, 50, true, true>, CELL_SIZE * CELL_SIZE, 300>,
+//            dbn::layer<dbn::conf<true, 50, false, true>, 500, 500>,
+            dbn::layer<dbn::conf<true, 50, false, true>, 300, 500>,
+            dbn::layer<dbn::conf<true, 50, false, true, true, dbn::Type::EXP>, 500, 9>> dbn_t;
 
         auto dbn = std::make_unique<dbn_t>();
-
         dbn->display();
 
         std::cout << "Start pretraining" << std::endl;
@@ -211,17 +210,26 @@ int main(int argc, char** argv ){
     } else if(command == "test"){
         auto ds = get_dataset(argc, argv);
 
-        typedef dbn::dbn<
+       /*
+            dbn_2000.dat
+            typedef dbn::dbn<
             dbn::layer<dbn::conf<true, 50, true, true>, CELL_SIZE * CELL_SIZE, 500>,
             dbn::layer<dbn::conf<true, 50, false, true>, 500, 500>,
             dbn::layer<dbn::conf<true, 50, false, true>, 500, 2000>,
             dbn::layer<dbn::conf<true, 50, false, true, true, dbn::Type::EXP>, 2000, 9>> dbn_t;
+            */
+
+        typedef dbn::dbn<
+            dbn::layer<dbn::conf<true, 50, true, true>, CELL_SIZE * CELL_SIZE, 300>,
+//            dbn::layer<dbn::conf<true, 50, false, true>, 500, 500>,
+            dbn::layer<dbn::conf<true, 50, false, true>, 300, 500>,
+            dbn::layer<dbn::conf<true, 50, false, true, true, dbn::Type::EXP>, 500, 9>> dbn_t;
 
         auto dbn = std::make_unique<dbn_t>();
 
         dbn->display();
 
-        std::ifstream is("dbn_2000.dat", std::ofstream::binary);
+        std::ifstream is("dbn_500.dat", std::ofstream::binary);
         dbn->load(is);
 
         auto error_rate = dbn::test_set(dbn, ds.training_images, ds.training_labels, dbn::predictor());
@@ -250,10 +258,15 @@ int main(int argc, char** argv ){
 
                     auto fill = fill_factor(cell_mat);
 
+                    auto weights = dbn->predict_weights(mat_to_image(cell_mat));
                     if(fill == 1.0f){
                         answer = 0;
                     } else {
-                        answer = dbn->predict(mat_to_image(cell_mat))+1;
+                        answer = dbn->predict_final(weights)+1;
+                        //std::cout << weights[answer-1] << std::endl;
+                        if(weights[answer-1] < 1e5){
+                            answer = 0;
+                        }
                     }
 
                     if(answer == data.results[i][j]){
@@ -265,12 +278,20 @@ int main(int argc, char** argv ){
                             ++dbn_errors;
                         }
 
-                        std::cout << "ERROR: " << static_cast<size_t>(answer) << std::endl;
+                        std::cout << "ERROR: " << std::endl;
+                        std::cout << "\t where: " << i << ":" << j << std::endl;
+                        std::cout << "\t answer: " << static_cast<size_t>(answer) << std::endl;
                         std::cout << "\t was: " << static_cast<size_t>(data.results[i][j]) << std::endl;
-                        std::cout << "\t fill_factor=" << fill << std::endl;
+                        std::cout << "\t fill_factor: " << fill << std::endl;
 
-                        std::cout << i << ":" << j << std::endl;
-//                        std::cout << cell_mat << std::endl;
+                        std::cout << "\t weights: {";
+                        for(std::size_t i = 0; i < weights.size(); ++i){
+                            if(i > 0){
+                                std::cout << ",";
+                            }
+                            std::cout << weights[i];
+                        }
+                        std::cout << "}" << std::endl;
                     }
                 }
             }
@@ -285,13 +306,13 @@ int main(int argc, char** argv ){
         auto total_s = static_cast<float>(ds.source_images.size());
         auto total_c = total_s * 81.0f;
 
-        std::cout << "Cell Error Rate " << 100.0 * (total_c - cell_hits) / total_c << "%" << std::endl;
-        std::cout << "Sudoku Error Rate " << 100.0 * (total_s - sudoku_hits) / total_s << "%" << std::endl;
+        std::cout << "Cell Error Rate " << 100.0 * (total_c - cell_hits) / total_c << "% (" << (total_c - cell_hits) << "/" << total_c << ")" << std::endl;
+        std::cout << "Sudoku Error Rate " << 100.0 * (total_s - sudoku_hits) / total_s << "% (" << (total_s - sudoku_hits) << "/" << total_s << ")" << std::endl;
 
         if(zero_errors || dbn_errors){
-            std::cout << "Cell Errors: " << zero_errors + dbn_errors << std::endl;
-            std::cout << "Zero errors: " << 100.0 * zero_errors / static_cast<double>(zero_errors + dbn_errors) << std::endl;
-            std::cout << "DBN errors: " << 100.0 * dbn_errors / static_cast<double>(zero_errors + dbn_errors) << std::endl;
+            auto tot = zero_errors + dbn_errors;
+            std::cout << "Zero errors: " << 100.0 * zero_errors / tot << "% (" << zero_errors << "/" << tot << ")" << std::endl;
+            std::cout << "DBN errors: " << 100.0 * dbn_errors / tot << "% (" << dbn_errors << "/" << tot << ")" << std::endl;
         }
     } else {
         std::cout << "Invalid command \"" << command << "\"" << std::endl;
