@@ -893,7 +893,13 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
         candidates.erase(std::remove_if(candidates.begin(), candidates.end(), [&rect_image_clean,height,width](auto rect){
             ensure_inside(rect_image_clean, rect);
 
-            if(fill_factor(cv::Mat(rect_image_clean, rect)) > 0.95f){
+            auto dim = std::max(rect.width, rect.height);
+            cv::Mat tmp_rect(rect_image_clean, rect);
+            cv::Mat tmp_square(cv::Size(dim, dim), tmp_rect.type());
+            tmp_square = cv::Scalar(255,255,255);
+            tmp_rect.copyTo(tmp_square(cv::Rect((dim - rect.width) / 2, (dim - rect.height) / 2, rect.width, rect.height)));
+
+            if(fill_factor(tmp_square) > 0.95f){
                 return true;
             }
 
@@ -961,6 +967,8 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
 
             auto fill = fill_factor(final_square);
 
+            IF_DEBUG std::cout << "\tfill_factor=" << fill << std::endl;
+
             if(fill < 0.95f){
                 auto min_distance = 1000000.0f;
 
@@ -976,6 +984,8 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
                         min_distance = std::min(min_distance, local_distance);
                     }
                 }
+
+                IF_DEBUG std::cout << "\tmin_distance=" << min_distance << std::endl;
 
                 if(min_distance >= 50.0f){
                     //Resize the square to the cell size
