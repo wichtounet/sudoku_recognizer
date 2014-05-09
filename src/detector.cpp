@@ -49,7 +49,7 @@ void sudoku_binarize(const cv::Mat& source_image, cv::Mat& dest_image){
     cv::morphologyEx(dest_image, dest_image, cv::MORPH_DILATE, structure_elem);
 }
 
-void cell_binarize_direct(const cv::Mat& gray_image, cv::Mat& dest_image){
+void cell_binarize(const cv::Mat& gray_image, cv::Mat& dest_image){
     dest_image = gray_image.clone();
     cv::adaptiveThreshold(gray_image, dest_image, 255, CV_ADAPTIVE_THRESH_MEAN_C, CV_THRESH_BINARY, 7, 2);
 
@@ -993,7 +993,7 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
                     cv::resize(final_square, big_square, big_square.size(), 0, 0, cv::INTER_CUBIC);
 
                     //Binarize again because resize goes back to GRAY
-                    cell_binarize_direct(big_square, cell_mat);
+                    cell_binarize(big_square, cell_mat);
 
                     if(SHOW_CHAR_CELLS){
                         cv::rectangle(dest_image, big_rect, cv::Scalar(255, 0, 0), 2);
