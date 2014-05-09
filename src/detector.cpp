@@ -28,10 +28,10 @@ constexpr const bool SHOW_CLUSTERED_INTERSECTIONS = false;
 constexpr const bool SHOW_HULL = false;
 constexpr const bool SHOW_HULL_FILL = false;
 constexpr const bool SHOW_TL_BR = false;
+constexpr const bool SHOW_CELLS = false;
 constexpr const bool SHOW_GRID_NUMBERS= false;
+constexpr const bool SHOW_CHAR_CELLS = false;
 constexpr const bool SHOW_REGRID = false;
-constexpr const bool SHOW_CELLS = true;
-constexpr const bool SHOW_CHAR_CELLS = true;
 
 #define IF_DEBUG if(DEBUG)
 
@@ -716,10 +716,10 @@ std::vector<cv::Rect> compute_grid(const std::vector<cv::Point2f>& hull, cv::Mat
 
     if(SHOW_GRID_NUMBERS){
         for(size_t i = 0; i < cells.size(); ++i){
-            auto center_x = cells[i].x + cells[i].width / 2.0f;
-            auto center_y = cells[i].y + cells[i].height / 2.0f;
+            auto center_x = cells[i].x + cells[i].width / 2.0f - 12;
+            auto center_y = cells[i].y + cells[i].height / 2.0f + 5;
             cv::putText(dest_image, std::to_string(i + 1), cv::Point2f(center_x, center_y),
-                cv::FONT_HERSHEY_PLAIN, 0.7f, cv::Scalar(0,255,25));
+                cv::FONT_HERSHEY_PLAIN, 1.0f, cv::Scalar(0,255,25));
         }
     }
 
