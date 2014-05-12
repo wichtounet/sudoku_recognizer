@@ -62,13 +62,15 @@ cv::Mat open_image(const std::string& path){
     return source_image;
 }
 
-dataset get_dataset(int argc, char** argv){
+dataset get_dataset(int argc, char** argv, bool quiet = false){
     dataset ds;
 
     for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
         std::string image_source_path(argv[i]);
 
-        std::cout << image_source_path << std::endl;
+        if(!quiet){
+            std::cout << image_source_path << std::endl;
+        }
 
         auto source_image = open_image(image_source_path);
 
@@ -283,48 +285,78 @@ int main(int argc, char** argv ){
         }
     } else if(command == "time"){
         typedef dbn::dbn<
-            dbn::layer<dbn::conf<true, 50, true, true>, CELL_SIZE * CELL_SIZE, 300>,
-            dbn::layer<dbn::conf<true, 50, false, true>, 300, 300>,
-            dbn::layer<dbn::conf<true, 50, false, true>, 300, 500>,
-            dbn::layer<dbn::conf<true, 50, false, true, true, dbn::Type::EXP>, 500, 9>> dbn_t;
+            dbn::layer<dbn::conf<true, 10, true, true>, CELL_SIZE * CELL_SIZE, 300>,
+            dbn::layer<dbn::conf<true, 10, false, true>, 300, 300>,
+            dbn::layer<dbn::conf<true, 10, false, true>, 300, 500>,
+            dbn::layer<dbn::conf<true, 10, false, true, true, dbn::Type::EXP>, 500, 9>> dbn_t;
 
         auto dbn = std::make_unique<dbn_t>();
 
         std::ifstream is("dbn.dat", std::ofstream::binary);
         dbn->load(is);
-        uint8_t answer;
 
-        stop_watch<> watch;
+        //1. Image loading
 
-        auto ds = get_dataset(argc, argv);
+        double il_max = 0.0;
+        double il_min = std::numeric_limits<double>::max();
+        double il_sum = 0.0;
 
-        for(std::size_t i = 0; i < ds.source_images.size(); ++i){
-            const auto& image = ds.source_images[i];
-
-            for(size_t i = 0; i < 9; ++i){
-                for(size_t j = 0; j < 9; ++j){
-                    auto& cell_mat = image[i * 9 + j];
-
-                    auto fill = fill_factor(cell_mat);
-
-                    auto weights = dbn->predict_weights(mat_to_image(cell_mat));
-                    if(fill == 1.0f){
-                        answer = 0;
-                    } else {
-                        answer = dbn->predict_final(weights)+1;
-                        if(weights[answer-1] < 1e5){
-                            answer = 0;
-                        }
-                    }
-                }
-            }
+        for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
+            std::string image_source_path(argv[i]);
+            open_image(image_source_path);
         }
 
-        auto elapsed = watch.elapsed();
-        std::cout << "Detection took: " << elapsed << "ms" << std::endl;
-        std::cout << "\tAverage: " << (elapsed * 1.0f / ds.source_images.size()) << "ms" << std::endl;
+        for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
+            stop_watch<std::chrono::microseconds> il_watch;
+            std::string image_source_path(argv[i]);
 
-        std::cout << answer << std::endl;
+            open_image(image_source_path);
+
+            auto il_elapsed = il_watch.elapsed();
+
+            il_max = std::max(il_max, il_elapsed);
+            il_min = std::min(il_min, il_elapsed);
+            il_sum += il_elapsed;
+        }
+
+        std::cout << "Image loading: " << std::endl;
+        std::cout << "\tmin: " << il_min << std::endl;
+        std::cout << "\tmax: " << il_max << std::endl;
+        std::cout << "\taverage: " << (il_sum / (argc - 2)) << std::endl;
+
+        //2. Line detection
+
+        double ld_max = 0.0;
+        double ld_min = std::numeric_limits<double>::max();
+        double ld_sum = 0.0;
+
+        for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
+            std::string image_source_path(argv[i]);
+            auto source_image = open_image(image_source_path);
+            auto dest_image = source_image.clone();
+            detect_lines(source_image, dest_image);
+        }
+
+        for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
+            std::string image_source_path(argv[i]);
+            auto source_image = open_image(image_source_path);
+
+            stop_watch<std::chrono::microseconds> ld_watch;
+
+            auto dest_image = source_image.clone();
+            detect_lines(source_image, dest_image);
+
+            auto ld_elapsed = ld_watch.elapsed();
+
+            ld_max = std::max(ld_max, ld_elapsed);
+            ld_min = std::min(ld_min, ld_elapsed);
+            ld_sum += ld_elapsed;
+        }
+
+        std::cout << "Line Detection: " << std::endl;
+        std::cout << "\tmin: " << ld_min << std::endl;
+        std::cout << "\tmax: " << ld_max << std::endl;
+        std::cout << "\taverage: " << (ld_sum / (argc - 2)) << std::endl;
     } else {
         std::cout << "Invalid command \"" << command << "\"" << std::endl;
         return -1;
