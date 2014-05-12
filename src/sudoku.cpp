@@ -357,6 +357,43 @@ int main(int argc, char** argv ){
         std::cout << "\tmin: " << ld_min << std::endl;
         std::cout << "\tmax: " << ld_max << std::endl;
         std::cout << "\taverage: " << (ld_sum / (argc - 2)) << std::endl;
+
+        //2. Grid detection
+
+        double gd_max = 0.0;
+        double gd_min = std::numeric_limits<double>::max();
+        double gd_sum = 0.0;
+
+        for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
+            std::string image_source_path(argv[i]);
+            auto source_image = open_image(image_source_path);
+            auto dest_image = source_image.clone();
+            auto lines = detect_lines(source_image, dest_image);
+            detect_grid(source_image, dest_image, lines);
+        }
+
+        for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
+            std::string image_source_path(argv[i]);
+            auto source_image = open_image(image_source_path);
+            auto dest_image = source_image.clone();
+            auto lines = detect_lines(source_image, dest_image);
+
+            stop_watch<std::chrono::microseconds> gd_watch;
+
+            detect_grid(source_image, dest_image, lines);
+
+            auto gd_elapsed = gd_watch.elapsed();
+
+            gd_max = std::max(gd_max, gd_elapsed);
+            gd_min = std::min(gd_min, gd_elapsed);
+            gd_sum += gd_elapsed;
+        }
+
+        std::cout << "Grid Detection: " << std::endl;
+        std::cout << "\tmin: " << gd_min << std::endl;
+        std::cout << "\tmax: " << gd_max << std::endl;
+        std::cout << "\taverage: " << (gd_sum / (argc - 2)) << std::endl;
+
     } else {
         std::cout << "Invalid command \"" << command << "\"" << std::endl;
         return -1;

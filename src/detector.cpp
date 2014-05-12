@@ -384,67 +384,6 @@ std::vector<cv::Point2f> to_float_points(const std::vector<cv::Point>& vec){
     return vector_transform(vec.begin(), vec.end(), [](auto& i){return cv::Point2f(i.x, i.y);});
 }
 
-std::vector<cv::Rect> detect_grid(const cv::Mat& source_image, cv::Mat& dest_image, std::vector<line_t>& lines){
-    auto_stop_watch<std::chrono::microseconds> watch("detect_grid");
-
-    dest_image = source_image.clone();
-
-    lines = detect_lines(source_image, dest_image);
-
-    auto intersections = find_intersections(lines, source_image);
-
-    if(SHOW_INTERSECTIONS){
-        draw_points(dest_image, intersections, cv::Scalar(0,0,255));
-    }
-
-    IF_DEBUG std::cout << intersections.size() << " intersections found" << std::endl;
-
-    auto clusters = cluster(intersections);
-    auto points = gravity_points(clusters);
-
-    if(SHOW_CLUSTERED_INTERSECTIONS){
-        draw_points(dest_image, points, cv::Scalar(255,0,0));
-    }
-
-    IF_DEBUG std::cout << points.size() << " clustered intersections found" << std::endl;
-
-    //If the detected lines are optimal, the number of intersection is 100
-    //In that case, no need to more post processing, just get the grid around
-    //the points
-    if(points.size() == 100){
-        IF_DEBUG std::cout << "POINTS PERFECT" << std::endl;
-
-        auto hull = compute_hull(points, dest_image);
-
-        return compute_grid(hull, dest_image);
-    } else {
-        cv::Mat dest_image_gray;
-        sudoku_binarize(source_image, dest_image_gray);
-
-        std::size_t CANNY = 150;
-        cv::Canny(dest_image_gray, dest_image_gray, CANNY, CANNY * 4, 5);
-
-        std::vector<std::vector<cv::Point>> contours;
-        std::vector<cv::Vec4i> hierarchy;
-        cv::findContours(dest_image_gray, contours, hierarchy, CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE, cv::Point(0,0));
-
-        std::size_t max_c = 0;
-
-        for(std::size_t i = 1; i < contours.size(); ++i){
-            if(cv::contourArea(contours[i]) > cv::contourArea(contours[max_c])){
-                max_c = i;
-            }
-        }
-
-        auto clusters = cluster(to_float_points(contours[max_c]));
-        auto points = gravity_points(clusters);
-
-        auto hull = compute_hull(points, dest_image);
-
-        return compute_grid(hull, dest_image);
-    }
-}
-
 std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, const std::vector<cv::Rect>& cells, std::vector<line_t>& lines){
     auto_stop_watch<std::chrono::microseconds> watch("split");
 
@@ -1021,9 +960,65 @@ std::vector<line_t> detect_lines(const cv::Mat& source_image, cv::Mat& dest_imag
     return final_lines;
 }
 
+std::vector<cv::Rect> detect_grid(const cv::Mat& source_image, cv::Mat& dest_image, std::vector<line_t>& lines){
+    auto intersections = find_intersections(lines, source_image);
+
+    if(SHOW_INTERSECTIONS){
+        draw_points(dest_image, intersections, cv::Scalar(0,0,255));
+    }
+
+    IF_DEBUG std::cout << intersections.size() << " intersections found" << std::endl;
+
+    auto clusters = cluster(intersections);
+    auto points = gravity_points(clusters);
+
+    if(SHOW_CLUSTERED_INTERSECTIONS){
+        draw_points(dest_image, points, cv::Scalar(255,0,0));
+    }
+
+    IF_DEBUG std::cout << points.size() << " clustered intersections found" << std::endl;
+
+    //If the detected lines are optimal, the number of intersection is 100
+    //In that case, no need to more post processing, just get the grid around
+    //the points
+    if(points.size() == 100){
+        IF_DEBUG std::cout << "POINTS PERFECT" << std::endl;
+
+        auto hull = compute_hull(points, dest_image);
+
+        return compute_grid(hull, dest_image);
+    } else {
+        cv::Mat dest_image_gray;
+        sudoku_binarize(source_image, dest_image_gray);
+
+        std::size_t CANNY = 150;
+        cv::Canny(dest_image_gray, dest_image_gray, CANNY, CANNY * 4, 5);
+
+        std::vector<std::vector<cv::Point>> contours;
+        std::vector<cv::Vec4i> hierarchy;
+        cv::findContours(dest_image_gray, contours, hierarchy, CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE, cv::Point(0,0));
+
+        std::size_t max_c = 0;
+
+        for(std::size_t i = 1; i < contours.size(); ++i){
+            if(cv::contourArea(contours[i]) > cv::contourArea(contours[max_c])){
+                max_c = i;
+            }
+        }
+
+        auto clusters = cluster(to_float_points(contours[max_c]));
+        auto points = gravity_points(clusters);
+
+        auto hull = compute_hull(points, dest_image);
+
+        return compute_grid(hull, dest_image);
+    }
+}
 
 std::vector<cv::Mat> detect(const cv::Mat& source_image, cv::Mat& dest_image){
-    std::vector<line_t> lines;
+    dest_image = source_image.clone();
+
+    auto lines = detect_lines(source_image, dest_image);
     auto cells = detect_grid(source_image, dest_image, lines);
     return split(source_image, dest_image, cells, lines);
 }

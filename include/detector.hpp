@@ -11,6 +11,7 @@ typedef std::pair<cv::Point2f, cv::Point2f> line_t;
 typedef std::pair<cv::Point2f, cv::Point2f> grid_cell;
 
 std::vector<line_t> detect_lines(const cv::Mat& source_image, cv::Mat& dest_image);
+std::vector<cv::Rect> detect_grid(const cv::Mat& source_image, cv::Mat& dest_image, std::vector<line_t>& lines);
 
 std::vector<cv::Mat> detect(const cv::Mat& source_image, cv::Mat& dest_image);
 
