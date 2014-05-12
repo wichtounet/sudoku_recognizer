@@ -164,19 +164,19 @@ int main(int argc, char** argv ){
         auto labels = dbn::make_fake(ds.training_labels);
 
         typedef dbn::dbn<
-            dbn::layer<dbn::conf<true, 10, true, true>, CELL_SIZE * CELL_SIZE, 100>,
-            //dbn::layer<dbn::conf<true, 10, false, true>, 500, 500>,
-            dbn::layer<dbn::conf<true, 10, false, true>, 100, 300>,
-            dbn::layer<dbn::conf<true, 10, false, true, true, dbn::Type::EXP>, 300, 9>> dbn_t;
+            dbn::layer<dbn::conf<true, 10, true, true>, CELL_SIZE * CELL_SIZE, 300>,
+            dbn::layer<dbn::conf<true, 10, false, true>, 300, 300>,
+            dbn::layer<dbn::conf<true, 10, false, true>, 300, 500>,
+            dbn::layer<dbn::conf<true, 10, false, true, true, dbn::Type::EXP>, 500, 9>> dbn_t;
 
         auto dbn = std::make_unique<dbn_t>();
         dbn->display();
 
         std::cout << "Start pretraining" << std::endl;
-        dbn->pretrain(ds.training_images, 5);
+        dbn->pretrain(ds.training_images, 20);
 
         std::cout << "Start fine-tuning" << std::endl;
-        dbn->fine_tune(ds.training_images, labels, 5, 100);
+        dbn->fine_tune(ds.training_images, labels, 10, 100);
 
         std::ofstream os("dbn.dat", std::ofstream::binary);
         dbn->store(os);
@@ -187,10 +187,10 @@ int main(int argc, char** argv ){
         std::cout << "Test with " << ds.training_images.size() << " cells" << std::endl;
 
         typedef dbn::dbn<
-            dbn::layer<dbn::conf<true, 10, true, true>, CELL_SIZE * CELL_SIZE, 100>,
-            //dbn::layer<dbn::conf<true, 10, false, true>, 500, 500>,
-            dbn::layer<dbn::conf<true, 10, false, true>, 100, 300>,
-            dbn::layer<dbn::conf<true, 10, false, true, true, dbn::Type::EXP>, 300, 9>> dbn_t;
+            dbn::layer<dbn::conf<true, 10, true, true>, CELL_SIZE * CELL_SIZE, 300>,
+            dbn::layer<dbn::conf<true, 10, false, true>, 300, 300>,
+            dbn::layer<dbn::conf<true, 10, false, true>, 300, 500>,
+            dbn::layer<dbn::conf<true, 10, false, true, true, dbn::Type::EXP>, 500, 9>> dbn_t;
 
         auto dbn = std::make_unique<dbn_t>();
 
@@ -231,9 +231,9 @@ int main(int argc, char** argv ){
                     } else {
                         answer = dbn->predict_final(weights)+1;
                         //std::cout << weights[answer-1] << std::endl;
-                        if(weights[answer-1] < 1e5){
-                            answer = 0;
-                        }
+                        //if(weights[answer-1] < 1e5){
+                        //    answer = 0;
+                        //}
                     }
 
                     if(answer == data.results[i][j]){
