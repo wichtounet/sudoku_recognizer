@@ -180,53 +180,6 @@ int main(int argc, char** argv ){
 
         std::ofstream os("dbn.dat", std::ofstream::binary);
         dbn->store(os);
-
-        auto error_rate = dbn::test_set(dbn, ds.training_images, ds.training_labels, dbn::predictor());
-
-        std::cout << std::endl;
-        std::cout << "DBN Error rate (normal): " << 100.0 * error_rate << "%" << std::endl;
-
-        std::size_t sudoku_hits = 0;
-        std::size_t cell_hits = 0;
-
-        for(std::size_t i = 0; i < ds.source_images.size(); ++i){
-            const auto& image = ds.source_images[i];
-            const auto& data = ds.source_data[i];
-
-            std::size_t local_hits = 0;
-
-            for(size_t i = 0; i < 9; ++i){
-                for(size_t j = 0; j < 9; ++j){
-                    uint8_t answer;
-
-                    auto& cell_mat = image[i * 9 + j];
-
-                    auto fill = fill_factor(cell_mat);
-
-                    if(fill == 1.0f){
-                        answer = 0;
-                    } else {
-                        answer = dbn->predict(mat_to_image(cell_mat))+1;
-                    }
-
-                    if(answer == data.results[i][j]){
-                        ++local_hits;
-                    }
-                }
-            }
-
-            if(local_hits == 81){
-                ++sudoku_hits;
-            }
-
-            cell_hits += local_hits;
-        }
-
-        auto total_s = static_cast<float>(ds.source_images.size());
-        auto total_c = total_s * 81.0f;
-
-        std::cout << "Cell Error Rate " << 100.0 * (total_c - cell_hits) / total_c << "%" << std::endl;
-        std::cout << "Sudoku Error Rate " << 100.0 * (total_s - sudoku_hits) / total_s << "%" << std::endl;
     } else if(command == "test"){
         auto ds = get_dataset(argc, argv);
 
