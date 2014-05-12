@@ -42,6 +42,26 @@ struct dataset {
     std::vector<gt_data> source_data;
 };
 
+cv::Mat open_image(const std::string& path){
+    auto source_image = cv::imread(path.c_str(), 1);
+
+    if (!source_image.data){
+        return source_image;
+    }
+
+    if(source_image.rows > 800 || source_image.cols > 800){
+        auto factor = 800.0f / std::max(source_image.rows, source_image.cols);
+
+        cv::Mat resized_image;
+
+        cv::resize(source_image, resized_image, cv::Size(), factor, factor, cv::INTER_AREA);
+
+        return resized_image;
+    }
+
+    return source_image;
+}
+
 dataset get_dataset(int argc, char** argv){
     dataset ds;
 
@@ -50,7 +70,7 @@ dataset get_dataset(int argc, char** argv){
 
         std::cout << image_source_path << std::endl;
 
-        auto source_image = cv::imread(image_source_path.c_str(), 1);
+        auto source_image = open_image(image_source_path);
 
         if (!source_image.data){
             std::cout << "Invalid source_image" << std::endl;
@@ -92,16 +112,16 @@ int main(int argc, char** argv ){
 
     std::string command(argv[1]);
 
-    if(command == "detect"){
+    if(command == "detect" || command == "detect_save"){
         if(argc < 3){
             std::cout << "Usage: sudoku detect <image>..." << std::endl;
             return -1;
         }
 
-        if(argc == 3){
+        if(argc == 3 && command != "detect_save"){
             std::string image_source_path(argv[2]);
 
-            auto source_image = cv::imread(image_source_path.c_str(), 1);
+            auto source_image = open_image(image_source_path);
 
             if (!source_image.data){
                 std::cout << "Invalid source_image" << std::endl;
@@ -121,7 +141,7 @@ int main(int argc, char** argv ){
 
                 std::cout << image_source_path << std::endl;
 
-                auto source_image = cv::imread(image_source_path.c_str(), 1);
+                auto source_image = open_image(image_source_path);
 
                 if (!source_image.data){
                     std::cout << "Invalid source_image" << std::endl;
@@ -144,19 +164,19 @@ int main(int argc, char** argv ){
         auto labels = dbn::make_fake(ds.training_labels);
 
         typedef dbn::dbn<
-            dbn::layer<dbn::conf<true, 50, true, true>, CELL_SIZE * CELL_SIZE, 300>,
-//            dbn::layer<dbn::conf<true, 50, false, true>, 500, 500>,
-            dbn::layer<dbn::conf<true, 50, false, true>, 300, 500>,
-            dbn::layer<dbn::conf<true, 50, false, true, true, dbn::Type::EXP>, 500, 9>> dbn_t;
+            dbn::layer<dbn::conf<true, 10, true, true>, CELL_SIZE * CELL_SIZE, 100>,
+            //dbn::layer<dbn::conf<true, 10, false, true>, 500, 500>,
+            dbn::layer<dbn::conf<true, 10, false, true>, 100, 300>,
+            dbn::layer<dbn::conf<true, 10, false, true, true, dbn::Type::EXP>, 300, 9>> dbn_t;
 
         auto dbn = std::make_unique<dbn_t>();
         dbn->display();
 
         std::cout << "Start pretraining" << std::endl;
-        dbn->pretrain(ds.training_images, 10);
+        dbn->pretrain(ds.training_images, 5);
 
         std::cout << "Start fine-tuning" << std::endl;
-        dbn->fine_tune(ds.training_images, labels, 10, 100);
+        dbn->fine_tune(ds.training_images, labels, 5, 100);
 
         std::ofstream os("dbn.dat", std::ofstream::binary);
         dbn->store(os);
@@ -210,26 +230,17 @@ int main(int argc, char** argv ){
     } else if(command == "test"){
         auto ds = get_dataset(argc, argv);
 
-       /*
-            dbn_2000.dat
-            typedef dbn::dbn<
-            dbn::layer<dbn::conf<true, 50, true, true>, CELL_SIZE * CELL_SIZE, 500>,
-            dbn::layer<dbn::conf<true, 50, false, true>, 500, 500>,
-            dbn::layer<dbn::conf<true, 50, false, true>, 500, 2000>,
-            dbn::layer<dbn::conf<true, 50, false, true, true, dbn::Type::EXP>, 2000, 9>> dbn_t;
-            */
-
         typedef dbn::dbn<
-            dbn::layer<dbn::conf<true, 50, true, true>, CELL_SIZE * CELL_SIZE, 300>,
-//            dbn::layer<dbn::conf<true, 50, false, true>, 500, 500>,
-            dbn::layer<dbn::conf<true, 50, false, true>, 300, 500>,
-            dbn::layer<dbn::conf<true, 50, false, true, true, dbn::Type::EXP>, 500, 9>> dbn_t;
+            dbn::layer<dbn::conf<true, 10, true, true>, CELL_SIZE * CELL_SIZE, 100>,
+            //dbn::layer<dbn::conf<true, 10, false, true>, 500, 500>,
+            dbn::layer<dbn::conf<true, 10, false, true>, 100, 300>,
+            dbn::layer<dbn::conf<true, 10, false, true, true, dbn::Type::EXP>, 300, 9>> dbn_t;
 
         auto dbn = std::make_unique<dbn_t>();
 
         dbn->display();
 
-        std::ifstream is("dbn_500.dat", std::ofstream::binary);
+        std::ifstream is("dbn.dat", std::ofstream::binary);
         dbn->load(is);
 
         auto error_rate = dbn::test_set(dbn, ds.training_images, ds.training_labels, dbn::predictor());
@@ -314,6 +325,50 @@ int main(int argc, char** argv ){
             std::cout << "Zero errors: " << 100.0 * zero_errors / tot << "% (" << zero_errors << "/" << tot << ")" << std::endl;
             std::cout << "DBN errors: " << 100.0 * dbn_errors / tot << "% (" << dbn_errors << "/" << tot << ")" << std::endl;
         }
+    } else if(command == "time"){
+        typedef dbn::dbn<
+            dbn::layer<dbn::conf<true, 50, true, true>, CELL_SIZE * CELL_SIZE, 300>,
+            dbn::layer<dbn::conf<true, 50, false, true>, 300, 300>,
+            dbn::layer<dbn::conf<true, 50, false, true>, 300, 500>,
+            dbn::layer<dbn::conf<true, 50, false, true, true, dbn::Type::EXP>, 500, 9>> dbn_t;
+
+        auto dbn = std::make_unique<dbn_t>();
+
+        std::ifstream is("dbn.dat", std::ofstream::binary);
+        dbn->load(is);
+        uint8_t answer;
+
+        stop_watch<> watch;
+
+        auto ds = get_dataset(argc, argv);
+
+        for(std::size_t i = 0; i < ds.source_images.size(); ++i){
+            const auto& image = ds.source_images[i];
+
+            for(size_t i = 0; i < 9; ++i){
+                for(size_t j = 0; j < 9; ++j){
+                    auto& cell_mat = image[i * 9 + j];
+
+                    auto fill = fill_factor(cell_mat);
+
+                    auto weights = dbn->predict_weights(mat_to_image(cell_mat));
+                    if(fill == 1.0f){
+                        answer = 0;
+                    } else {
+                        answer = dbn->predict_final(weights)+1;
+                        if(weights[answer-1] < 1e5){
+                            answer = 0;
+                        }
+                    }
+                }
+            }
+        }
+
+        auto elapsed = watch.elapsed();
+        std::cout << "Detection took: " << elapsed << "ms" << std::endl;
+        std::cout << "\tAverage: " << (elapsed * 1.0f / ds.source_images.size()) << "ms" << std::endl;
+
+        std::cout << answer << std::endl;
     } else {
         std::cout << "Invalid command \"" << command << "\"" << std::endl;
         return -1;
