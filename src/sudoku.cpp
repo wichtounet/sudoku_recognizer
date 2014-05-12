@@ -183,6 +183,9 @@ int main(int argc, char** argv ){
     } else if(command == "test"){
         auto ds = get_dataset(argc, argv);
 
+        std::cout << "Test with " << ds.source_images.size() << " sudokus" << std::endl;
+        std::cout << "Test with " << ds.training_images.size() << " cells" << std::endl;
+
         typedef dbn::dbn<
             dbn::layer<dbn::conf<true, 10, true, true>, CELL_SIZE * CELL_SIZE, 100>,
             //dbn::layer<dbn::conf<true, 10, false, true>, 500, 500>,
