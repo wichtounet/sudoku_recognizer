@@ -394,6 +394,43 @@ int main(int argc, char** argv ){
         std::cout << "\tmax: " << gd_max << std::endl;
         std::cout << "\taverage: " << (gd_sum / (argc - 2)) << std::endl;
 
+        //3. Digit Detection
+
+        double dd_max = 0.0;
+        double dd_min = std::numeric_limits<double>::max();
+        double dd_sum = 0.0;
+
+        for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
+            std::string image_source_path(argv[i]);
+            auto source_image = open_image(image_source_path);
+            auto dest_image = source_image.clone();
+            auto lines = detect_lines(source_image, dest_image);
+            auto cells = detect_grid(source_image, dest_image, lines);
+            split(source_image, dest_image, cells, lines);
+        }
+
+        for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
+            std::string image_source_path(argv[i]);
+            auto source_image = open_image(image_source_path);
+            auto dest_image = source_image.clone();
+            auto lines = detect_lines(source_image, dest_image);
+            auto cells = detect_grid(source_image, dest_image, lines);
+
+            stop_watch<std::chrono::microseconds> dd_watch;
+
+            split(source_image, dest_image, cells, lines);
+
+            auto dd_elapsed = dd_watch.elapsed();
+
+            dd_max = std::max(dd_max, dd_elapsed);
+            dd_min = std::min(dd_min, dd_elapsed);
+            dd_sum += dd_elapsed;
+        }
+
+        std::cout << "Digit Detection: " << std::endl;
+        std::cout << "\tmin: " << dd_min << std::endl;
+        std::cout << "\tmax: " << dd_max << std::endl;
+        std::cout << "\taverage: " << (dd_sum / (argc - 2)) << std::endl;
     } else {
         std::cout << "Invalid command \"" << command << "\"" << std::endl;
         return -1;
