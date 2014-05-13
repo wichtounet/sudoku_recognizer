@@ -42,6 +42,28 @@ struct dataset {
     std::vector<gt_data> source_data;
 };
 
+double min(const std::vector<double>& vec){
+    return *std::min_element(vec.begin(), vec.end());
+}
+
+double max(const std::vector<double>& vec){
+    return *std::max_element(vec.begin(), vec.end());
+}
+
+double mean(const std::vector<double>& vec){
+    return std::accumulate(vec.begin(), vec.end(), 0.0) / vec.size();
+}
+
+double median(std::vector<double>& vec){
+    std::sort(vec.begin(), vec.end());
+
+    if(vec.size() % 2 == 0){
+        return vec[vec.size() / 2 + 1];
+    } else {
+        return (vec[vec.size() / 2] + vec[vec.size() / 2 + 1]) / 2.0;
+    }
+}
+
 cv::Mat open_image(const std::string& path){
     auto source_image = cv::imread(path.c_str(), 1);
 
@@ -295,142 +317,237 @@ int main(int argc, char** argv ){
         std::ifstream is("dbn.dat", std::ofstream::binary);
         dbn->load(is);
 
-        //1. Image loading
+        {
+            //1. Image loading
 
-        double il_max = 0.0;
-        double il_min = std::numeric_limits<double>::max();
-        double il_sum = 0.0;
+            std::vector<double> il_sum;
 
-        for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
-            std::string image_source_path(argv[i]);
-            open_image(image_source_path);
+            for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
+                std::string image_source_path(argv[i]);
+                open_image(image_source_path);
+            }
+
+            for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
+                stop_watch<std::chrono::microseconds> il_watch;
+                std::string image_source_path(argv[i]);
+
+                open_image(image_source_path);
+
+                il_sum.push_back(il_watch.elapsed());
+            }
+
+            std::cout << "Image loading: " << std::endl;
+            std::cout << "\tmin: " << min(il_sum) << std::endl;
+            std::cout << "\tmax: " << max(il_sum) << std::endl;
+            std::cout << "\tmean: " << mean(il_sum) << std::endl;
+            std::cout << "\tmedian: " << median(il_sum) << std::endl;
         }
 
-        for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
-            stop_watch<std::chrono::microseconds> il_watch;
-            std::string image_source_path(argv[i]);
+        {
+            //2. Line detection
 
-            open_image(image_source_path);
+            std::vector<double> ld_sum;
 
-            auto il_elapsed = il_watch.elapsed();
+            for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
+                std::string image_source_path(argv[i]);
+                auto source_image = open_image(image_source_path);
+                auto dest_image = source_image.clone();
+                detect_lines(source_image, dest_image);
+            }
 
-            il_max = std::max(il_max, il_elapsed);
-            il_min = std::min(il_min, il_elapsed);
-            il_sum += il_elapsed;
+            for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
+                std::string image_source_path(argv[i]);
+                auto source_image = open_image(image_source_path);
+
+                stop_watch<std::chrono::microseconds> ld_watch;
+
+                auto dest_image = source_image.clone();
+                detect_lines(source_image, dest_image);
+
+                ld_sum.push_back(ld_watch.elapsed());
+            }
+
+            std::cout << "Line Detection: " << std::endl;
+            std::cout << "\tmin: " << min(ld_sum) << std::endl;
+            std::cout << "\tmax: " << max(ld_sum) << std::endl;
+            std::cout << "\tmean: " << mean(ld_sum) << std::endl;
+            std::cout << "\tmedian: " << median(ld_sum) << std::endl;
         }
 
-        std::cout << "Image loading: " << std::endl;
-        std::cout << "\tmin: " << il_min << std::endl;
-        std::cout << "\tmax: " << il_max << std::endl;
-        std::cout << "\taverage: " << (il_sum / (argc - 2)) << std::endl;
+        {
+            //2. Grid detection
 
-        //2. Line detection
+            std::vector<double> gd_sum;
 
-        double ld_max = 0.0;
-        double ld_min = std::numeric_limits<double>::max();
-        double ld_sum = 0.0;
+            for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
+                std::string image_source_path(argv[i]);
+                auto source_image = open_image(image_source_path);
+                auto dest_image = source_image.clone();
+                auto lines = detect_lines(source_image, dest_image);
+                detect_grid(source_image, dest_image, lines);
+            }
 
-        for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
-            std::string image_source_path(argv[i]);
-            auto source_image = open_image(image_source_path);
-            auto dest_image = source_image.clone();
-            detect_lines(source_image, dest_image);
+            for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
+                std::string image_source_path(argv[i]);
+                auto source_image = open_image(image_source_path);
+                auto dest_image = source_image.clone();
+                auto lines = detect_lines(source_image, dest_image);
+
+                stop_watch<std::chrono::microseconds> gd_watch;
+
+                detect_grid(source_image, dest_image, lines);
+
+                gd_sum.push_back(gd_watch.elapsed());
+            }
+
+            std::cout << "Grid Detection: " << std::endl;
+            std::cout << "\tmin: " << min(gd_sum) << std::endl;
+            std::cout << "\tmax: " << max(gd_sum) << std::endl;
+            std::cout << "\tmean: " << mean(gd_sum) << std::endl;
+            std::cout << "\tmedian: " << median(gd_sum) << std::endl;
         }
 
-        for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
-            std::string image_source_path(argv[i]);
-            auto source_image = open_image(image_source_path);
+        {
+            //3. Digit Detection
 
-            stop_watch<std::chrono::microseconds> ld_watch;
+            std::vector<double> dd_sum;
 
-            auto dest_image = source_image.clone();
-            detect_lines(source_image, dest_image);
+            for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
+                std::string image_source_path(argv[i]);
+                auto source_image = open_image(image_source_path);
+                auto dest_image = source_image.clone();
+                auto lines = detect_lines(source_image, dest_image);
+                auto cells = detect_grid(source_image, dest_image, lines);
+                split(source_image, dest_image, cells, lines);
+            }
 
-            auto ld_elapsed = ld_watch.elapsed();
+            for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
+                std::string image_source_path(argv[i]);
+                auto source_image = open_image(image_source_path);
+                auto dest_image = source_image.clone();
+                auto lines = detect_lines(source_image, dest_image);
+                auto cells = detect_grid(source_image, dest_image, lines);
 
-            ld_max = std::max(ld_max, ld_elapsed);
-            ld_min = std::min(ld_min, ld_elapsed);
-            ld_sum += ld_elapsed;
+                stop_watch<std::chrono::microseconds> dd_watch;
+
+                split(source_image, dest_image, cells, lines);
+
+                dd_sum.push_back(dd_watch.elapsed());
+            }
+
+            std::cout << "Digit Detection: " << std::endl;
+            std::cout << "\tmin: " << min(dd_sum) << std::endl;
+            std::cout << "\tmax: " << max(dd_sum) << std::endl;
+            std::cout << "\tmean: " << mean(dd_sum) << std::endl;
+            std::cout << "\tmedian: " << median(dd_sum) << std::endl;
         }
 
-        std::cout << "Line Detection: " << std::endl;
-        std::cout << "\tmin: " << ld_min << std::endl;
-        std::cout << "\tmax: " << ld_max << std::endl;
-        std::cout << "\taverage: " << (ld_sum / (argc - 2)) << std::endl;
+        {
+            //4. Digit Recognition
 
-        //2. Grid detection
+            std::vector<double> dr_sum;
 
-        double gd_max = 0.0;
-        double gd_min = std::numeric_limits<double>::max();
-        double gd_sum = 0.0;
+            for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
+                std::string image_source_path(argv[i]);
+                auto source_image = open_image(image_source_path);
+                auto dest_image = source_image.clone();
+                auto lines = detect_lines(source_image, dest_image);
+                auto cells = detect_grid(source_image, dest_image, lines);
+                auto image = split(source_image, dest_image, cells, lines);
 
-        for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
-            std::string image_source_path(argv[i]);
-            auto source_image = open_image(image_source_path);
-            auto dest_image = source_image.clone();
-            auto lines = detect_lines(source_image, dest_image);
-            detect_grid(source_image, dest_image, lines);
+                for(size_t i = 0; i < 9; ++i){
+                    for(size_t j = 0; j < 9; ++j){
+                        uint8_t answer;
+
+                        auto& cell_mat = image[i * 9 + j];
+
+                        auto fill = fill_factor(cell_mat);
+                        if(fill == 1.0f){
+                            answer = 0;
+                        } else {
+                            auto weights = dbn->predict_weights(mat_to_image(cell_mat));
+                            answer = dbn->predict_final(weights)+1;
+                        }
+                    }
+                }
+            }
+
+            for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
+                std::string image_source_path(argv[i]);
+                auto source_image = open_image(image_source_path);
+                auto dest_image = source_image.clone();
+                auto lines = detect_lines(source_image, dest_image);
+                auto cells = detect_grid(source_image, dest_image, lines);
+                auto image = split(source_image, dest_image, cells, lines);
+
+                stop_watch<std::chrono::microseconds> dr_watch;
+
+                for(size_t i = 0; i < 9; ++i){
+                    for(size_t j = 0; j < 9; ++j){
+                        uint8_t answer;
+
+                        auto& cell_mat = image[i * 9 + j];
+
+                        auto fill = fill_factor(cell_mat);
+                        if(fill == 1.0f){
+                            answer = 0;
+                        } else {
+                            auto weights = dbn->predict_weights(mat_to_image(cell_mat));
+                            answer = dbn->predict_final(weights)+1;
+                        }
+                    }
+                }
+
+                dr_sum.push_back(dr_watch.elapsed());
+            }
+
+            std::cout << "Digit Recognition: " << std::endl;
+            std::cout << "\tmin: " << min(dr_sum) << std::endl;
+            std::cout << "\tmax: " << max(dr_sum) << std::endl;
+            std::cout << "\tmean: " << mean(dr_sum) << std::endl;
+            std::cout << "\tmedian: " << median(dr_sum) << std::endl;
         }
 
-        for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
-            std::string image_source_path(argv[i]);
-            auto source_image = open_image(image_source_path);
-            auto dest_image = source_image.clone();
-            auto lines = detect_lines(source_image, dest_image);
+        {
+            //5. Total
 
-            stop_watch<std::chrono::microseconds> gd_watch;
+            std::vector<double> tot_sum;
 
-            detect_grid(source_image, dest_image, lines);
+            for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
+                stop_watch<std::chrono::microseconds> tot_watch;
 
-            auto gd_elapsed = gd_watch.elapsed();
+                std::string image_source_path(argv[i]);
+                auto source_image = open_image(image_source_path);
+                auto dest_image = source_image.clone();
+                auto lines = detect_lines(source_image, dest_image);
+                auto cells = detect_grid(source_image, dest_image, lines);
+                auto image = split(source_image, dest_image, cells, lines);
 
-            gd_max = std::max(gd_max, gd_elapsed);
-            gd_min = std::min(gd_min, gd_elapsed);
-            gd_sum += gd_elapsed;
+                for(size_t i = 0; i < 9; ++i){
+                    for(size_t j = 0; j < 9; ++j){
+                        uint8_t answer;
+
+                        auto& cell_mat = image[i * 9 + j];
+
+                        auto fill = fill_factor(cell_mat);
+                        if(fill == 1.0f){
+                            answer = 0;
+                        } else {
+                            auto weights = dbn->predict_weights(mat_to_image(cell_mat));
+                            answer = dbn->predict_final(weights)+1;
+                        }
+                    }
+                }
+
+                tot_sum.push_back(tot_watch.elapsed());
+            }
+
+            std::cout << "Total: " << std::endl;
+            std::cout << "\tmin: " << min(tot_sum) << std::endl;
+            std::cout << "\tmax: " << max(tot_sum) << std::endl;
+            std::cout << "\tmean: " << mean(tot_sum) << std::endl;
+            std::cout << "\tmedian: " << median(tot_sum) << std::endl;
         }
-
-        std::cout << "Grid Detection: " << std::endl;
-        std::cout << "\tmin: " << gd_min << std::endl;
-        std::cout << "\tmax: " << gd_max << std::endl;
-        std::cout << "\taverage: " << (gd_sum / (argc - 2)) << std::endl;
-
-        //3. Digit Detection
-
-        double dd_max = 0.0;
-        double dd_min = std::numeric_limits<double>::max();
-        double dd_sum = 0.0;
-
-        for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
-            std::string image_source_path(argv[i]);
-            auto source_image = open_image(image_source_path);
-            auto dest_image = source_image.clone();
-            auto lines = detect_lines(source_image, dest_image);
-            auto cells = detect_grid(source_image, dest_image, lines);
-            split(source_image, dest_image, cells, lines);
-        }
-
-        for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
-            std::string image_source_path(argv[i]);
-            auto source_image = open_image(image_source_path);
-            auto dest_image = source_image.clone();
-            auto lines = detect_lines(source_image, dest_image);
-            auto cells = detect_grid(source_image, dest_image, lines);
-
-            stop_watch<std::chrono::microseconds> dd_watch;
-
-            split(source_image, dest_image, cells, lines);
-
-            auto dd_elapsed = dd_watch.elapsed();
-
-            dd_max = std::max(dd_max, dd_elapsed);
-            dd_min = std::min(dd_min, dd_elapsed);
-            dd_sum += dd_elapsed;
-        }
-
-        std::cout << "Digit Detection: " << std::endl;
-        std::cout << "\tmin: " << dd_min << std::endl;
-        std::cout << "\tmax: " << dd_max << std::endl;
-        std::cout << "\taverage: " << (dd_sum / (argc - 2)) << std::endl;
     } else {
         std::cout << "Invalid command \"" << command << "\"" << std::endl;
         return -1;
