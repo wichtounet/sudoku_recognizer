@@ -1,3 +1,10 @@
+//=======================================================================
+// Copyright Baptiste Wicht 2013-2014.
+// Distributed under the MIT License.
+// (See accompanying file LICENSE or copy at
+//  http://opensource.org/licenses/MIT)
+//=======================================================================
+
 struct integral_image {
     size_t* const image;
     const size_t rows;
