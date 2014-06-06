@@ -1,0 +1,4 @@
+[submodule "dbn"]
+	path = dbn
+	url = git@github.com:wichtounet/dbn.git
+	branch = master
