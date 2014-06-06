@@ -198,7 +198,7 @@ int main(int argc, char** argv ){
             dbn::layer<dbn::conf<true, 10, true, true>, CELL_SIZE * CELL_SIZE, 300>,
             dbn::layer<dbn::conf<true, 10, false, true>, 300, 300>,
             dbn::layer<dbn::conf<true, 10, false, true>, 300, 500>,
-            dbn::layer<dbn::conf<true, 10, false, true, true, dbn::Type::EXP>, 500, 9>> dbn_t;
+            dbn::layer<dbn::conf<true, 10, false, true, true, dbn::Type::SIGMOID, dbn::Type::SOFTMAX>, 500, 9>> dbn_t;
 
         auto dbn = std::make_unique<dbn_t>();
         dbn->display();
@@ -221,7 +221,7 @@ int main(int argc, char** argv ){
             dbn::layer<dbn::conf<true, 10, true, true>, CELL_SIZE * CELL_SIZE, 300>,
             dbn::layer<dbn::conf<true, 10, false, true>, 300, 300>,
             dbn::layer<dbn::conf<true, 10, false, true>, 300, 500>,
-            dbn::layer<dbn::conf<true, 10, false, true, true, dbn::Type::EXP>, 500, 9>> dbn_t;
+            dbn::layer<dbn::conf<true, 10, false, true, true, dbn::Type::SIGMOID, dbn::Type::SOFTMAX>, 500, 9>> dbn_t;
 
         auto dbn = std::make_unique<dbn_t>();
 
@@ -317,7 +317,7 @@ int main(int argc, char** argv ){
             dbn::layer<dbn::conf<true, 10, true, true>, CELL_SIZE * CELL_SIZE, 300>,
             dbn::layer<dbn::conf<true, 10, false, true>, 300, 300>,
             dbn::layer<dbn::conf<true, 10, false, true>, 300, 500>,
-            dbn::layer<dbn::conf<true, 10, false, true, true, dbn::Type::EXP>, 500, 9>> dbn_t;
+            dbn::layer<dbn::conf<true, 10, false, true, true, dbn::Type::SIGMOID, dbn::Type::SOFTMAX>, 500, 9>> dbn_t;
 
         auto dbn = std::make_unique<dbn_t>();
 
