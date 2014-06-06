@@ -211,6 +211,48 @@ int main(int argc, char** argv ){
 
         std::ofstream os("dbn.dat", std::ofstream::binary);
         dbn->store(os);
+
+    } else if(command == "mads"){
+        std::string image_source_path(argv[2]);
+
+        typedef dbn::dbn<
+            dbn::layer<dbn::conf<true, 10, true, true>, CELL_SIZE * CELL_SIZE, 300>,
+            dbn::layer<dbn::conf<true, 10, false, true>, 300, 300>,
+            dbn::layer<dbn::conf<true, 10, false, true>, 300, 500>,
+            dbn::layer<dbn::conf<true, 10, false, true, true, dbn::Type::SIGMOID, dbn::Type::SOFTMAX>, 500, 9>> dbn_t;
+
+        auto dbn = std::make_unique<dbn_t>();
+
+        std::ifstream is("final.dat", std::ofstream::binary);
+        dbn->load(is);
+
+        auto source_image = open_image(image_source_path);
+
+        if (!source_image.data){
+            std::cout << "Invalid source_image" << std::endl;
+            return 1;
+        }
+
+        cv::Mat dest_image;
+        auto mats = detect(source_image, dest_image);
+
+        for(size_t i = 0; i < 9; ++i){
+            for(size_t j = 0; j < 9; ++j){
+                auto& cell_mat = mats[i * 9 + j];
+
+                auto fill = fill_factor(cell_mat);
+
+                std::size_t answer;
+                if(fill == 1.0f){
+                    answer = 0;
+                } else {
+                    answer = dbn->predict(mat_to_image(cell_mat))+1;
+                }
+
+                std::cout << answer << " ";
+            }
+            std::cout << std::endl;
+        }
     } else if(command == "test"){
         auto ds = get_dataset(argc, argv);
 
