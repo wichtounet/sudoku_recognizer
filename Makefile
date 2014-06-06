@@ -18,7 +18,7 @@ LD=clang++
 PREFIX=/home/wichtounet/install/
 
 WARNING_FLAGS=-Wextra -Wall -Qunused-arguments -Wuninitialized -Wsometimes-uninitialized -Wno-long-long -Winit-self -Wdocumentation
-CXX_FLAGS=-Iinclude -I../dbn/include -isystem $(PREFIX)/include/ -std=c++1y -stdlib=libc++ $(WARNING_FLAGS)
+CXX_FLAGS=-Iinclude -Idbn/include -isystem $(PREFIX)/include/ -std=c++1y -stdlib=libc++ $(WARNING_FLAGS)
 LD_FLAGS=$(CXX_FLAGS) -L$(PREFIX)/lib/ -lopencv_core -lopencv_imgproc -lopencv_highgui
 
 DEBUG_FLAGS=-g
