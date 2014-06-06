@@ -212,7 +212,7 @@ int main(int argc, char** argv ){
         std::ofstream os("dbn.dat", std::ofstream::binary);
         dbn->store(os);
 
-    } else if(command == "mads"){
+    } else if(command == "recog"){
         std::string image_source_path(argv[2]);
 
         typedef dbn::dbn<
