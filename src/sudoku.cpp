@@ -200,7 +200,7 @@ int main(int argc, char** argv ){
             dbn::layer<dbn::conf<true, 10, false, true>, 300, 500>,
             dbn::layer<dbn::conf<true, 10, false, true, true, dbn::Type::SIGMOID, dbn::Type::SOFTMAX>, 500, 9>> dbn_t;
 
-        auto dbn = std::make_unique<dbn_t>();
+        auto dbn = make_unique<dbn_t>();
         dbn->display();
 
         std::cout << "Start pretraining" << std::endl;
@@ -221,7 +221,7 @@ int main(int argc, char** argv ){
             dbn::layer<dbn::conf<true, 10, false, true>, 300, 500>,
             dbn::layer<dbn::conf<true, 10, false, true, true, dbn::Type::SIGMOID, dbn::Type::SOFTMAX>, 500, 9>> dbn_t;
 
-        auto dbn = std::make_unique<dbn_t>();
+        auto dbn = make_unique<dbn_t>();
 
         std::ifstream is("final.dat", std::ofstream::binary);
         dbn->load(is);
@@ -265,7 +265,7 @@ int main(int argc, char** argv ){
             dbn::layer<dbn::conf<true, 10, false, true>, 300, 500>,
             dbn::layer<dbn::conf<true, 10, false, true, true, dbn::Type::SIGMOID, dbn::Type::SOFTMAX>, 500, 9>> dbn_t;
 
-        auto dbn = std::make_unique<dbn_t>();
+        auto dbn = make_unique<dbn_t>();
 
         dbn->display();
 
@@ -361,7 +361,7 @@ int main(int argc, char** argv ){
             dbn::layer<dbn::conf<true, 10, false, true>, 300, 500>,
             dbn::layer<dbn::conf<true, 10, false, true, true, dbn::Type::SIGMOID, dbn::Type::SOFTMAX>, 500, 9>> dbn_t;
 
-        auto dbn = std::make_unique<dbn_t>();
+        auto dbn = make_unique<dbn_t>();
 
         std::ifstream is("dbn.dat", std::ofstream::binary);
         dbn->load(is);
