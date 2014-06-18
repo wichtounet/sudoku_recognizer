@@ -26,6 +26,14 @@ STATIC_LD_FLAGS=-static $(LD_FLAGS) -lpng -ljpeg -ltiff -llibjasper -lIlmImf -lz
 DEBUG_FLAGS=-g
 RELEASE_FLAGS=-g -Ofast -march=native -fvectorize -fslp-vectorize-aggressive -fomit-frame-pointer
 
+debug/src/%.cpp.d: $(CPP_FILES)
+	@ mkdir -p debug/src/
+	@ $(CXX) $(CXX_FLAGS) $(DEBUG_FLAGS) -MM -MT debug/src/$*.cpp.o src/$*.cpp | sed -e 's@^\(.*\)\.o:@\1.d \1.o:@' > $@
+
+release/src/%.cpp.d: $(CPP_FILES)
+	@ mkdir -p release/src/
+	@ $(CXX) $(CXX_FLAGS) $(RELEASE_FLAGS) -MM -MT release/src/$*.cpp.o src/$*.cpp | sed -e 's@^\(.*\)\.o:@\1.d \1.o:@' > $@
+
 debug/src/%.cpp.o: src/%.cpp
 	@ mkdir -p debug/src/
 	$(CXX) $(CXX_FLAGS) $(DEBUG_FLAGS) -o $@ -c $<
@@ -41,14 +49,6 @@ debug/bin/$(OUTPUT): $(DEBUG_O_FILES)
 release/bin/$(OUTPUT): $(RELEASE_O_FILES)
 	@ mkdir -p release/bin/
 	$(LD) $(LD_FLAGS) $(RELEASE_FLAGS) -o $@ $+
-
-debug/src/%.cpp.d: $(CPP_FILES)
-	@ mkdir -p debug/src/
-	@ $(CXX) $(CXX_FLAGS) $(DEBUG_FLAGS) -MM -MT debug/src/$*.cpp.o src/$*.cpp | sed -e 's@^\(.*\)\.o:@\1.d \1.o:@' > $@
-
-release/src/%.cpp.d: $(CPP_FILES)
-	@ mkdir -p release/src/
-	@ $(CXX) $(CXX_FLAGS) $(RELEASE_FLAGS) -MM -MT release/src/$*.cpp.o src/$*.cpp | sed -e 's@^\(.*\)\.o:@\1.d \1.o:@' > $@
 
 release: release/bin/$(OUTPUT)
 debug: debug/bin/$(OUTPUT)
