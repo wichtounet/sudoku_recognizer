@@ -1,6 +1,6 @@
 default: release
 
-.PHONY: default release debug dynamic_all clean
+.PHONY: default release debug all clean
 
 OUTPUT=sudoku
 
@@ -17,8 +17,8 @@ LD=clang++
 
 WARNING_FLAGS=-Wextra -Wall -Qunused-arguments -Wuninitialized -Wsometimes-uninitialized -Wno-long-long -Winit-self -Wdocumentation
 
-CXX_FLAGS=-Iinclude -Idbn/include -std=c++1y $(WARNING_FLAGS)
-LD_FLAGS=$(CXX_FLAGS) -lopencv_imgproc -lopencv_core -lopencv_highgui
+CXX_FLAGS=-Iinclude -Idbn/include -std=c++1y -stdlib=libc++ $(WARNING_FLAGS)
+LD_FLAGS=$(CXX_FLAGS) -lopencv_core -lopencv_imgproc -lopencv_highgui
 
 STATIC_CXX_FLAGS=$(CXX_FLAGS) -DNO_GUI
 STATIC_LD_FLAGS=-static $(LD_FLAGS) -lpng -ljpeg -ltiff -llibjasper -lIlmImf -lz
@@ -53,7 +53,7 @@ release/bin/$(OUTPUT): $(RELEASE_O_FILES)
 release: release/bin/$(OUTPUT)
 debug: debug/bin/$(OUTPUT)
 
-dynamic_all: release debug
+all: release debug
 
 sonar: release
 	cppcheck --xml-version=2 --enable=all --std=c++11 -I include src 2> cppcheck_report.xml
