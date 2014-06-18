@@ -24,7 +24,7 @@ STATIC_CXX_FLAGS=$(CXX_FLAGS) -DNO_GUI
 STATIC_LD_FLAGS=-static $(LD_FLAGS) -lpng -ljpeg -ltiff -llibjasper -lIlmImf -lz
 
 DEBUG_FLAGS=-g
-RELEASE_FLAGS=-g -Ofast -march=native -fvectorize -fslp-vectorize-aggressive -fomit-frame-pointer
+RELEASE_FLAGS=-g -Ofast -fno-rtti -fno-exceptions -march=native -fvectorize -fslp-vectorize-aggressive -fomit-frame-pointer
 
 debug/src/%.cpp.d: $(CPP_FILES)
 	@ mkdir -p debug/src/
