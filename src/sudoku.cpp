@@ -223,13 +223,23 @@ int main(int argc, char** argv ){
 
         auto dbn = make_unique<dbn_t>();
 
-        std::ifstream is("final.dat", std::ofstream::binary);
+        std::string dbn_path = "final.dat";
+        if(argc > 3){
+            dbn_path = argv[3];
+        }
+
+        std::ifstream is(dbn_path, std::ofstream::binary);
+        if(!is.is_open()){
+            std::cerr << dbn_path << " does not exist or is not readable" << std::endl;
+            return 1;
+        }
+
         dbn->load(is);
 
         auto source_image = open_image(image_source_path);
 
         if (!source_image.data){
-            std::cout << "Invalid source_image" << std::endl;
+            std::cerr << "Invalid source_image" << std::endl;
             return 1;
         }
 
