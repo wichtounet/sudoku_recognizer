@@ -9,11 +9,10 @@
 
 #include <iostream>
 
-#include "dbn/dbn.hpp"
-#include "dbn/layer.hpp"
-#include "dbn/conf.hpp"
-#include "dbn/labels.hpp"
-#include "dbn/test.hpp"
+#include "dll/dbn.hpp"
+#include "dll/layer.hpp"
+#include "dll/labels.hpp"
+#include "dll/test.hpp"
 
 #include "detector.hpp"
 #include "data.hpp"
@@ -192,13 +191,13 @@ int main(int argc, char** argv ){
         std::cout << "Train with " << ds.source_images.size() << " sudokus" << std::endl;
         std::cout << "Train with " << ds.training_images.size() << " cells" << std::endl;
 
-        auto labels = dbn::make_fake(ds.training_labels);
+        auto labels = dll::make_fake(ds.training_labels);
 
-        typedef dbn::dbn<
-            dbn::layer<dbn::conf<true, 10, true, true>, CELL_SIZE * CELL_SIZE, 300>,
-            dbn::layer<dbn::conf<true, 10, false, true>, 300, 300>,
-            dbn::layer<dbn::conf<true, 10, false, true>, 300, 500>,
-            dbn::layer<dbn::conf<true, 10, false, true, true, dbn::Type::SIGMOID, dbn::Type::SOFTMAX>, 500, 9>> dbn_t;
+        typedef dll::dbn<
+            dll::layer<CELL_SIZE * CELL_SIZE, 300, dll::momentum, dll::batch_size<10>, dll::in_dbn, dll::init_weights>,
+            dll::layer<300, 300, dll::momentum, dll::batch_size<10>, dll::in_dbn>,
+            dll::layer<300, 500, dll::momentum, dll::batch_size<10>, dll::in_dbn>,
+            dll::layer<500, 9, dll::momentum, dll::batch_size<10>, dll::in_dbn, dll::hidden_unit<dll::Type::SOFTMAX>>> dbn_t;
 
         auto dbn = make_unique<dbn_t>();
         dbn->display();
@@ -215,11 +214,11 @@ int main(int argc, char** argv ){
     } else if(command == "recog"){
         std::string image_source_path(argv[2]);
 
-        typedef dbn::dbn<
-            dbn::layer<dbn::conf<true, 10, true, true>, CELL_SIZE * CELL_SIZE, 300>,
-            dbn::layer<dbn::conf<true, 10, false, true>, 300, 300>,
-            dbn::layer<dbn::conf<true, 10, false, true>, 300, 500>,
-            dbn::layer<dbn::conf<true, 10, false, true, true, dbn::Type::SIGMOID, dbn::Type::SOFTMAX>, 500, 9>> dbn_t;
+        typedef dll::dbn<
+            dll::layer<CELL_SIZE * CELL_SIZE, 300, dll::momentum, dll::batch_size<10>, dll::in_dbn, dll::init_weights>,
+            dll::layer<300, 300, dll::momentum, dll::batch_size<10>, dll::in_dbn>,
+            dll::layer<300, 500, dll::momentum, dll::batch_size<10>, dll::in_dbn>,
+            dll::layer<500, 9, dll::momentum, dll::batch_size<10>, dll::in_dbn, dll::hidden_unit<dll::Type::SOFTMAX>>> dbn_t;
 
         auto dbn = make_unique<dbn_t>();
 
@@ -269,11 +268,11 @@ int main(int argc, char** argv ){
         std::cout << "Test with " << ds.source_images.size() << " sudokus" << std::endl;
         std::cout << "Test with " << ds.training_images.size() << " cells" << std::endl;
 
-        typedef dbn::dbn<
-            dbn::layer<dbn::conf<true, 10, true, true>, CELL_SIZE * CELL_SIZE, 300>,
-            dbn::layer<dbn::conf<true, 10, false, true>, 300, 300>,
-            dbn::layer<dbn::conf<true, 10, false, true>, 300, 500>,
-            dbn::layer<dbn::conf<true, 10, false, true, true, dbn::Type::SIGMOID, dbn::Type::SOFTMAX>, 500, 9>> dbn_t;
+        typedef dll::dbn<
+            dll::layer<CELL_SIZE * CELL_SIZE, 300, dll::momentum, dll::batch_size<10>, dll::in_dbn, dll::init_weights>,
+            dll::layer<300, 300, dll::momentum, dll::batch_size<10>, dll::in_dbn>,
+            dll::layer<300, 500, dll::momentum, dll::batch_size<10>, dll::in_dbn>,
+            dll::layer<500, 9, dll::momentum, dll::batch_size<10>, dll::in_dbn, dll::hidden_unit<dll::Type::SOFTMAX>>> dbn_t;
 
         auto dbn = make_unique<dbn_t>();
 
@@ -282,7 +281,7 @@ int main(int argc, char** argv ){
         std::ifstream is("dbn.dat", std::ofstream::binary);
         dbn->load(is);
 
-        auto error_rate = dbn::test_set(dbn, ds.training_images, ds.training_labels, dbn::predictor());
+        auto error_rate = dll::test_set(dbn, ds.training_images, ds.training_labels, dll::predictor());
 
         std::cout << std::endl;
         std::cout << "DBN Error rate (normal): " << 100.0 * error_rate << "%" << std::endl;
@@ -365,11 +364,11 @@ int main(int argc, char** argv ){
             std::cout << "DBN errors: " << 100.0 * dbn_errors / tot << "% (" << dbn_errors << "/" << tot << ")" << std::endl;
         }
     } else if(command == "time"){
-        typedef dbn::dbn<
-            dbn::layer<dbn::conf<true, 10, true, true>, CELL_SIZE * CELL_SIZE, 300>,
-            dbn::layer<dbn::conf<true, 10, false, true>, 300, 300>,
-            dbn::layer<dbn::conf<true, 10, false, true>, 300, 500>,
-            dbn::layer<dbn::conf<true, 10, false, true, true, dbn::Type::SIGMOID, dbn::Type::SOFTMAX>, 500, 9>> dbn_t;
+        typedef dll::dbn<
+            dll::layer<CELL_SIZE * CELL_SIZE, 300, dll::momentum, dll::batch_size<10>, dll::in_dbn, dll::init_weights>,
+            dll::layer<300, 300, dll::momentum, dll::batch_size<10>, dll::in_dbn>,
+            dll::layer<300, 500, dll::momentum, dll::batch_size<10>, dll::in_dbn>,
+            dll::layer<500, 9, dll::momentum, dll::batch_size<10>, dll::in_dbn, dll::hidden_unit<dll::Type::SOFTMAX>>> dbn_t;
 
         auto dbn = make_unique<dbn_t>();
 
