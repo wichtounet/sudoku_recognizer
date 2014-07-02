@@ -394,11 +394,16 @@ std::vector<cv::Point2f> to_float_points(const std::vector<cv::Point>& vec){
 } //end of anonymous namespace
 
 std::vector<line_t> detect_lines(const cv::Mat& source_image, cv::Mat& dest_image){
-    std::vector<line_t> final_lines;
-//1. Detect lines
-
     cv::Mat binary_image;
     sudoku_binarize(source_image, binary_image);
+
+    return detect_lines_binary(binary_image, dest_image);
+}
+
+std::vector<line_t> detect_lines_binary(const cv::Mat& binary_image, cv::Mat& dest_image){
+    std::vector<line_t> final_lines;
+
+    //1. Detect lines
 
     cv::Mat lines_image;
     constexpr const size_t CANNY_THRESHOLD = 60;
@@ -408,6 +413,11 @@ std::vector<line_t> detect_lines(const cv::Mat& source_image, cv::Mat& dest_imag
     cv::HoughLinesP(lines_image, lines, 1, CV_PI/180, 50, 50, 12);
 
     IF_DEBUG std::cout << lines.size() << " lines found" << std::endl;
+
+    //If Hough failed, there is no sense filtering it
+    if(lines.empty()){
+        return {};
+    }
 
     //2. Cluster lines
 
@@ -444,6 +454,8 @@ std::vector<line_t> detect_lines(const cv::Mat& source_image, cv::Mat& dest_imag
             }
         });
     } while(merged_cluster);
+
+    IF_DEBUG std::cout << clusters.size() << " clusters found" << std::endl;
 
     auto& max_cluster = *std::max_element(clusters.begin(), clusters.end(), [](auto& lhs, auto& rhs){return lhs.size() < rhs.size();});
 
@@ -543,7 +555,7 @@ std::vector<line_t> detect_lines(const cv::Mat& source_image, cv::Mat& dest_imag
         cv::Vec2f u(b.x - a.x, b.y - a.y);
         u /= norm(u);
 
-        while(b.x < source_image.cols && b.y < source_image.rows && b.x > 0 && b.y > 0){
+        while(b.x < binary_image.cols && b.y < binary_image.rows && b.x > 0 && b.y > 0){
             b.x += u[0];
             b.y += u[1];
         }
@@ -551,7 +563,7 @@ std::vector<line_t> detect_lines(const cv::Mat& source_image, cv::Mat& dest_imag
         b.x -= u[0];
         b.y -= u[1];
 
-        while(a.x < source_image.cols && a.y < source_image.rows && a.x > 0 && a.y > 0){
+        while(a.x < binary_image.cols && a.y < binary_image.rows && a.x > 0 && a.y > 0){
             a.x -= u[0];
             a.y -= u[1];
         }
@@ -661,7 +673,7 @@ std::vector<line_t> detect_lines(const cv::Mat& source_image, cv::Mat& dest_imag
                         if((d12 < 0.6f * mean_first || d12 < 0.40f * d23) && almost_equals(d23, mean_first, 0.25f)){
                             auto inter = find_intersection(first, second);
 
-                            if(inter.x > 0 && inter.y > 0 && inter.x < source_image.cols && inter.y < source_image.rows){
+                            if(inter.x > 0 && inter.y > 0 && inter.x < binary_image.cols && inter.y < binary_image.rows){
                                 second.first = gravity(make_vector({first.first, second.first}));
                                 second.second = gravity(make_vector({first.second, second.second}));
 
@@ -688,7 +700,7 @@ std::vector<line_t> detect_lines(const cv::Mat& source_image, cv::Mat& dest_imag
                             if((dlp < 0.6f * mean_last || dlp < 0.40f * dpa) && almost_equals(dpa, mean_last, 0.20f)){
                                 auto inter = find_intersection(pen, last);
 
-                                if(inter.x > 0 && inter.y > 0 && inter.x < source_image.cols && inter.y < source_image.rows){
+                                if(inter.x > 0 && inter.y > 0 && inter.x < binary_image.cols && inter.y < binary_image.rows){
                                     pen.first = gravity(make_vector({last.first, pen.first}));
                                     pen.second = gravity(make_vector({last.second, pen.second}));
 
@@ -736,6 +748,10 @@ std::vector<line_t> detect_lines(const cv::Mat& source_image, cv::Mat& dest_imag
 }
 
 std::vector<cv::Rect> detect_grid(const cv::Mat& source_image, cv::Mat& dest_image, std::vector<line_t>& lines){
+    if(lines.empty()){
+        return {};
+    }
+
     auto intersections = find_intersections(lines, source_image);
 
     if(SHOW_INTERSECTIONS){
@@ -792,7 +808,7 @@ std::vector<cv::Rect> detect_grid(const cv::Mat& source_image, cv::Mat& dest_ima
 
 std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, const std::vector<cv::Rect>& cells, std::vector<line_t>& lines){
     if(cells.empty()){
-        std::cout << "No cell provided, no splitting" << std::endl;
+        IF_DEBUG std::cout << "No cell provided, no splitting" << std::endl;
         return {};
     }
 
@@ -1023,6 +1039,14 @@ std::vector<cv::Mat> detect(const cv::Mat& source_image, cv::Mat& dest_image){
     dest_image = source_image.clone();
 
     auto lines = detect_lines(source_image, dest_image);
+    auto cells = detect_grid(source_image, dest_image, lines);
+    return split(source_image, dest_image, cells, lines);
+}
+
+std::vector<cv::Mat> detect_binary(const cv::Mat& source_image, cv::Mat& dest_image){
+    dest_image = source_image.clone();
+
+    auto lines = detect_lines_binary(source_image, dest_image);
     auto cells = detect_grid(source_image, dest_image, lines);
     return split(source_image, dest_image, cells, lines);
 }
