@@ -134,6 +134,12 @@ dataset get_dataset(int argc, char** argv, bool quiet = false){
 
 } //end of anonymous namespace
 
+typedef dll::dbn<
+    dll::layer<CELL_SIZE * CELL_SIZE, 300, dll::momentum, dll::batch_size<10>, dll::in_dbn, dll::init_weights>,
+    dll::layer<300, 300, dll::momentum, dll::batch_size<10>, dll::in_dbn>,
+    dll::layer<300, 500, dll::momentum, dll::batch_size<10>, dll::in_dbn>,
+    dll::layer<500, 9, dll::momentum, dll::batch_size<10>, dll::in_dbn, dll::hidden_unit<dll::Type::SOFTMAX>>> dbn_t;
+
 int main(int argc, char** argv ){
     if(argc < 2){
         std::cout << "Usage: sudoku <command> <options>" << std::endl;
@@ -193,12 +199,6 @@ int main(int argc, char** argv ){
 
         auto labels = dll::make_fake(ds.training_labels);
 
-        typedef dll::dbn<
-            dll::layer<CELL_SIZE * CELL_SIZE, 300, dll::momentum, dll::batch_size<10>, dll::in_dbn, dll::init_weights>,
-            dll::layer<300, 300, dll::momentum, dll::batch_size<10>, dll::in_dbn>,
-            dll::layer<300, 500, dll::momentum, dll::batch_size<10>, dll::in_dbn>,
-            dll::layer<500, 9, dll::momentum, dll::batch_size<10>, dll::in_dbn, dll::hidden_unit<dll::Type::SOFTMAX>>> dbn_t;
-
         auto dbn = make_unique<dbn_t>();
         dbn->display();
 
@@ -211,14 +211,8 @@ int main(int argc, char** argv ){
         std::ofstream os("dbn.dat", std::ofstream::binary);
         dbn->store(os);
 
-    } else if(command == "recog"){
+    } else if(command == "recog" || command == "recog_binary"){
         std::string image_source_path(argv[2]);
-
-        typedef dll::dbn<
-            dll::layer<CELL_SIZE * CELL_SIZE, 300, dll::momentum, dll::batch_size<10>, dll::in_dbn, dll::init_weights>,
-            dll::layer<300, 300, dll::momentum, dll::batch_size<10>, dll::in_dbn>,
-            dll::layer<300, 500, dll::momentum, dll::batch_size<10>, dll::in_dbn>,
-            dll::layer<500, 9, dll::momentum, dll::batch_size<10>, dll::in_dbn, dll::hidden_unit<dll::Type::SOFTMAX>>> dbn_t;
 
         auto dbn = make_unique<dbn_t>();
 
@@ -235,44 +229,106 @@ int main(int argc, char** argv ){
 
         dbn->load(is);
 
-        auto source_image = open_image(image_source_path);
-
-        if (!source_image.data){
-            std::cerr << "Invalid source_image" << std::endl;
-            return 1;
-        }
-
+        cv::Mat source_image;
         cv::Mat dest_image;
-        auto mats = detect(source_image, dest_image);
 
-        for(size_t i = 0; i < 9; ++i){
-            for(size_t j = 0; j < 9; ++j){
-                auto& cell_mat = mats[i * 9 + j];
+        std::vector<cv::Mat> mats;
 
-                auto fill = fill_factor(cell_mat);
+        if(command == "recog"){
+            source_image = open_image(image_source_path);
 
-                std::size_t answer;
-                if(fill == 1.0f){
-                    answer = 0;
-                } else {
-                    answer = dbn->predict(mat_to_image(cell_mat))+1;
+            if (!source_image.data){
+                std::cerr << "Invalid source_image" << std::endl;
+                return 1;
+            }
+
+            mats = detect(source_image, dest_image);
+        } else if(command == "recog_binary"){
+            std::ifstream is(image_source_path);
+
+            std::size_t rows = 0;
+            std::size_t columns = 0;
+
+            std::string line;
+            while (std::getline(is, line)){
+                std::size_t local_columns = 0;
+                for(std::size_t i = 0; i < line.size(); ++i){
+                    if(line[i] == '1' || line[i] == '0'){
+                        if(i+1 < line.size() && line[i+1] != ','){
+                            std::cout << "Invalid format of the binary file" << std::endl;
+                            return 1;
+                        }
+                        ++local_columns;
+                        ++i;
+                    } else {
+                        std::cout << "Invalid format of the binary file" << std::endl;
+                        return 1;
+                    }
                 }
 
-                std::cout << answer << " ";
+                if(columns == 0){
+                    columns = local_columns;
+                } else if(columns != local_columns){
+                    std::cout << "Invalid format of the binary file" << std::endl;
+                    return 1;
+                }
+
+                ++rows;
             }
-            std::cout << std::endl;
+
+            is.clear();
+            is.seekg(0, std::ios::beg);
+
+            source_image.create(rows, columns, CV_8U);
+
+            int i = 0;
+
+            while (std::getline(is, line)){
+                std::size_t j = 0;
+                for(std::size_t x = 0; x < line.size(); ++x){
+                    if(line[x] == '1' || line[x] == '0'){
+                        source_image.at<uint8_t>(i,j) = line[x] == '1' ? 1 : 0;
+                        ++j;
+                    }
+                }
+
+                ++i;
+            }
+
+            mats = detect_binary(source_image, dest_image);
+        }
+
+        if(mats.empty()){
+            for(size_t i = 0; i < 9; ++i){
+                for(size_t j = 0; j < 9; ++j){
+                    std::cout << "0 ";
+                }
+                std::cout << std::endl;
+            }
+        } else {
+            for(size_t i = 0; i < 9; ++i){
+                for(size_t j = 0; j < 9; ++j){
+                    auto& cell_mat = mats[i * 9 + j];
+
+                    auto fill = fill_factor(cell_mat);
+
+                    std::size_t answer;
+                    if(fill == 1.0f){
+                        answer = 0;
+                    } else {
+                        answer = dbn->predict(mat_to_image(cell_mat))+1;
+                    }
+
+                    std::cout << answer << " ";
+                }
+                std::cout << std::endl;
+            }
         }
     } else if(command == "test"){
         auto ds = get_dataset(argc, argv);
 
         std::cout << "Test with " << ds.source_images.size() << " sudokus" << std::endl;
         std::cout << "Test with " << ds.training_images.size() << " cells" << std::endl;
-
-        typedef dll::dbn<
-            dll::layer<CELL_SIZE * CELL_SIZE, 300, dll::momentum, dll::batch_size<10>, dll::in_dbn, dll::init_weights>,
-            dll::layer<300, 300, dll::momentum, dll::batch_size<10>, dll::in_dbn>,
-            dll::layer<300, 500, dll::momentum, dll::batch_size<10>, dll::in_dbn>,
-            dll::layer<500, 9, dll::momentum, dll::batch_size<10>, dll::in_dbn, dll::hidden_unit<dll::Type::SOFTMAX>>> dbn_t;
 
         auto dbn = make_unique<dbn_t>();
 
@@ -364,12 +420,6 @@ int main(int argc, char** argv ){
             std::cout << "DBN errors: " << 100.0 * dbn_errors / tot << "% (" << dbn_errors << "/" << tot << ")" << std::endl;
         }
     } else if(command == "time"){
-        typedef dll::dbn<
-            dll::layer<CELL_SIZE * CELL_SIZE, 300, dll::momentum, dll::batch_size<10>, dll::in_dbn, dll::init_weights>,
-            dll::layer<300, 300, dll::momentum, dll::batch_size<10>, dll::in_dbn>,
-            dll::layer<300, 500, dll::momentum, dll::batch_size<10>, dll::in_dbn>,
-            dll::layer<500, 9, dll::momentum, dll::batch_size<10>, dll::in_dbn, dll::hidden_unit<dll::Type::SOFTMAX>>> dbn_t;
-
         auto dbn = make_unique<dbn_t>();
 
         std::ifstream is("dbn.dat", std::ofstream::binary);
