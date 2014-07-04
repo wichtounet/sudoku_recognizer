@@ -287,7 +287,7 @@ int main(int argc, char** argv ){
                 std::size_t j = 0;
                 for(std::size_t x = 0; x < line.size(); ++x){
                     if(line[x] == '1' || line[x] == '0'){
-                        source_image.at<uint8_t>(i,j) = line[x] == '1' ? 1 : 0;
+                        source_image.at<uint8_t>(i,j) = line[x] == '1' ? 255 : 0;
                         ++j;
                     }
                 }

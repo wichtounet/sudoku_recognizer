@@ -813,7 +813,11 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
     }
 
     cv::Mat source;
-    sudoku_binarize(source_image, source);
+    if(source_image.type() == CV_8U){
+        source = source_image;
+    } else {
+        sudoku_binarize(source_image, source);
+    }
 
     if(lines.size() > 20){
         lines.erase(std::remove_if(lines.begin(), lines.end(), [&cells](auto& line){
