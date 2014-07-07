@@ -306,6 +306,10 @@ int main(int argc, char** argv ){
                 std::cout << std::endl;
             }
         } else {
+            std::vector<std::tuple<std::size_t, std::size_t, double>> next;
+
+            std::array<std::array<int, 9>, 9> matrix;
+
             for(size_t i = 0; i < 9; ++i){
                 for(size_t j = 0; j < 9; ++j){
                     auto& cell_mat = mats[i * 9 + j];
@@ -316,13 +320,48 @@ int main(int argc, char** argv ){
                     if(fill == 1.0f){
                         answer = 0;
                     } else {
-                        answer = dbn->predict(mat_to_image(cell_mat))+1;
+                        auto weights = dbn->predict_weights(mat_to_image(cell_mat));
+                        answer = dbn->predict_final(weights)+1;
+                        for(std::size_t x = 0; x < weights.size(); ++x){
+                            if(answer != x + 1 && weights(x) > 1e-5){
+                                next.push_back(std::make_tuple(i * 9 + j, x + 1, weights(x)));
+                            }
+                        }
                     }
+                    matrix[i][j] = answer;
+                }
+            }
 
-                    std::cout << answer << " ";
+            for(size_t i = 0; i < 9; ++i){
+                for(size_t j = 0; j < 9; ++j){
+                    std::cout << matrix[i][j] << " ";
                 }
                 std::cout << std::endl;
             }
+
+            if(!next.empty()){
+                std::sort(next.begin(), next.end(), [](auto& lhs, auto& rhs){
+                        return std::get<2>(lhs) > std::get<2>(rhs);
+                    });
+
+                for(int n = 0; n < next.size() && n < 5; ++n){
+                    std::cout << std::endl;
+
+                    auto change = next[n];
+
+                    for(size_t i = 0; i < 9; ++i){
+                        for(size_t j = 0; j < 9; ++j){
+                            if(std::get<0>(change) == i * 9 + j){
+                                std::cout << std::get<1>(change) << " ";
+                            } else {
+                                std::cout << matrix[i][j] << " ";
+                            }
+                        }
+                        std::cout << std::endl;
+                    }
+                }
+            }
+
         }
     } else if(command == "test"){
         auto ds = get_dataset(argc, argv);
