@@ -5,15 +5,16 @@
 //  http://opensource.org/licenses/MIT)
 //=======================================================================
 
-#include <opencv2/opencv.hpp>
-
 #include <iostream>
 #include <numeric>
 #include <array>
 
+#include <opencv2/opencv.hpp>
+
+#include "cpp_utils/algorithm.hpp"
+
 #include "detector.hpp"
 #include "stop_watch.hpp"
-#include "algo.hpp"
 #include "data.hpp"
 #include "trig_utils.hpp"
 #include "image_utils.hpp"
@@ -74,7 +75,7 @@ std::vector<cv::Point2f> find_intersections(const std::vector<line_t>& lines, co
     std::vector<cv::Point2f> intersections;
 
     //Detect intersections
-    pairwise_foreach(lines.begin(), lines.end(), [&intersections](auto& p1, auto& p2){
+    cpp::pairwise_foreach(lines.begin(), lines.end(), [&intersections](auto& p1, auto& p2){
         intersections.emplace_back(find_intersection(p1, p2));
     });
 
@@ -274,7 +275,7 @@ std::vector<cv::Point2f> compute_hull(const std::vector<cv::Point2f>& points, cv
     }
 
     if(SHOW_HULL_FILL){
-        auto hull_i = vector_transform(hull.begin(), hull.end(),
+        auto hull_i = cpp::vector_transform(hull.begin(), hull.end(),
             [](auto& p) -> cv::Point2i {return {static_cast<int>(p.x), static_cast<int>(p.y)};});
         std::vector<decltype(hull_i)> contours = {hull_i};
         cv::fillPoly(dest_image, contours, cv::Scalar(128, 128, 0));
@@ -388,7 +389,7 @@ std::vector<cv::Rect> compute_grid(const std::vector<cv::Point2f>& hull, cv::Mat
 }
 
 std::vector<cv::Point2f> to_float_points(const std::vector<cv::Point>& vec){
-    return vector_transform(vec.begin(), vec.end(), [](auto& i){return cv::Point2f(i.x, i.y);});
+    return cpp::vector_transform(vec.begin(), vec.end(), [](auto& i){return cv::Point2f(i.x, i.y);});
 }
 
 } //end of anonymous namespace
@@ -433,7 +434,7 @@ std::vector<line_t> detect_lines_binary(const cv::Mat& binary_image, cv::Mat& de
         l[1] -= u[1];
     }
 
-    auto clusters = vector_transform(lines.begin(), lines.end(), [](auto& v) -> std::vector<cv::Vec4i> {
+    auto clusters = cpp::vector_transform(lines.begin(), lines.end(), [](auto& v) -> std::vector<cv::Vec4i> {
         return {v};
     });
 
@@ -441,7 +442,7 @@ std::vector<line_t> detect_lines_binary(const cv::Mat& binary_image, cv::Mat& de
     do {
         merged_cluster = false;
 
-        pairwise_foreach(clusters.begin(), clusters.end(), [&merged_cluster](auto& c1, auto& c2){
+        cpp::pairwise_foreach(clusters.begin(), clusters.end(), [&merged_cluster](auto& c1, auto& c2){
             for(auto& v1 : c1){
                 for(auto& v2 : c2){
                     if(intersects(v1, v2)){

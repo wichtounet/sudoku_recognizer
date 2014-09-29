@@ -48,7 +48,7 @@ Point gravity(const std::vector<Point>& vec){
 
 template<typename Point>
 std::vector<Point> gravity_points(const std::vector<std::vector<Point>>& clusters){
-    return vector_transform(begin(clusters), end(clusters), [](auto& cluster) -> Point {return gravity(cluster);});
+    return cpp::vector_transform(begin(clusters), end(clusters), [](auto& cluster) -> Point {return gravity(cluster);});
 }
 
 template<typename Point>
