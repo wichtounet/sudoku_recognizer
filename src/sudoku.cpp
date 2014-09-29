@@ -5,9 +5,11 @@
 //  http://opensource.org/licenses/MIT)
 //=======================================================================
 
+#include <iostream>
+
 #include <opencv2/opencv.hpp>
 
-#include <iostream>
+#include "cpp_utils/stop_watch.hpp"
 
 #include "dll/dbn.hpp"
 #include "dll/layer.hpp"
@@ -475,7 +477,7 @@ int main(int argc, char** argv ){
             }
 
             for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
-                stop_watch<std::chrono::microseconds> il_watch;
+                cpp::stop_watch<std::chrono::microseconds> il_watch;
                 std::string image_source_path(argv[i]);
 
                 open_image(image_source_path);
@@ -506,7 +508,7 @@ int main(int argc, char** argv ){
                 std::string image_source_path(argv[i]);
                 auto source_image = open_image(image_source_path);
 
-                stop_watch<std::chrono::microseconds> ld_watch;
+                cpp::stop_watch<std::chrono::microseconds> ld_watch;
 
                 auto dest_image = source_image.clone();
                 detect_lines(source_image, dest_image);
@@ -540,7 +542,7 @@ int main(int argc, char** argv ){
                 auto dest_image = source_image.clone();
                 auto lines = detect_lines(source_image, dest_image);
 
-                stop_watch<std::chrono::microseconds> gd_watch;
+                cpp::stop_watch<std::chrono::microseconds> gd_watch;
 
                 detect_grid(source_image, dest_image, lines);
 
@@ -575,7 +577,7 @@ int main(int argc, char** argv ){
                 auto lines = detect_lines(source_image, dest_image);
                 auto cells = detect_grid(source_image, dest_image, lines);
 
-                stop_watch<std::chrono::microseconds> dd_watch;
+                cpp::stop_watch<std::chrono::microseconds> dd_watch;
 
                 split(source_image, dest_image, cells, lines);
 
@@ -627,7 +629,7 @@ int main(int argc, char** argv ){
                 auto cells = detect_grid(source_image, dest_image, lines);
                 auto image = split(source_image, dest_image, cells, lines);
 
-                stop_watch<std::chrono::microseconds> dr_watch;
+                cpp::stop_watch<std::chrono::microseconds> dr_watch;
 
                 for(size_t i = 0; i < 9; ++i){
                     for(size_t j = 0; j < 9; ++j){
@@ -661,7 +663,7 @@ int main(int argc, char** argv ){
             std::vector<double> tot_sum;
 
             for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
-                stop_watch<std::chrono::microseconds> tot_watch;
+                cpp::stop_watch<std::chrono::microseconds> tot_watch;
 
                 std::string image_source_path(argv[i]);
                 auto source_image = open_image(image_source_path);

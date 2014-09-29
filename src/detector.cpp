@@ -14,7 +14,6 @@
 #include "cpp_utils/algorithm.hpp"
 
 #include "detector.hpp"
-#include "stop_watch.hpp"
 #include "data.hpp"
 #include "trig_utils.hpp"
 #include "image_utils.hpp"
