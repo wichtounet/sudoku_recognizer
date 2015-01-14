@@ -14,6 +14,9 @@
 #include "dll/labels.hpp"
 #include "dll/test.hpp"
 
+#include "mnist/mnist_reader.hpp"
+#include "mnist/mnist_utils.hpp"
+
 #include "detector.hpp"
 #include "data.hpp"
 #include "image_utils.hpp"
@@ -110,19 +113,19 @@ dataset get_dataset(int argc, char** argv, bool quiet = false){
         auto data = read_data(image_source_path);
 
         cv::Mat dest_image;
-        auto mats = detect(source_image, dest_image);
+        auto grid = detect(source_image, dest_image);
 
         for(size_t i = 0; i < 9; ++i){
             for(size_t j = 0; j < 9; ++j){
                 if(data.results[i][j]){
                     ds.training_labels.push_back(data.results[i][j]-1);
-                    ds.training_images.emplace_back(mat_to_image(mats[i * 9 + j]));
+                    ds.training_images.emplace_back(mat_to_image(grid(i, j).final_mat));
                 }
             }
         }
 
         ds.source_files.push_back(std::move(image_source_path));
-        ds.source_images.push_back(std::move(mats));
+        //TODO ds.source_images.push_back(std::move(mats));
         ds.source_data.push_back(std::move(data));
     }
 
@@ -191,6 +194,97 @@ int main(int argc, char** argv ){
                 imwrite(image_source_path.c_str(), dest_image);
             }
         }
+    } else if(command == "fill" || command == "fill_save"){
+        if(argc < 3){
+            std::cout << "Usage: sudoku fill <image>..." << std::endl;
+            return -1;
+        }
+
+        std::cout << "Load MNIST Dataset" << std::endl;
+        auto mnist_dataset = mnist::read_dataset<std::vector, std::vector, uint8_t, uint8_t>();
+
+        //mnist::binarize(mnist_dataset);
+
+        auto size_1 = mnist_dataset.training_images.size();
+        auto size_2 = mnist_dataset.test_images.size();
+
+        static std::random_device rd;
+        static std::default_random_engine rand_engine(rd());
+        static std::uniform_int_distribution<std::size_t> distribution(0, size_1 + size_2);
+        static auto generator = std::bind(distribution, rand_engine);
+
+        if(argc == 3 && command != "fill_save"){
+            std::string image_source_path(argv[2]);
+
+            std::cout << "Process image" << std::endl;
+
+            auto source_image = open_image(image_source_path);
+
+            if (!source_image.data){
+                std::cout << "Invalid source_image" << std::endl;
+                return -1;
+            }
+
+            cv::Mat dest_image;
+            auto grid = detect(source_image, dest_image);
+
+            for(std::size_t x = 0; x < 9; ++x){
+                for(std::size_t y = 0; y < 9; ++y){
+                    if(grid(x,y).empty()){
+                        auto& bounding_rect = grid(x,y).bounding;
+                        std::cout << "Fill cell " << bounding_rect << std::endl;
+
+                        //if(x == 0 && y == 0){
+                            auto r = generator();
+
+                            auto& image = r < size_1 ? mnist_dataset.training_images[r] : mnist_dataset.test_images[r - size_1];
+
+                            auto x_start = bounding_rect.x + (bounding_rect.width - 28) / 2;
+                            auto y_start = bounding_rect.y + (bounding_rect.height - 28) / 2;
+
+                            std::cout << "Start painting at " << x_start << "," << y_start << std::endl;
+
+                            for(std::size_t xx = 0; xx < 28; ++xx){
+                                for(std::size_t yy = 0; yy < 28; ++yy){
+                                    auto& color = dest_image.at<cv::Vec3b>(cv::Point(xx + x_start, yy + y_start));
+                                    auto mnist_color = image[yy * 28 + xx];
+
+                                    if(mnist_color > 0){
+                                        color[0] = color[2] = 0;
+                                        color[1] = 255 * (255.0f / (1 + 255 - mnist_color));
+                                    }
+                                }
+                            }
+                        //}
+                    }
+                }
+            }
+
+            cv::namedWindow("Sudoku Grid", cv::WINDOW_AUTOSIZE);
+            cv::imshow("Sudoku Grid", dest_image);
+
+            cv::waitKey(0);
+        } else {
+            //TODO This body
+            for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
+                std::string image_source_path(argv[i]);
+
+                std::cout << image_source_path << std::endl;
+
+                auto source_image = open_image(image_source_path);
+
+                if (!source_image.data){
+                    std::cout << "Invalid source_image" << std::endl;
+                    continue;
+                }
+
+                cv::Mat dest_image;
+                detect(source_image, dest_image);
+
+                image_source_path.insert(image_source_path.rfind('.'), ".lines");
+                imwrite(image_source_path.c_str(), dest_image);
+            }
+        }
     } else if(command == "train"){
         auto ds = get_dataset(argc, argv);
 
@@ -232,7 +326,7 @@ int main(int argc, char** argv ){
         cv::Mat source_image;
         cv::Mat dest_image;
 
-        std::vector<cv::Mat> mats;
+        sudoku_grid grid;
 
         if(command == "recog"){
             source_image = open_image(image_source_path);
@@ -242,7 +336,7 @@ int main(int argc, char** argv ){
                 return 1;
             }
 
-            mats = detect(source_image, dest_image);
+            grid = detect(source_image, dest_image);
         } else if(command == "recog_binary"){
             std::ifstream is(image_source_path);
 
@@ -295,10 +389,10 @@ int main(int argc, char** argv ){
                 ++i;
             }
 
-            mats = detect_binary(source_image, dest_image);
+            grid = detect_binary(source_image, dest_image);
         }
 
-        if(mats.empty()){
+        if(!grid.valid()){
             for(size_t i = 0; i < 9; ++i){
                 for(size_t j = 0; j < 9; ++j){
                     std::cout << "0 ";
@@ -312,14 +406,14 @@ int main(int argc, char** argv ){
 
             for(size_t i = 0; i < 9; ++i){
                 for(size_t j = 0; j < 9; ++j){
-                    auto& cell_mat = mats[i * 9 + j];
-
-                    auto fill = fill_factor(cell_mat);
+                    auto& cell = grid(i, j);
 
                     std::size_t answer;
-                    if(fill == 1.0f){
+                    if(cell.empty()){
                         answer = 0;
                     } else {
+                        auto& cell_mat = cell.final_mat;
+
                         auto weights = dbn->predict_weights(mat_to_image(cell_mat));
                         answer = dbn->predict_final(weights)+1;
                         for(std::size_t x = 0; x < weights.size(); ++x){
@@ -606,13 +700,12 @@ int main(int argc, char** argv ){
                     for(size_t j = 0; j < 9; ++j){
                         uint8_t answer;
 
-                        auto& cell_mat = image[i * 9 + j];
+                        auto& cell = image(i, j);
 
-                        auto fill = fill_factor(cell_mat);
-                        if(fill == 1.0f){
+                        if(cell.empty()){
                             answer = 0;
                         } else {
-                            auto weights = dbn->predict_weights(mat_to_image(cell_mat));
+                            auto weights = dbn->predict_weights(mat_to_image(cell.final_mat));
                             answer = dbn->predict_final(weights)+1;
                         }
                     }
@@ -633,13 +726,12 @@ int main(int argc, char** argv ){
                     for(size_t j = 0; j < 9; ++j){
                         uint8_t answer;
 
-                        auto& cell_mat = image[i * 9 + j];
+                        auto& cell = image(i, j);
 
-                        auto fill = fill_factor(cell_mat);
-                        if(fill == 1.0f){
+                        if(cell.empty()){
                             answer = 0;
                         } else {
-                            auto weights = dbn->predict_weights(mat_to_image(cell_mat));
+                            auto weights = dbn->predict_weights(mat_to_image(cell.final_mat));
                             answer = dbn->predict_final(weights)+1;
                         }
                     }
@@ -674,13 +766,12 @@ int main(int argc, char** argv ){
                     for(size_t j = 0; j < 9; ++j){
                         uint8_t answer;
 
-                        auto& cell_mat = image[i * 9 + j];
+                        auto& cell = image(i,j);
 
-                        auto fill = fill_factor(cell_mat);
-                        if(fill == 1.0f){
+                        if(cell.empty()){
                             answer = 0;
                         } else {
-                            auto weights = dbn->predict_weights(mat_to_image(cell_mat));
+                            auto weights = dbn->predict_weights(mat_to_image(cell.final_mat));
                             answer = dbn->predict_final(weights)+1;
                         }
                     }

@@ -32,10 +32,10 @@ constexpr const bool SHOW_CLUSTERED_INTERSECTIONS = false;
 constexpr const bool SHOW_HULL = false;
 constexpr const bool SHOW_HULL_FILL = false;
 constexpr const bool SHOW_TL_BR = false;
-constexpr const bool SHOW_CELLS = false;
+constexpr const bool SHOW_CELLS = true;
 constexpr const bool SHOW_GRID_NUMBERS= false;
-constexpr const bool SHOW_CHAR_CELLS = false;
-constexpr const bool SHOW_REGRID = false;
+constexpr const bool SHOW_CHAR_CELLS = true;
+constexpr const bool SHOW_REGRID = true;
 
 #define IF_DEBUG if(DEBUG)
 
@@ -806,10 +806,13 @@ std::vector<cv::Rect> detect_grid(const cv::Mat& source_image, cv::Mat& dest_ima
     }
 }
 
-std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, const std::vector<cv::Rect>& cells, std::vector<line_t>& lines){
+sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::vector<cv::Rect>& cells, std::vector<line_t>& lines){
+    sudoku_grid grid;
+    grid.source_image = source_image.clone(); //TODO constructor
+
     if(cells.empty()){
         IF_DEBUG std::cout << "No cell provided, no splitting" << std::endl;
-        return {};
+        return grid;
     }
 
     cv::Mat source;
@@ -838,15 +841,18 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
 
     //TODO Clean
 
-    std::vector<cv::Mat> cell_mats;
     for(size_t n = 0; n < cells.size(); ++n){
-        cell_mats.emplace_back(cv::Size(CELL_SIZE, CELL_SIZE), source.type());
+        //Create a new cell
+        grid.cells.emplace_back();
+        auto& cell = grid.cells.back();
 
-        auto& cell_mat = cell_mats.back();
+        cell.final_mat = cv::Mat(cv::Size(CELL_SIZE, CELL_SIZE), source.type());
+        cell.bounding = ensure_inside(source, cells[n]);
+
+        auto& cell_mat = cell.final_mat;
+        const auto& bounding = cell.bounding;
 
         cell_mat = cv::Scalar(255);
-
-        auto bounding = ensure_inside(source, cells[n]);
 
         cv::Mat rect_image_clean(source, bounding);
         cv::Mat rect_image = rect_image_clean.clone();
@@ -1017,29 +1023,35 @@ std::vector<cv::Mat> split(const cv::Mat& source_image, cv::Mat& dest_image, con
                     }
                 }
             }
+
+            if(fill_factor(cell_mat) == 1.0f){
+                cell.m_empty = true;
+            } else {
+                cell.m_empty = false;
+            }
         }
     }
 
     if(SHOW_REGRID){
-        cv::Mat remat(cv::Size(CELL_SIZE * 9, CELL_SIZE * 9), cell_mats.front().type());
+        cv::Mat remat(cv::Size(CELL_SIZE * 9, CELL_SIZE * 9), grid(0,0).final_mat.type());
 
-        for(size_t n = 0; n < cells.size(); ++n){
-            const auto& mat = cell_mats[n];
+        for(std::size_t i = 0; i < 9; ++i){
+            for(std::size_t j = 0; j < 9; ++j){
+                const auto& cell = grid(i, j);
+                const auto& mat = cell.final_mat;
 
-            size_t ni = n % 9;
-            size_t nj = n / 9;
-
-            mat.copyTo(remat(cv::Rect(ni * CELL_SIZE, nj * CELL_SIZE, CELL_SIZE, CELL_SIZE)));
+                mat.copyTo(remat(cv::Rect(i * CELL_SIZE, j * CELL_SIZE, CELL_SIZE, CELL_SIZE)));
+            }
         }
 
         cv::namedWindow("Sudoku Final", cv::WINDOW_AUTOSIZE);
         cv::imshow("Sudoku Final", remat);
     }
 
-    return cell_mats;
+    return grid;
 }
 
-std::vector<cv::Mat> detect(const cv::Mat& source_image, cv::Mat& dest_image){
+sudoku_grid detect(const cv::Mat& source_image, cv::Mat& dest_image){
     dest_image = source_image.clone();
 
     auto lines = detect_lines(source_image, dest_image);
@@ -1047,7 +1059,7 @@ std::vector<cv::Mat> detect(const cv::Mat& source_image, cv::Mat& dest_image){
     return split(source_image, dest_image, cells, lines);
 }
 
-std::vector<cv::Mat> detect_binary(const cv::Mat& source_image, cv::Mat& dest_image){
+sudoku_grid detect_binary(const cv::Mat& source_image, cv::Mat& dest_image){
     dest_image = source_image.clone();
 
     auto lines = detect_lines_binary(source_image, dest_image);

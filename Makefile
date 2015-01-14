@@ -17,7 +17,7 @@ LD=clang++
 
 WARNING_FLAGS=-Wextra -Wall -Qunused-arguments -Wuninitialized -Wsometimes-uninitialized -Wno-long-long -Winit-self -Wdocumentation
 
-CXX_FLAGS=-Iinclude -Idbn/etl/include -Idbn/include -std=c++1y -stdlib=libc++ $(WARNING_FLAGS)
+CXX_FLAGS=-Iinclude -Idbn/etl/include -Idbn/include -Imnist/include -std=c++1y -stdlib=libc++ $(WARNING_FLAGS)
 LD_FLAGS=$(CXX_FLAGS) -lopencv_core -lopencv_imgproc -lopencv_highgui
 
 STATIC_CXX_FLAGS=$(CXX_FLAGS) -DNO_GUI
