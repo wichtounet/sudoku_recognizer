@@ -143,6 +143,13 @@ typedef dll::dbn<
     dll::layer<300, 500, dll::momentum, dll::batch_size<10>, dll::in_dbn>,
     dll::layer<500, 9, dll::momentum, dll::batch_size<10>, dll::in_dbn, dll::hidden_unit<dll::Type::SOFTMAX>>> dbn_t;
 
+template<typename Color>
+void adapt_color(double ratio, Color& orig, Color& blend){
+    //if(ratio * blend > 25){
+        orig = /*ratio * */ blend;
+    //}
+}
+
 int main(int argc, char** argv ){
     if(argc < 2){
         std::cout << "Usage: sudoku <command> <options>" << std::endl;
@@ -228,6 +235,8 @@ int main(int argc, char** argv ){
             cv::Mat dest_image;
             auto grid = detect(source_image, dest_image);
 
+            cv::Vec3b fill_color(25, 25, 25);
+
             for(std::size_t x = 0; x < 9; ++x){
                 for(std::size_t y = 0; y < 9; ++y){
                     if(grid(x,y).empty()){
@@ -246,12 +255,16 @@ int main(int argc, char** argv ){
 
                             for(std::size_t xx = 0; xx < 28; ++xx){
                                 for(std::size_t yy = 0; yy < 28; ++yy){
-                                    auto& color = dest_image.at<cv::Vec3b>(cv::Point(xx + x_start, yy + y_start));
                                     auto mnist_color = image[yy * 28 + xx];
 
-                                    if(mnist_color > 0){
-                                        color[0] = color[2] = 0;
-                                        color[1] = 255 * (255.0f / (1 + 255 - mnist_color));
+                                    if(mnist_color > 40){
+                                        auto& color = dest_image.at<cv::Vec3b>(cv::Point(xx + x_start, yy + y_start));
+
+                                        auto ratio = mnist_color / 255.0;
+
+                                        adapt_color(ratio, color[0], fill_color[0]);
+                                        adapt_color(ratio, color[1], fill_color[1]);
+                                        adapt_color(ratio, color[2], fill_color[2]);
                                     }
                                 }
                             }
