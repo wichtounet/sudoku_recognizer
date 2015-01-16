@@ -219,8 +219,11 @@ int main(int argc, char** argv ){
 
         static std::random_device rd;
         static std::default_random_engine rand_engine(rd());
-        static std::uniform_int_distribution<std::size_t> distribution(0, size_1 + size_2);
-        static auto generator = std::bind(distribution, rand_engine);
+
+        static std::uniform_int_distribution<std::size_t> digit_distribution(0, size_1 + size_2);
+        static std::uniform_int_distribution<int> offset_distribution(-3, 3);
+        static auto digit_generator = std::bind(digit_distribution, rand_engine);
+        static auto offset_generator = std::bind(offset_distribution, rand_engine);
 
         if(argc == 3 && command != "fill_save"){
             std::string image_source_path(argv[2]);
@@ -246,12 +249,15 @@ int main(int argc, char** argv ){
                         std::cout << "Fill cell " << bounding_rect << std::endl;
 
                         //if(x == 0 && y == 0){
-                            auto r = generator();
+                            auto r = digit_generator();
 
                             auto& image = r < size_1 ? mnist_dataset.training_images[r] : mnist_dataset.test_images[r - size_1];
 
                             auto x_start = bounding_rect.x + (bounding_rect.width - 28) / 2;
                             auto y_start = bounding_rect.y + (bounding_rect.height - 28) / 2;
+
+                            x_start += offset_generator();
+                            y_start += offset_generator();
 
                             std::cout << "Start painting at " << x_start << "," << y_start << std::endl;
 
