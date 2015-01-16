@@ -32,10 +32,10 @@ constexpr const bool SHOW_CLUSTERED_INTERSECTIONS = false;
 constexpr const bool SHOW_HULL = false;
 constexpr const bool SHOW_HULL_FILL = false;
 constexpr const bool SHOW_TL_BR = false;
-constexpr const bool SHOW_CELLS = true;
+constexpr const bool SHOW_CELLS = false;
 constexpr const bool SHOW_GRID_NUMBERS= false;
-constexpr const bool SHOW_CHAR_CELLS = true;
-constexpr const bool SHOW_REGRID = true;
+constexpr const bool SHOW_CHAR_CELLS = false;
+constexpr const bool SHOW_REGRID = false;
 
 #define IF_DEBUG if(DEBUG)
 
