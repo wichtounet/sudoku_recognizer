@@ -256,35 +256,36 @@ int main(int argc, char** argv ){
                         auto& bounding_rect = grid(x,y).bounding;
                         std::cout << "Fill cell " << bounding_rect << std::endl;
 
-                        //if(x == 0 && y == 0){
-                            auto r = digit_generator();
+                        auto r = digit_generator();
 
-                            auto& image = r < size_1 ? mnist_dataset.training_images[r] : mnist_dataset.test_images[r - size_1];
+                        auto& image = r < size_1 ? mnist_dataset.training_images[r] : mnist_dataset.test_images[r - size_1];
 
-                            auto x_start = bounding_rect.x + (bounding_rect.width - 28) / 2;
-                            auto y_start = bounding_rect.y + (bounding_rect.height - 28) / 2;
+                        auto x_start = bounding_rect.x + (bounding_rect.width - 28) / 2;
+                        auto y_start = bounding_rect.y + (bounding_rect.height - 28) / 2;
 
-                            x_start += offset_generator();
-                            y_start += offset_generator();
+                        x_start += offset_generator();
+                        y_start += offset_generator();
 
-                            std::cout << "Start painting at " << x_start << "," << y_start << std::endl;
+                        std::cout << "Start painting at " << x_start << "," << y_start << std::endl;
 
-                            for(std::size_t xx = 0; xx < 28; ++xx){
-                                for(std::size_t yy = 0; yy < 28; ++yy){
-                                    auto mnist_color = image[yy * 28 + xx];
+                        for(std::size_t xx = 0; xx < 28; ++xx){
+                            for(std::size_t yy = 0; yy < 28; ++yy){
+                                auto mnist_color = image[yy * 28 + xx];
 
-                                    if(mnist_color > 40){
-                                        auto& color = dest_image.at<cv::Vec3b>(cv::Point(xx + x_start, yy + y_start));
+                                if(mnist_color > 40){
+                                    auto& color = dest_image.at<cv::Vec3b>(cv::Point(xx + x_start, yy + y_start));
 
-                                        auto ratio = mnist_color / 255.0;
+                                    auto ratio = mnist_color / 255.0;
 
-                                        adapt_color(ratio, color[0], fill_color[0]);
-                                        adapt_color(ratio, color[1], fill_color[1]);
-                                        adapt_color(ratio, color[2], fill_color[2]);
-                                    }
+                                    adapt_color(ratio, color[0], fill_color[0]);
+                                    adapt_color(ratio, color[1], fill_color[1]);
+                                    adapt_color(ratio, color[2], fill_color[2]);
                                 }
                             }
-                        //}
+                        }
+
+                        cv::Rect mnist_rect(x_start, y_start, 28, 28);
+                        cv::GaussianBlur(dest_image(mnist_rect), dest_image(mnist_rect), cv::Size(0,0), 1);
                     }
                 }
             }
