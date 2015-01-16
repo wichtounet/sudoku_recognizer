@@ -146,7 +146,7 @@ typedef dll::dbn<
     dll::layer<500, 9, dll::momentum, dll::batch_size<10>, dll::in_dbn, dll::hidden_unit<dll::Type::SOFTMAX>>> dbn_t;
 
 template<typename Color>
-void adapt_color(double ratio, Color& orig, Color& blend){
+void adapt_color(double ratio, Color& orig, const Color& blend){
     //if(ratio * blend > 25){
         orig = /*ratio * */ blend;
     //}
@@ -209,6 +209,11 @@ int main(int argc, char** argv ){
             return -1;
         }
 
+        std::vector<cv::Vec3b> colors;
+        colors.emplace_back(25, 25, 25);
+        colors.emplace_back(25, 25, 145);
+        colors.emplace_back(145, 25, 25);
+
         std::cout << "Load MNIST Dataset" << std::endl;
         auto mnist_dataset = mnist::read_dataset<std::vector, std::vector, uint8_t, uint8_t>();
 
@@ -222,8 +227,11 @@ int main(int argc, char** argv ){
 
         static std::uniform_int_distribution<std::size_t> digit_distribution(0, size_1 + size_2);
         static std::uniform_int_distribution<int> offset_distribution(-3, 3);
+        static std::uniform_int_distribution<std::size_t> color_distribution(0, colors.size() - 1);
+
         static auto digit_generator = std::bind(digit_distribution, rand_engine);
         static auto offset_generator = std::bind(offset_distribution, rand_engine);
+        static auto color_generator = std::bind(color_distribution, rand_engine);
 
         if(argc == 3 && command != "fill_save"){
             std::string image_source_path(argv[2]);
@@ -240,7 +248,7 @@ int main(int argc, char** argv ){
             cv::Mat dest_image;
             auto grid = detect(source_image, dest_image);
 
-            cv::Vec3b fill_color(25, 25, 25);
+            const auto& fill_color = colors[color_generator()];
 
             for(std::size_t x = 0; x < 9; ++x){
                 for(std::size_t y = 0; y < 9; ++y){
