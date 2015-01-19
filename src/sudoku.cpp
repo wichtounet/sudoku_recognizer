@@ -202,7 +202,7 @@ int command_detect(int argc, char** argv, const std::string& command){
     ;
 
 template<typename Dataset>
-cv::Mat fill_image(const std::string& image_source_path, dbn_p& dbn, Dataset& mnist_dataset, const std::vector<cv::Vec3b>& colors){
+cv::Mat fill_image(const std::string& image_source_path, Dataset& mnist_dataset, const std::vector<cv::Vec3b>& colors){
     auto size_1 = mnist_dataset.training_images.size();
     auto size_2 = mnist_dataset.test_images.size();
 
@@ -240,20 +240,21 @@ cv::Mat fill_image(const std::string& image_source_path, dbn_p& dbn, Dataset& mn
             std::cout << "Invalid grid" << std::endl;
         }
 
+        auto data = read_data(image_source_path);
+
         for(size_t i = 0; i < 9; ++i){
             for(size_t j = 0; j < 9; ++j){
                 auto& cell = grid(i, j);
 
-                if(cell.empty()){
-                    cell.value() = 0;
-                } else {
-                    auto& cell_mat = cell.final_mat;
+                cell.value() = data.results[j][i];
 
-                    auto weights = dbn->predict_weights(mat_to_image(cell_mat));
-                    cell.value() = dbn->predict_final(weights)+1;
+                if(!cell.value()){
+                    cell.m_empty = true;
                 }
             }
         }
+
+        std::cout << grid << std::endl;
 
         if(!solve(grid)){
             solve_random(grid);
@@ -353,24 +354,12 @@ int command_fill(int argc, char** argv, const std::string& command){
         return -1;
     }
 
-    auto dbn = make_unique<dbn_t>();
-
-    std::string dbn_path = "final.dat";
-
-    std::ifstream is(dbn_path, std::ofstream::binary);
-    if(!is.is_open()){
-        std::cerr << dbn_path << " does not exist or is not readable" << std::endl;
-        return -1;
-    }
-
-    dbn->load(is);
-
     //mnist::binarize(mnist_dataset);
 
     if(argc == 3 && command != "fill_save"){
         std::string image_source_path(argv[2]);
 
-        auto dest_image = fill_image(image_source_path, dbn, mnist_dataset, colors);
+        auto dest_image = fill_image(image_source_path, mnist_dataset, colors);
 
         cv::namedWindow("Sudoku Grid", cv::WINDOW_AUTOSIZE);
         cv::imshow("Sudoku Grid", dest_image);
@@ -382,7 +371,7 @@ int command_fill(int argc, char** argv, const std::string& command){
 
             std::cout << image_source_path << std::endl;
 
-            auto dest_image = fill_image(image_source_path, dbn, mnist_dataset, colors);
+            auto dest_image = fill_image(image_source_path, mnist_dataset, colors);
 
             image_source_path.insert(image_source_path.rfind('.'), ".mixed");
             imwrite(image_source_path.c_str(), dest_image);
