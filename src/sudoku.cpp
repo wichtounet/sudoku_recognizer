@@ -345,8 +345,10 @@ int command_fill(int argc, char** argv, const std::string& command){
 
     std::vector<cv::Vec3b> colors;
     colors.emplace_back(25, 25, 25);
+    colors.emplace_back(30, 30, 30);
     colors.emplace_back(25, 25, 145);
     colors.emplace_back(145, 25, 25);
+    colors.emplace_back(120, 40, 40);
 
     std::cout << "Load MNIST Dataset" << std::endl;
     auto mnist_dataset = mnist::read_dataset<std::vector, std::vector, uint8_t, uint8_t>();
