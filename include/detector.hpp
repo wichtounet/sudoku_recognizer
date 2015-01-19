@@ -22,18 +22,17 @@ struct sudoku_cell {
     cv::Mat final_mat;
     cv::Rect bounding;
     uint8_t m_value = 0;
-    uint8_t m_solved_value = 0;
 
-    bool empty(){
+    bool empty() const {
         return m_empty;
     }
 
-    uint8_t value(){
+    uint8_t value() const {
         return m_value;
     }
 
-    uint8_t solved_value(){
-        return m_solved_value;
+    uint8_t& value(){
+        return m_value;
     }
 };
 
@@ -53,6 +52,8 @@ struct sudoku_grid {
         return cells.size() == 9 * 9;
     }
 };
+
+std::ostream& operator<<(std::ostream& os, const sudoku_grid& grid);
 
 std::vector<line_t> detect_lines(const cv::Mat& source_image, cv::Mat& dest_image);
 std::vector<line_t> detect_lines_binary(const cv::Mat& source_image, cv::Mat& dest_image);

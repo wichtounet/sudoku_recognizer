@@ -264,9 +264,26 @@ int command_fill(int argc, char** argv, const std::string& command){
             std::cout << "Invalid grid" << std::endl;
         }
 
+        for(size_t i = 0; i < 9; ++i){
+            for(size_t j = 0; j < 9; ++j){
+                auto& cell = grid(i, j);
+
+                if(cell.empty()){
+                    cell.value() = 0;
+                } else {
+                    auto& cell_mat = cell.final_mat;
+
+                    auto weights = dbn->predict_weights(mat_to_image(cell_mat));
+                    cell.value() = dbn->predict_final(weights)+1;
+                }
+            }
+        }
+
         if(!solve(grid)){
             solve_random(grid);
         }
+
+        std::cout << grid << std::endl;
 
         const auto& fill_color = colors[color_generator()];
 
@@ -274,7 +291,7 @@ int command_fill(int argc, char** argv, const std::string& command){
             for(std::size_t y = 0; y < 9; ++y){
                 if(grid(x,y).empty()){
                     auto& bounding_rect = grid(x,y).bounding;
-                    std::cout << "Fill cell " << bounding_rect << std::endl;
+                    //std::cout << "Fill cell " << bounding_rect << std::endl;
 
                     auto r = digit_generator();
 
@@ -286,7 +303,7 @@ int command_fill(int argc, char** argv, const std::string& command){
                     x_start += offset_generator();
                     y_start += offset_generator();
 
-                    std::cout << "Start painting at " << x_start << "," << y_start << std::endl;
+                    //std::cout << "Start painting at " << x_start << "," << y_start << std::endl;
 
                     for(std::size_t xx = 0; xx < 28; ++xx){
                         for(std::size_t yy = 0; yy < 28; ++yy){

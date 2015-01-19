@@ -1066,3 +1066,24 @@ sudoku_grid detect_binary(const cv::Mat& source_image, cv::Mat& dest_image){
     auto cells = detect_grid(source_image, dest_image, lines);
     return split(source_image, dest_image, cells, lines);
 }
+
+//TODO Order of the cells should really be unified
+std::ostream& operator<<(std::ostream& os, const sudoku_grid& grid){
+    if(grid.valid()){
+        for(size_t i = 0; i < 9; ++i){
+            for(size_t j = 0; j < 9; ++j){
+                os << static_cast<std::size_t>(grid(j,i).value()) << " ";
+            }
+            os << std::endl;
+        }
+    } else {
+        for(size_t i = 0; i < 9; ++i){
+            for(size_t j = 0; j < 9; ++j){
+                os << "0 ";
+            }
+            os << std::endl;
+        }
+    }
+
+    return os;
+}
