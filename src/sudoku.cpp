@@ -377,21 +377,12 @@ int command_fill(int argc, char** argv, const std::string& command){
 
         cv::waitKey(0);
     } else {
-        //TODO This body
         for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
             std::string image_source_path(argv[i]);
 
             std::cout << image_source_path << std::endl;
 
-            auto source_image = open_image(image_source_path);
-
-            if (!source_image.data){
-                std::cout << "Invalid source_image" << std::endl;
-                continue;
-            }
-
-            cv::Mat dest_image;
-            detect(source_image, dest_image);
+            auto dest_image = fill_image(image_source_path, dbn, mnist_dataset, colors);
 
             image_source_path.insert(image_source_path.rfind('.'), ".mixed");
             imwrite(image_source_path.c_str(), dest_image);
