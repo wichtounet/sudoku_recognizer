@@ -144,6 +144,8 @@ typedef dll::dbn<
     dll::layer<300, 500, dll::momentum, dll::batch_size<10>, dll::in_dbn>,
     dll::layer<500, 9, dll::momentum, dll::batch_size<10>, dll::in_dbn, dll::hidden_unit<dll::Type::SOFTMAX>>> dbn_t;
 
+using dbn_p = std::unique_ptr<dbn_t>;
+
 template<typename Color>
 void adapt_color(double ratio, Color& orig, const Color& blend){
     //if(ratio * blend > 25){
@@ -197,56 +199,23 @@ int command_detect(int argc, char** argv, const std::string& command){
 
     return 0;
 }
+    ;
 
-int command_fill(int argc, char** argv, const std::string& command){
-    if(argc < 3){
-        std::cout << "Usage: sudoku fill <image>..." << std::endl;
-        return -1;
-    }
-
-    std::vector<cv::Vec3b> colors;
-    colors.emplace_back(25, 25, 25);
-    colors.emplace_back(25, 25, 145);
-    colors.emplace_back(145, 25, 25);
-
-    std::cout << "Load MNIST Dataset" << std::endl;
-    auto mnist_dataset = mnist::read_dataset<std::vector, std::vector, uint8_t, uint8_t>();
-
-    if(mnist_dataset.training_images.empty() || mnist_dataset.test_images.empty()){
-        std::cout << "Impossible to load MNIST images" << std::endl;
-        return -1;
-    }
-
-    auto dbn = make_unique<dbn_t>();
-
-    std::string dbn_path = "final.dat";
-
-    std::ifstream is(dbn_path, std::ofstream::binary);
-    if(!is.is_open()){
-        std::cerr << dbn_path << " does not exist or is not readable" << std::endl;
-        return -1;
-    }
-
-    dbn->load(is);
-
-    //mnist::binarize(mnist_dataset);
-
+template<typename Dataset>
+cv::Mat fill_image(const std::string& image_source_path, dbn_p& dbn, Dataset& mnist_dataset, const std::vector<cv::Vec3b>& colors){
     auto size_1 = mnist_dataset.training_images.size();
     auto size_2 = mnist_dataset.test_images.size();
 
     static std::random_device rd;
     static std::default_random_engine rand_engine(rd());
 
-    static std::uniform_int_distribution<std::size_t> digit_distribution(0, size_1 + size_2);
-    static std::uniform_int_distribution<int> offset_distribution(-3, 3);
-    static std::uniform_int_distribution<std::size_t> color_distribution(0, colors.size() - 1);
+    std::uniform_int_distribution<std::size_t> digit_distribution(0, size_1 + size_2);
+    std::uniform_int_distribution<int> offset_distribution(-3, 3);
+    std::uniform_int_distribution<std::size_t> color_distribution(0, colors.size() - 1);
 
-    static auto digit_generator = std::bind(digit_distribution, rand_engine);
-    static auto offset_generator = std::bind(offset_distribution, rand_engine);
-    static auto color_generator = std::bind(color_distribution, rand_engine);
-
-    if(argc == 3 && command != "fill_save"){
-        std::string image_source_path(argv[2]);
+    auto digit_generator = std::bind(digit_distribution, rand_engine);
+    auto offset_generator = std::bind(offset_distribution, rand_engine);
+    auto color_generator = std::bind(color_distribution, rand_engine);
 
         std::cout << "Process image" << std::endl;
 
@@ -255,7 +224,7 @@ int command_fill(int argc, char** argv, const std::string& command){
 
         if (!source_image.data || !original_image.data){
             std::cout << "Invalid source_image" << std::endl;
-            return -1;
+            return original_image;
         }
 
         cv::Mat detect_dest_image;
@@ -337,8 +306,8 @@ int command_fill(int argc, char** argv, const std::string& command){
                         y_start *= (1.0 / h_ratio);
                     }
 
-                    for(std::size_t xx = 0; xx < image_mat.size().width; ++xx){
-                        for(std::size_t yy = 0; yy < image_mat.size().height; ++yy){
+                    for(int xx = 0; xx < image_mat.size().width; ++xx){
+                        for(int yy = 0; yy < image_mat.size().height; ++yy){
                             auto mnist_color = image_mat.at<uchar>(cv::Point(xx, yy));
 
                             if(mnist_color > 40){
@@ -362,6 +331,47 @@ int command_fill(int argc, char** argv, const std::string& command){
             }
         }
 
+        return dest_image;
+}
+
+int command_fill(int argc, char** argv, const std::string& command){
+    if(argc < 3){
+        std::cout << "Usage: sudoku fill <image>..." << std::endl;
+        return -1;
+    }
+
+    std::vector<cv::Vec3b> colors;
+    colors.emplace_back(25, 25, 25);
+    colors.emplace_back(25, 25, 145);
+    colors.emplace_back(145, 25, 25);
+
+    std::cout << "Load MNIST Dataset" << std::endl;
+    auto mnist_dataset = mnist::read_dataset<std::vector, std::vector, uint8_t, uint8_t>();
+
+    if(mnist_dataset.training_images.empty() || mnist_dataset.test_images.empty()){
+        std::cout << "Impossible to load MNIST images" << std::endl;
+        return -1;
+    }
+
+    auto dbn = make_unique<dbn_t>();
+
+    std::string dbn_path = "final.dat";
+
+    std::ifstream is(dbn_path, std::ofstream::binary);
+    if(!is.is_open()){
+        std::cerr << dbn_path << " does not exist or is not readable" << std::endl;
+        return -1;
+    }
+
+    dbn->load(is);
+
+    //mnist::binarize(mnist_dataset);
+
+    if(argc == 3 && command != "fill_save"){
+        std::string image_source_path(argv[2]);
+
+        auto dest_image = fill_image(image_source_path, dbn, mnist_dataset, colors);
+
         cv::namedWindow("Sudoku Grid", cv::WINDOW_AUTOSIZE);
         cv::imshow("Sudoku Grid", dest_image);
 
@@ -383,7 +393,7 @@ int command_fill(int argc, char** argv, const std::string& command){
             cv::Mat dest_image;
             detect(source_image, dest_image);
 
-            image_source_path.insert(image_source_path.rfind('.'), ".lines");
+            image_source_path.insert(image_source_path.rfind('.'), ".mixed");
             imwrite(image_source_path.c_str(), dest_image);
         }
     }
@@ -547,7 +557,7 @@ int command_recog(int argc, char** argv, const std::string& command){
                 return std::get<2>(lhs) > std::get<2>(rhs);
                 });
 
-            for(int n = 0; n < next.size() && n < 5; ++n){
+            for(std::size_t n = 0; n < next.size() && n < 5; ++n){
                 std::cout << std::endl;
 
                 auto change = next[n];
