@@ -239,6 +239,8 @@ cv::Mat fill_image(const std::string& image_source_path, Dataset& mnist_dataset,
         std::cout << "Invalid grid" << std::endl;
     }
 
+    //We use the ground truth to complete/fix the detection pass
+
     auto data = read_data(image_source_path);
 
     for(size_t i = 0; i < 9; ++i){
@@ -246,10 +248,7 @@ cv::Mat fill_image(const std::string& image_source_path, Dataset& mnist_dataset,
             auto& cell = grid(i, j);
 
             cell.value() = data.results[j][i];
-
-            if(!cell.value()){
-                cell.m_empty = true;
-            }
+            cell.m_empty = !cell.value();
         }
     }
 
