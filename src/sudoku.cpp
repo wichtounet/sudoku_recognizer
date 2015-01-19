@@ -252,13 +252,11 @@ cv::Mat fill_image(const std::string& image_source_path, Dataset& mnist_dataset,
         }
     }
 
-    std::cout << grid << std::endl;
+    //Solve the grid (if it fails (bad detection/ground truth), random fill)
 
     if(!solve(grid)){
         solve_random(grid);
     }
-
-    std::cout << grid << std::endl;
 
     const auto& fill_color = colors[color_generator()];
 
