@@ -20,6 +20,7 @@
 #include "mnist/mnist_utils.hpp"
 
 #include "detector.hpp"
+#include "solver.hpp"
 #include "data.hpp"
 #include "image_utils.hpp"
 
@@ -211,6 +212,23 @@ int command_fill(int argc, char** argv, const std::string& command){
     std::cout << "Load MNIST Dataset" << std::endl;
     auto mnist_dataset = mnist::read_dataset<std::vector, std::vector, uint8_t, uint8_t>();
 
+    if(mnist_dataset.training_images.empty() || mnist_dataset.test_images.empty()){
+        std::cout << "Impossible to load MNIST images" << std::endl;
+        return -1;
+    }
+
+    auto dbn = make_unique<dbn_t>();
+
+    std::string dbn_path = "final.dat";
+
+    std::ifstream is(dbn_path, std::ofstream::binary);
+    if(!is.is_open()){
+        std::cerr << dbn_path << " does not exist or is not readable" << std::endl;
+        return -1;
+    }
+
+    dbn->load(is);
+
     //mnist::binarize(mnist_dataset);
 
     auto size_1 = mnist_dataset.training_images.size();
@@ -241,6 +259,14 @@ int command_fill(int argc, char** argv, const std::string& command){
 
         cv::Mat dest_image;
         auto grid = detect(source_image, dest_image);
+
+        if(!grid.valid()){
+            std::cout << "Invalid grid" << std::endl;
+        }
+
+        if(!solve(grid)){
+            solve_random(grid);
+        }
 
         const auto& fill_color = colors[color_generator()];
 
