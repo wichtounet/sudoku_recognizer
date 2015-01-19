@@ -199,10 +199,9 @@ int command_detect(int argc, char** argv, const std::string& command){
 
     return 0;
 }
-    ;
 
 template<typename Dataset>
-cv::Mat fill_image(const std::string& image_source_path, Dataset& mnist_dataset, const std::vector<cv::Vec3b>& colors){
+cv::Mat fill_image(const std::string& image_source_path, Dataset& mnist_dataset, const std::vector<cv::Vec3b>& colors, bool write){
     auto size_1 = mnist_dataset.training_images.size();
     auto size_2 = mnist_dataset.test_images.size();
 
@@ -217,122 +216,128 @@ cv::Mat fill_image(const std::string& image_source_path, Dataset& mnist_dataset,
     auto offset_generator = std::bind(offset_distribution, rand_engine);
     auto color_generator = std::bind(color_distribution, rand_engine);
 
-        std::cout << "Process image" << std::endl;
+    std::cout << "Process image" << std::endl;
 
-        auto source_image = open_image(image_source_path);
-        auto original_image = open_image(image_source_path, false);
+    auto source_image = open_image(image_source_path);
+    auto original_image = open_image(image_source_path, false);
 
-        if (!source_image.data || !original_image.data){
-            std::cout << "Invalid source_image" << std::endl;
-            return original_image;
-        }
+    if (!source_image.data || !original_image.data){
+        std::cout << "Invalid source_image" << std::endl;
+        return original_image;
+    }
 
-        cv::Mat detect_dest_image;
-        auto grid = detect(source_image, detect_dest_image);
+    cv::Mat detect_dest_image;
+    auto grid = detect(source_image, detect_dest_image);
 
-        cv::Mat dest_image = original_image.clone();
+    cv::Mat dest_image = original_image.clone();
 
-        bool resized = source_image.size() != original_image.size();
-        auto w_ratio = static_cast<double>(source_image.size().width) / original_image.size().width;
-        auto h_ratio = static_cast<double>(source_image.size().height) / original_image.size().height;
+    bool resized = source_image.size() != original_image.size();
+    auto w_ratio = static_cast<double>(source_image.size().width) / original_image.size().width;
+    auto h_ratio = static_cast<double>(source_image.size().height) / original_image.size().height;
 
-        if(!grid.valid()){
-            std::cout << "Invalid grid" << std::endl;
-        }
+    if(!grid.valid()){
+        std::cout << "Invalid grid" << std::endl;
+    }
 
-        auto data = read_data(image_source_path);
+    auto data = read_data(image_source_path);
 
-        for(size_t i = 0; i < 9; ++i){
-            for(size_t j = 0; j < 9; ++j){
-                auto& cell = grid(i, j);
+    for(size_t i = 0; i < 9; ++i){
+        for(size_t j = 0; j < 9; ++j){
+            auto& cell = grid(i, j);
 
-                cell.value() = data.results[j][i];
+            cell.value() = data.results[j][i];
 
-                if(!cell.value()){
-                    cell.m_empty = true;
-                }
+            if(!cell.value()){
+                cell.m_empty = true;
             }
         }
+    }
 
-        std::cout << grid << std::endl;
+    std::cout << grid << std::endl;
 
-        if(!solve(grid)){
-            solve_random(grid);
-        }
+    if(!solve(grid)){
+        solve_random(grid);
+    }
 
-        std::cout << grid << std::endl;
+    std::cout << grid << std::endl;
 
-        const auto& fill_color = colors[color_generator()];
+    const auto& fill_color = colors[color_generator()];
 
-        for(std::size_t x = 0; x < 9; ++x){
-            for(std::size_t y = 0; y < 9; ++y){
-                if(grid(x,y).empty()){
-                    auto& bounding_rect = grid(x,y).bounding;
+    for(std::size_t x = 0; x < 9; ++x){
+        for(std::size_t y = 0; y < 9; ++y){
+            if(grid(x,y).empty()){
+                auto& bounding_rect = grid(x,y).bounding;
 
-                    //Note to self: This is pretty stupid (possible infinite loop)
-                    auto r = digit_generator();
-                    while(true){
-                        auto label = r < size_1 ? mnist_dataset.training_labels[r] : mnist_dataset.test_labels[r - size_1];
+                //Note to self: This is pretty stupid (possible infinite loop)
+                auto r = digit_generator();
+                while(true){
+                    auto label = r < size_1 ? mnist_dataset.training_labels[r] : mnist_dataset.test_labels[r - size_1];
 
-                        if(label == grid(x, y).value()){
-                            break;
-                        }
-
-                        r = digit_generator();
+                    if(label == grid(x, y).value()){
+                        break;
                     }
 
-                    auto image = r < size_1 ? mnist_dataset.training_images[r] : mnist_dataset.test_images[r - size_1];
-
-                    cv::Mat image_mat(28, 28, CV_8U);
-                    for(std::size_t xx = 0; xx < 28; ++xx){
-                        for(std::size_t yy = 0; yy < 28; ++yy){
-                            image_mat.at<uchar>(cv::Point(xx, yy)) = image[yy * 28 + xx];
-                        }
-                    }
-
-                    if(resized){
-                        cv::Mat resized;
-                        cv::resize(image_mat, resized, cv::Size(), 0.9 * (1.0 / w_ratio), 0.9 * (1.0 / h_ratio), CV_INTER_CUBIC);
-                        image_mat = resized;
-                    }
-
-                    auto x_start = bounding_rect.x + (bounding_rect.width - 28) / 2;
-                    auto y_start = bounding_rect.y + (bounding_rect.height - 28) / 2;
-
-                    x_start += offset_generator();
-                    y_start += offset_generator();
-
-                    if(resized){
-                        x_start *= (1.0 / w_ratio);
-                        y_start *= (1.0 / h_ratio);
-                    }
-
-                    for(int xx = 0; xx < image_mat.size().width; ++xx){
-                        for(int yy = 0; yy < image_mat.size().height; ++yy){
-                            auto mnist_color = image_mat.at<uchar>(cv::Point(xx, yy));
-
-                            if(mnist_color > 40){
-                                auto final_x = xx + x_start;
-                                auto final_y = yy + y_start;
-
-                                auto& color = dest_image.at<cv::Vec3b>(cv::Point(final_x, final_y));
-
-                                auto ratio = mnist_color / 255.0;
-
-                                adapt_color(ratio, color[0], fill_color[0]);
-                                adapt_color(ratio, color[1], fill_color[1]);
-                                adapt_color(ratio, color[2], fill_color[2]);
-                            }
-                        }
-                    }
-
-                    cv::Rect mnist_rect(x_start, y_start, 28, 28);
-                    cv::GaussianBlur(dest_image(mnist_rect), dest_image(mnist_rect), cv::Size(0,0), 1);
+                    r = digit_generator();
                 }
+
+                auto image = r < size_1 ? mnist_dataset.training_images[r] : mnist_dataset.test_images[r - size_1];
+
+                cv::Mat image_mat(28, 28, CV_8U);
+                for(std::size_t xx = 0; xx < 28; ++xx){
+                    for(std::size_t yy = 0; yy < 28; ++yy){
+                        image_mat.at<uchar>(cv::Point(xx, yy)) = image[yy * 28 + xx];
+                    }
+                }
+
+                if(resized){
+                    cv::Mat resized;
+                    cv::resize(image_mat, resized, cv::Size(), 0.9 * (1.0 / w_ratio), 0.9 * (1.0 / h_ratio), CV_INTER_CUBIC);
+                    image_mat = resized;
+                }
+
+                auto x_start = bounding_rect.x + (bounding_rect.width - 28) / 2;
+                auto y_start = bounding_rect.y + (bounding_rect.height - 28) / 2;
+
+                x_start += offset_generator();
+                y_start += offset_generator();
+
+                if(resized){
+                    x_start *= (1.0 / w_ratio);
+                    y_start *= (1.0 / h_ratio);
+                }
+
+                for(int xx = 0; xx < image_mat.size().width; ++xx){
+                    for(int yy = 0; yy < image_mat.size().height; ++yy){
+                        auto mnist_color = image_mat.at<uchar>(cv::Point(xx, yy));
+
+                        if(mnist_color > 40){
+                            auto final_x = xx + x_start;
+                            auto final_y = yy + y_start;
+
+                            auto& color = dest_image.at<cv::Vec3b>(cv::Point(final_x, final_y));
+
+                            auto ratio = mnist_color / 255.0;
+
+                            adapt_color(ratio, color[0], fill_color[0]);
+                            adapt_color(ratio, color[1], fill_color[1]);
+                            adapt_color(ratio, color[2], fill_color[2]);
+                        }
+                    }
+                }
+
+                cv::Rect mnist_rect(x_start, y_start, 28, 28);
+                cv::GaussianBlur(dest_image(mnist_rect), dest_image(mnist_rect), cv::Size(0,0), 1);
             }
         }
+    }
 
-        return dest_image;
+    if(write){
+        std::string image_dest_path(image_source_path);
+        image_dest_path.insert(image_dest_path.rfind('.'), ".mixed");
+        imwrite(image_dest_path.c_str(), dest_image);
+    }
+
+    return dest_image;
 }
 
 int command_fill(int argc, char** argv, const std::string& command){
@@ -359,7 +364,7 @@ int command_fill(int argc, char** argv, const std::string& command){
     if(argc == 3 && command != "fill_save"){
         std::string image_source_path(argv[2]);
 
-        auto dest_image = fill_image(image_source_path, mnist_dataset, colors);
+        auto dest_image = fill_image(image_source_path, mnist_dataset, colors, false);
 
         cv::namedWindow("Sudoku Grid", cv::WINDOW_AUTOSIZE);
         cv::imshow("Sudoku Grid", dest_image);
@@ -371,10 +376,7 @@ int command_fill(int argc, char** argv, const std::string& command){
 
             std::cout << image_source_path << std::endl;
 
-            auto dest_image = fill_image(image_source_path, mnist_dataset, colors);
-
-            image_source_path.insert(image_source_path.rfind('.'), ".mixed");
-            imwrite(image_source_path.c_str(), dest_image);
+            fill_image(image_source_path, mnist_dataset, colors, true);
         }
     }
 
