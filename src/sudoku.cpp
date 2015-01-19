@@ -76,14 +76,14 @@ double median(std::vector<double>& vec){
     }
 }
 
-cv::Mat open_image(const std::string& path){
+cv::Mat open_image(const std::string& path, bool resize = true){
     auto source_image = cv::imread(path.c_str(), 1);
 
     if (!source_image.data){
         return source_image;
     }
 
-    if(source_image.rows > 800 || source_image.cols > 800){
+    if(resize && (source_image.rows > 800 || source_image.cols > 800)){
         auto factor = 800.0f / std::max(source_image.rows, source_image.cols);
 
         cv::Mat resized_image;
@@ -251,14 +251,21 @@ int command_fill(int argc, char** argv, const std::string& command){
         std::cout << "Process image" << std::endl;
 
         auto source_image = open_image(image_source_path);
+        auto original_image = open_image(image_source_path, false);
 
-        if (!source_image.data){
+        if (!source_image.data || !original_image.data){
             std::cout << "Invalid source_image" << std::endl;
             return -1;
         }
 
-        cv::Mat dest_image;
-        auto grid = detect(source_image, dest_image);
+        cv::Mat detect_dest_image;
+        auto grid = detect(source_image, detect_dest_image);
+
+        cv::Mat dest_image = original_image.clone();
+
+        bool resized = source_image.size() != original_image.size();
+        auto w_ratio = static_cast<double>(source_image.size().width) / original_image.size().width;
+        auto h_ratio = static_cast<double>(source_image.size().height) / original_image.size().height;
 
         if(!grid.valid()){
             std::cout << "Invalid grid" << std::endl;
@@ -304,7 +311,20 @@ int command_fill(int argc, char** argv, const std::string& command){
                         r = digit_generator();
                     }
 
-                    auto& image = r < size_1 ? mnist_dataset.training_images[r] : mnist_dataset.test_images[r - size_1];
+                    auto image = r < size_1 ? mnist_dataset.training_images[r] : mnist_dataset.test_images[r - size_1];
+
+                    cv::Mat image_mat(28, 28, CV_8U);
+                    for(std::size_t xx = 0; xx < 28; ++xx){
+                        for(std::size_t yy = 0; yy < 28; ++yy){
+                            image_mat.at<uchar>(cv::Point(xx, yy)) = image[yy * 28 + xx];
+                        }
+                    }
+
+                    if(resized){
+                        cv::Mat resized;
+                        cv::resize(image_mat, resized, cv::Size(), 0.9 * (1.0 / w_ratio), 0.9 * (1.0 / h_ratio), CV_INTER_CUBIC);
+                        image_mat = resized;
+                    }
 
                     auto x_start = bounding_rect.x + (bounding_rect.width - 28) / 2;
                     auto y_start = bounding_rect.y + (bounding_rect.height - 28) / 2;
@@ -312,12 +332,20 @@ int command_fill(int argc, char** argv, const std::string& command){
                     x_start += offset_generator();
                     y_start += offset_generator();
 
-                    for(std::size_t xx = 0; xx < 28; ++xx){
-                        for(std::size_t yy = 0; yy < 28; ++yy){
-                            auto mnist_color = image[yy * 28 + xx];
+                    if(resized){
+                        x_start *= (1.0 / w_ratio);
+                        y_start *= (1.0 / h_ratio);
+                    }
+
+                    for(std::size_t xx = 0; xx < image_mat.size().width; ++xx){
+                        for(std::size_t yy = 0; yy < image_mat.size().height; ++yy){
+                            auto mnist_color = image_mat.at<uchar>(cv::Point(xx, yy));
 
                             if(mnist_color > 40){
-                                auto& color = dest_image.at<cv::Vec3b>(cv::Point(xx + x_start, yy + y_start));
+                                auto final_x = xx + x_start;
+                                auto final_y = yy + y_start;
+
+                                auto& color = dest_image.at<cv::Vec3b>(cv::Point(final_x, final_y));
 
                                 auto ratio = mnist_color / 255.0;
 
