@@ -227,14 +227,12 @@ cv::Mat fill_image(const std::string& source, Dataset& mnist_dataset, const std:
         return original_image;
     }
 
-    cv::Mat detect_dest_image;
-    auto grid = detect(source_image, detect_dest_image);
-
     cv::Mat dest_image = original_image.clone();
 
-    bool resized = source_image.size() != original_image.size();
-    auto w_ratio = static_cast<double>(source_image.size().width) / original_image.size().width;
-    auto h_ratio = static_cast<double>(source_image.size().height) / original_image.size().height;
+    //Detect the grid/cells
+
+    cv::Mat detect_dest_image;
+    auto grid = detect(source_image, detect_dest_image);
 
     if(!grid.valid()){
         std::cout << "Invalid grid" << std::endl;
@@ -259,6 +257,11 @@ cv::Mat fill_image(const std::string& source, Dataset& mnist_dataset, const std:
         solve_random(grid);
     }
 
+    bool resized = source_image.size() != original_image.size();
+    auto w_ratio = static_cast<double>(source_image.size().width) / original_image.size().width;
+    auto h_ratio = static_cast<double>(source_image.size().height) / original_image.size().height;
+
+    //Pick a random color for the whole sudoku
     const auto& fill_color = colors[color_generator()];
 
     for(std::size_t x = 0; x < 9; ++x){
@@ -266,7 +269,7 @@ cv::Mat fill_image(const std::string& source, Dataset& mnist_dataset, const std:
             if(grid(x,y).empty()){
                 auto& bounding_rect = grid(x,y).bounding;
 
-                //Note to self: This is pretty stupid (possible infinite loop)
+                //Note to self: This is pretty stupid (theoretical possible infinite loop)
                 auto r = digit_generator();
                 while(true){
                     auto label = r < size_1 ? mnist_dataset.training_labels[r] : mnist_dataset.test_labels[r - size_1];
@@ -278,6 +281,8 @@ cv::Mat fill_image(const std::string& source, Dataset& mnist_dataset, const std:
                     r = digit_generator();
                 }
 
+                //Get the digit from MNIST
+
                 auto image = r < size_1 ? mnist_dataset.training_images[r] : mnist_dataset.test_images[r - size_1];
 
                 cv::Mat image_mat(28, 28, CV_8U);
@@ -287,11 +292,7 @@ cv::Mat fill_image(const std::string& source, Dataset& mnist_dataset, const std:
                     }
                 }
 
-                if(resized){
-                    cv::Mat resized;
-                    cv::resize(image_mat, resized, cv::Size(), 0.9 * (1.0 / w_ratio), 0.9 * (1.0 / h_ratio), CV_INTER_CUBIC);
-                    image_mat = resized;
-                }
+                //Center the digit inside the cell
 
                 auto x_start = bounding_rect.x + (bounding_rect.width - 28) / 2;
                 auto y_start = bounding_rect.y + (bounding_rect.height - 28) / 2;
@@ -299,10 +300,17 @@ cv::Mat fill_image(const std::string& source, Dataset& mnist_dataset, const std:
                 x_start += offset_generator();
                 y_start += offset_generator();
 
+                //Apply reverse ratio
                 if(resized){
+                    cv::Mat resized;
+                    cv::resize(image_mat, resized, cv::Size(), 0.9 * (1.0 / w_ratio), 0.9 * (1.0 / h_ratio), CV_INTER_CUBIC);
+                    image_mat = resized;
+
                     x_start *= (1.0 / w_ratio);
                     y_start *= (1.0 / h_ratio);
                 }
+
+                //Draw the digit
 
                 for(int xx = 0; xx < image_mat.size().width; ++xx){
                     for(int yy = 0; yy < image_mat.size().height; ++yy){
