@@ -248,6 +248,10 @@ cv::Mat fill_image(const std::string& source, Dataset& mnist_dataset, const std:
 
     auto data = read_data(source);
 
+    if(!data.valid){
+        std::cout << "The ground truth data is not valid" << std::endl;
+    }
+
     for(size_t i = 0; i < 9; ++i){
         for(size_t j = 0; j < 9; ++j){
             auto& cell = grid(i, j);
@@ -257,9 +261,14 @@ cv::Mat fill_image(const std::string& source, Dataset& mnist_dataset, const std:
         }
     }
 
+    if(!is_valid(grid)){
+        std::cout << "The grid is not valid" << std::endl;
+    }
+
     //Solve the grid (if it fails (bad detection/ground truth), random fill)
 
     if(!solve(grid)){
+        std::cout << "The grid is not solvable" << std::endl;
         solve_random(grid);
     }
 

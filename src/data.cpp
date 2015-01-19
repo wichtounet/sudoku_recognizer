@@ -13,17 +13,39 @@ gt_data read_data(const std::string& image_source_path){
     data_source_path.replace(data_source_path.end() - 3, data_source_path.end(), "dat");
 
     gt_data data;
+    data.valid = true;
 
     std::ifstream is(data_source_path);
 
+    if(!is.good()){
+        data.valid = false;
+        return data;
+    }
+
     std::getline(is, data.phone_type);
+
+    if(!is.good()){
+        data.valid = false;
+        return data;
+    }
+
     std::getline(is, data.image_type);
+
+    if(!is.good()){
+        data.valid = false;
+        return data;
+    }
 
     for(size_t i = 0; i < 9; ++i){
         for(size_t j = 0; j < 9; ++j){
             size_t value;
             is >> value;
             data.results[i][j] = static_cast<uint8_t>(value);
+
+            if(!is.good()){
+                data.valid = false;
+                return data;
+            }
         }
     }
 

@@ -58,6 +58,60 @@ bool next_empty_cell(const sudoku_grid& grid, std::size_t& next_x, std::size_t& 
 
 } //end of anonymous namespace
 
+bool is_valid(sudoku_grid& grid){
+    //Check all columns
+    for(std::size_t x = 0; x < 9; ++x){
+        for(std::size_t y = 0; y < 9; ++y){
+            //Don't test zero
+            if(grid(y, x).value()){
+                for(std::size_t yy = 0; yy < 9; ++yy){
+                    if(y != yy && grid(yy, x).value() == grid(y, x).value()){
+                        return false;
+                    }
+                }
+            }
+        }
+    }
+
+    //Check all rows
+    for(std::size_t y = 0; y < 9; ++y){
+        for(std::size_t x = 0; x < 9; ++x){
+            //Don't test zero
+            if(grid(y, x).value()){
+                for(std::size_t xx = 0; xx < 9; ++xx){
+                    if(x != xx && grid(y, xx).value() == grid(y, x).value()){
+                        return false;
+                    }
+                }
+            }
+        }
+    }
+
+    //Check all squares
+    for(std::size_t x = 0; x < 3; ++x){
+        for(std::size_t y = 0; y < 3; ++y){
+            auto start_x = x * 3;
+            auto start_y = y * 3;
+
+            for(std::size_t xx = 0; xx < 3; ++xx){
+                for(std::size_t yy = 0; yy < 3; ++yy){
+                    if(grid(start_y + yy, start_x + xx).value()){
+                        for(std::size_t xxx = 0; xxx < 3; ++xxx){
+                            for(std::size_t yyy = 0; yyy < 3; ++yyy){
+                                if(!(xxx == xx && yyy == yy) && grid(start_y + yy, start_x + xx).value() == grid(start_y + yyy, start_x + xxx).value()){
+                                    return false;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return true;
+}
+
 bool solve(sudoku_grid& grid){
     std::size_t x = 0;
     std::size_t y = 0;

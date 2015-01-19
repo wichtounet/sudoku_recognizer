@@ -11,6 +11,7 @@
 #include "detector.hpp"
 
 bool solve(sudoku_grid& grid);
+bool is_valid(sudoku_grid& grid);
 void solve_random(sudoku_grid& grid);
 
 #endif
