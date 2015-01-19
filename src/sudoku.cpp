@@ -291,9 +291,18 @@ int command_fill(int argc, char** argv, const std::string& command){
             for(std::size_t y = 0; y < 9; ++y){
                 if(grid(x,y).empty()){
                     auto& bounding_rect = grid(x,y).bounding;
-                    //std::cout << "Fill cell " << bounding_rect << std::endl;
 
+                    //Note to self: This is pretty stupid (possible infinite loop)
                     auto r = digit_generator();
+                    while(true){
+                        auto label = r < size_1 ? mnist_dataset.training_labels[r] : mnist_dataset.test_labels[r - size_1];
+
+                        if(label == grid(x, y).value()){
+                            break;
+                        }
+
+                        r = digit_generator();
+                    }
 
                     auto& image = r < size_1 ? mnist_dataset.training_images[r] : mnist_dataset.test_images[r - size_1];
 
@@ -302,8 +311,6 @@ int command_fill(int argc, char** argv, const std::string& command){
 
                     x_start += offset_generator();
                     y_start += offset_generator();
-
-                    //std::cout << "Start painting at " << x_start << "," << y_start << std::endl;
 
                     for(std::size_t xx = 0; xx < 28; ++xx){
                         for(std::size_t yy = 0; yy < 28; ++yy){
