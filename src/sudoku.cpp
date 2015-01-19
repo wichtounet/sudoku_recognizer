@@ -274,76 +274,70 @@ cv::Mat fill_image(const std::string& source, Dataset& mnist_dataset, const std:
     //Pick a random color for the whole sudoku
     const auto& fill_color = colors[color_generator()];
 
-    for(std::size_t x = 0; x < 9; ++x){
-        for(std::size_t y = 0; y < 9; ++y){
-            if(grid(x,y).empty()){
-                auto& bounding_rect = grid(x,y).bounding;
+    for(auto& cell : grid.cells){
+        if(cell.empty()){
+            auto& bounding_rect = cell.bounding;
 
-                //Note to self: This is pretty stupid (theoretical possible infinite loop)
-                auto r = digit_generator();
-                while(true){
-                    auto label = r < size_1 ? mnist_dataset.training_labels[r] : mnist_dataset.test_labels[r - size_1];
+            //Note to self: This is pretty stupid (theoretical possible infinite loop)
+            auto r = digit_generator();
+            while(true){
+                auto label = r < size_1 ? mnist_dataset.training_labels[r] : mnist_dataset.test_labels[r - size_1];
 
-                    if(label == grid(x, y).value()){
-                        break;
-                    }
-
-                    r = digit_generator();
+                if(label == cell.value()){
+                    break;
                 }
 
-                //Get the digit from MNIST
-
-                auto image = r < size_1 ? mnist_dataset.training_images[r] : mnist_dataset.test_images[r - size_1];
-
-                cv::Mat image_mat(28, 28, CV_8U);
-                for(std::size_t xx = 0; xx < 28; ++xx){
-                    for(std::size_t yy = 0; yy < 28; ++yy){
-                        image_mat.at<uchar>(cv::Point(xx, yy)) = image[yy * 28 + xx];
-                    }
-                }
-
-                //Center the digit inside the cell
-
-                auto x_start = bounding_rect.x + (bounding_rect.width - 28) / 2;
-                auto y_start = bounding_rect.y + (bounding_rect.height - 28) / 2;
-
-                x_start += offset_generator();
-                y_start += offset_generator();
-
-                //Apply reverse ratio
-                if(resized){
-                    cv::Mat resized;
-                    cv::resize(image_mat, resized, cv::Size(), 0.9 * (1.0 / w_ratio), 0.9 * (1.0 / h_ratio), CV_INTER_CUBIC);
-                    image_mat = resized;
-
-                    x_start *= (1.0 / w_ratio);
-                    y_start *= (1.0 / h_ratio);
-                }
-
-                //Draw the digit
-
-                for(int xx = 0; xx < image_mat.size().width; ++xx){
-                    for(int yy = 0; yy < image_mat.size().height; ++yy){
-                        auto mnist_color = image_mat.at<uchar>(cv::Point(xx, yy));
-
-                        if(mnist_color > 40){
-                            auto final_x = xx + x_start;
-                            auto final_y = yy + y_start;
-
-                            auto& color = dest_image.at<cv::Vec3b>(cv::Point(final_x, final_y));
-
-                            auto ratio = mnist_color / 255.0;
-
-                            adapt_color(ratio, color[0], fill_color[0]);
-                            adapt_color(ratio, color[1], fill_color[1]);
-                            adapt_color(ratio, color[2], fill_color[2]);
-                        }
-                    }
-                }
-
-                cv::Rect mnist_rect(x_start, y_start, 28, 28);
-                cv::GaussianBlur(dest_image(mnist_rect), dest_image(mnist_rect), cv::Size(0,0), 1);
+                r = digit_generator();
             }
+
+            //Get the digit from MNIST
+
+            auto image = r < size_1 ? mnist_dataset.training_images[r] : mnist_dataset.test_images[r - size_1];
+
+            cv::Mat image_mat(28, 28, CV_8U);
+            for(std::size_t xx = 0; xx < 28; ++xx){
+                for(std::size_t yy = 0; yy < 28; ++yy){
+                    image_mat.at<uchar>(cv::Point(xx, yy)) = image[yy * 28 + xx];
+                }
+            }
+
+            //Center the digit inside the cell (plus some random offsets)
+
+            auto x_start = offset_generator() + bounding_rect.x + (bounding_rect.width - 28) / 2;
+            auto y_start = offset_generator() + bounding_rect.y + (bounding_rect.height - 28) / 2;
+
+            //Apply reverse ratio
+            if(resized){
+                cv::Mat resized;
+                cv::resize(image_mat, resized, cv::Size(), 0.9 * (1.0 / w_ratio), 0.9 * (1.0 / h_ratio), CV_INTER_CUBIC);
+                image_mat = resized;
+
+                x_start *= (1.0 / w_ratio);
+                y_start *= (1.0 / h_ratio);
+            }
+
+            //Draw the digit
+
+            for(int xx = 0; xx < image_mat.size().width; ++xx){
+                for(int yy = 0; yy < image_mat.size().height; ++yy){
+                    auto mnist_color = image_mat.at<uchar>(cv::Point(xx, yy));
+
+                    if(mnist_color > 40){
+                        auto& color = dest_image.at<cv::Vec3b>(cv::Point(xx + x_start, yy + y_start));
+
+                        auto ratio = mnist_color / 255.0;
+
+                        adapt_color(ratio, color[0], fill_color[0]);
+                        adapt_color(ratio, color[1], fill_color[1]);
+                        adapt_color(ratio, color[2], fill_color[2]);
+                    }
+                }
+            }
+
+            //Apply a light blur on the drawed digit
+
+            cv::Rect mnist_rect(x_start, y_start, image_mat.size().width, image_mat.size().height);
+            cv::GaussianBlur(dest_image(mnist_rect), dest_image(mnist_rect), cv::Size(0,0), 1);
         }
     }
 
@@ -363,6 +357,8 @@ int command_fill(int argc, char** argv, const std::string& command){
         std::cout << "Usage: sudoku fill <image>..." << std::endl;
         return -1;
     }
+
+    //Create colors for the generation
 
     std::vector<cv::Vec3b> colors;
     colors.emplace_back(25, 25, 25);
