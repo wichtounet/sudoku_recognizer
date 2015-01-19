@@ -26,6 +26,10 @@
 
 namespace {
 
+constexpr const std::size_t size_1 = 60000;
+constexpr const std::size_t size_2 = 10000;
+constexpr const std::size_t n_colors = 6;
+
 vector<double> mat_to_image(const cv::Mat& mat){
     vector<double> image(CELL_SIZE * CELL_SIZE);
 
@@ -201,25 +205,22 @@ int command_detect(int argc, char** argv, const std::string& command){
 }
 
 template<typename Dataset>
-cv::Mat fill_image(const std::string& image_source_path, Dataset& mnist_dataset, const std::vector<cv::Vec3b>& colors, bool write){
-    auto size_1 = mnist_dataset.training_images.size();
-    auto size_2 = mnist_dataset.test_images.size();
+cv::Mat fill_image(const std::string& source, Dataset& mnist_dataset, const std::vector<cv::Vec3b>& colors, bool write){
+    static std::random_device rd{};
+    static std::default_random_engine rand_engine{rd()};
 
-    static std::random_device rd;
-    static std::default_random_engine rand_engine(rd());
+    static std::uniform_int_distribution<std::size_t> digit_distribution(0, size_1 + size_2);
+    static std::uniform_int_distribution<int> offset_distribution(-3, 3);
+    static std::uniform_int_distribution<std::size_t> color_distribution(0, n_colors - 1);
 
-    std::uniform_int_distribution<std::size_t> digit_distribution(0, size_1 + size_2);
-    std::uniform_int_distribution<int> offset_distribution(-3, 3);
-    std::uniform_int_distribution<std::size_t> color_distribution(0, colors.size() - 1);
+    static auto digit_generator = std::bind(digit_distribution, rand_engine);
+    static auto offset_generator = std::bind(offset_distribution, rand_engine);
+    static auto color_generator = std::bind(color_distribution, rand_engine);
 
-    auto digit_generator = std::bind(digit_distribution, rand_engine);
-    auto offset_generator = std::bind(offset_distribution, rand_engine);
-    auto color_generator = std::bind(color_distribution, rand_engine);
+    std::cout << "Process image " << source << std::endl;
 
-    std::cout << "Process image" << std::endl;
-
-    auto source_image = open_image(image_source_path);
-    auto original_image = open_image(image_source_path, false);
+    auto source_image = open_image(source);
+    auto original_image = open_image(source, false);
 
     if (!source_image.data || !original_image.data){
         std::cout << "Invalid source_image" << std::endl;
@@ -241,7 +242,7 @@ cv::Mat fill_image(const std::string& image_source_path, Dataset& mnist_dataset,
 
     //We use the ground truth to complete/fix the detection pass
 
-    auto data = read_data(image_source_path);
+    auto data = read_data(source);
 
     for(size_t i = 0; i < 9; ++i){
         for(size_t j = 0; j < 9; ++j){
@@ -329,9 +330,9 @@ cv::Mat fill_image(const std::string& image_source_path, Dataset& mnist_dataset,
     }
 
     if(write){
-        std::string image_dest_path(image_source_path);
-        image_dest_path.insert(image_dest_path.rfind('.'), ".mixed");
-        imwrite(image_dest_path.c_str(), dest_image);
+        std::string dest(source);
+        dest.insert(dest.rfind('.'), ".mixed");
+        imwrite(dest.c_str(), dest_image);
     }
 
     return dest_image;
@@ -359,6 +360,16 @@ int command_fill(int argc, char** argv, const std::string& command){
         return -1;
     }
 
+    if(mnist_dataset.training_images.size() != size_1 || mnist_dataset.test_images.size() != size_2){
+        std::cout << "Constants size_1 and size_2 need to be updated!" << std::endl;
+        return -1;
+    }
+
+    if(colors.size() != n_colors){
+        std::cout << "Constant n_colors needs to be updated!" << std::endl;
+        return -1;
+    }
+
     //mnist::binarize(mnist_dataset);
 
     if(argc == 3 && command != "fill_save"){
@@ -373,8 +384,6 @@ int command_fill(int argc, char** argv, const std::string& command){
     } else {
         for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
             std::string image_source_path(argv[i]);
-
-            std::cout << image_source_path << std::endl;
 
             fill_image(image_source_path, mnist_dataset, colors, true);
         }
