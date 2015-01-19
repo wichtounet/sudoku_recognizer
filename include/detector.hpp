@@ -21,9 +21,19 @@ struct sudoku_cell {
     bool m_empty = true;
     cv::Mat final_mat;
     cv::Rect bounding;
+    uint8_t m_value = 0;
+    uint8_t m_solved_value = 0;
 
     bool empty(){
         return m_empty;
+    }
+
+    uint8_t value(){
+        return m_value;
+    }
+
+    uint8_t solved_value(){
+        return m_solved_value;
     }
 };
 
