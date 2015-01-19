@@ -229,6 +229,12 @@ cv::Mat fill_image(const std::string& source, Dataset& mnist_dataset, const std:
 
     cv::Mat dest_image = original_image.clone();
 
+    //Detect if image was resized
+
+    bool resized = source_image.size() != original_image.size();
+    auto w_ratio = static_cast<double>(source_image.size().width) / original_image.size().width;
+    auto h_ratio = static_cast<double>(source_image.size().height) / original_image.size().height;
+
     //Detect the grid/cells
 
     cv::Mat detect_dest_image;
@@ -257,9 +263,13 @@ cv::Mat fill_image(const std::string& source, Dataset& mnist_dataset, const std:
         solve_random(grid);
     }
 
-    bool resized = source_image.size() != original_image.size();
-    auto w_ratio = static_cast<double>(source_image.size().width) / original_image.size().width;
-    auto h_ratio = static_cast<double>(source_image.size().height) / original_image.size().height;
+    //Update the ground truth
+
+    for(size_t i = 0; i < 9; ++i){
+        for(size_t j = 0; j < 9; ++j){
+            data.results[j][i] = grid(i, j).value();
+        }
+    }
 
     //Pick a random color for the whole sudoku
     const auto& fill_color = colors[color_generator()];
@@ -341,6 +351,8 @@ cv::Mat fill_image(const std::string& source, Dataset& mnist_dataset, const std:
         std::string dest(source);
         dest.insert(dest.rfind('.'), ".mixed");
         imwrite(dest.c_str(), dest_image);
+
+        write_data(dest, data);
     }
 
     return dest_image;

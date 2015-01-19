@@ -29,3 +29,24 @@ gt_data read_data(const std::string& image_source_path){
 
     return data;
 }
+
+void write_data(const std::string& image_source_path, const gt_data& data){
+    std::string data_source_path(image_source_path);
+    data_source_path.replace(data_source_path.end() - 3, data_source_path.end(), "dat");
+
+    std::ofstream os(data_source_path);
+
+    os << data.phone_type << "\n";
+    os << data.image_type << "\n";
+
+    for(size_t i = 0; i < 9; ++i){
+        for(size_t j = 0; j < 9; ++j){
+            os << static_cast<std::size_t>(data.results[i][j]);
+
+            if(j < 8){
+                os << " ";
+            }
+        }
+        os << "\n";
+    }
+}

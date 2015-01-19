@@ -17,5 +17,6 @@ struct gt_data {
 };
 
 gt_data read_data(const std::string& path);
+void write_data(const std::string& path, const gt_data& data);
 
 #endif
