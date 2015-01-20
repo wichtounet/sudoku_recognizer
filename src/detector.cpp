@@ -1020,6 +1020,8 @@ sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::v
                     //Binarize again because resize goes back to GRAY
                     cell_binarize(big_square, cell_mat);
 
+                    cell.digit_bounding = big_rect;
+
                     if(SHOW_CHAR_CELLS){
                         cv::rectangle(dest_image, big_rect, cv::Scalar(255, 0, 0), 2);
                     }

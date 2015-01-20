@@ -21,6 +21,7 @@ struct sudoku_cell {
     bool m_empty = true;
     cv::Mat final_mat;
     cv::Rect bounding;
+    cv::Rect digit_bounding;
     uint8_t m_value = 0;
 
     bool empty() const {

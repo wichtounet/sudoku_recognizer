@@ -294,6 +294,34 @@ cv::Mat fill_image(const std::string& source, Dataset& mnist_dataset, const std:
     //Pick a random color for the whole sudoku
     const auto& fill_color = colors[color_generator()];
 
+    //double avg_width = 0.0;
+    //double avg_height = 0.0;
+    //std::size_t avg_cnt = 0;
+
+    //for(auto& cell : grid.cells){
+        //if(!cell.empty()){
+            //avg_width += cell.digit_bounding.width;
+            //avg_height += cell.digit_bounding.height;
+            //++avg_cnt;
+        //}
+    //}
+
+    //avg_width /= avg_cnt;
+    //avg_height /= avg_cnt;
+
+    //auto max_avg = 0.9 * std::max(avg_width, avg_height);
+
+    //if(max_avg > 28.0){
+        //if(resized){
+            //w_ratio *= (28.0 / max_avg);
+            //h_ratio *= (28.0 / max_avg);
+        //} else {
+            //w_ratio = (28.0 / max_avg);
+            //h_ratio = (28.0 / max_avg);
+            //resized = true;
+        //}
+    //}
+
     for(auto& cell : grid.cells){
         if(cell.empty()){
             auto& bounding_rect = cell.bounding;
@@ -329,7 +357,7 @@ cv::Mat fill_image(const std::string& source, Dataset& mnist_dataset, const std:
             //Apply reverse ratio
             if(resized){
                 cv::Mat resized;
-                cv::resize(image_mat, resized, cv::Size(), 0.9 * (1.0 / w_ratio), 0.9 * (1.0 / h_ratio), CV_INTER_CUBIC);
+                cv::resize(image_mat, resized, cv::Size(), 1.0 / w_ratio, 1.0 / h_ratio, CV_INTER_CUBIC);
                 image_mat = resized;
 
                 x_start *= (1.0 / w_ratio);
