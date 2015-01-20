@@ -953,7 +953,7 @@ int main(int argc, char** argv){
 
     std::string command(argv[1]);
 
-    if(command == "detect" || command == "detect_save" || command == "detect_mixed" || command == "detect_save_mixed"){
+    if(command == "detect" || command == "detect_save" || command == "detect_mixed" || command == "detect_mixed_save"){
         return command_detect(argc, argv, command);
     } else if(command == "fill" || command == "fill_save"){
         return command_fill(argc, argv, command);
