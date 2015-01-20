@@ -913,39 +913,41 @@ sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::v
 
         IF_DEBUG std::cout << candidates.size() << " merged candidates found" << std::endl;
 
-        candidates.erase(std::remove_if(candidates.begin(), candidates.end(), [&rect_image_clean,height,width](auto rect){
-            ensure_inside(rect_image_clean, rect);
+        if(!(mixed && candidates.size() == 1)){
+            candidates.erase(std::remove_if(candidates.begin(), candidates.end(), [&rect_image_clean,height,width](auto rect){
+                ensure_inside(rect_image_clean, rect);
 
-            auto dim = std::max(rect.width, rect.height);
-            cv::Mat tmp_rect(rect_image_clean, rect);
-            cv::Mat tmp_square(cv::Size(dim, dim), tmp_rect.type());
-            tmp_square = cv::Scalar(255,255,255);
-            tmp_rect.copyTo(tmp_square(cv::Rect((dim - rect.width) / 2, (dim - rect.height) / 2, rect.width, rect.height)));
+                auto dim = std::max(rect.width, rect.height);
+                cv::Mat tmp_rect(rect_image_clean, rect);
+                cv::Mat tmp_square(cv::Size(dim, dim), tmp_rect.type());
+                tmp_square = cv::Scalar(255,255,255);
+                tmp_rect.copyTo(tmp_square(cv::Rect((dim - rect.width) / 2, (dim - rect.height) / 2, rect.width, rect.height)));
 
-            if(fill_factor(tmp_square) > 0.95f){
-                return true;
-            }
-
-            if(rect.height < 10 || rect.width < 5 || rect.height > height || rect.width > width){
-                return true;
-            }
-
-            //Horizontal
-            if(rect.width > 1.5 * rect.height){
-                if(rect.y < 5 || rect.y + rect.height > rect_image_clean.rows - 5){
+                if(fill_factor(tmp_square) > 0.95f){
                     return true;
                 }
-            }
 
-            //Vertical
-            if(rect.height > 2.0 * rect.width && rect.width < 8){
-                if(rect.x < 5 || rect.x + rect.width > rect_image_clean.cols - 5){
+                if(rect.height < 10 || rect.width < 5 || rect.height > height || rect.width > width){
                     return true;
                 }
-            }
 
-            return false;
-        }), candidates.end());
+                //Horizontal
+                if(rect.width > 1.5 * rect.height){
+                    if(rect.y < 5 || rect.y + rect.height > rect_image_clean.rows - 5){
+                        return true;
+                    }
+                }
+
+                //Vertical
+                if(rect.height > 2.0 * rect.width && rect.width < 8){
+                    if(rect.x < 5 || rect.x + rect.width > rect_image_clean.cols - 5){
+                        return true;
+                    }
+                }
+
+                return false;
+            }), candidates.end());
+        }
 
         IF_DEBUG std::cout << candidates.size() << " filtered bounding rect found" << std::endl;
 
@@ -970,7 +972,7 @@ sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::v
             rect.y += 1;
             rect.height += 2;
 
-            ensure_inside(rect_image, rect);
+            ensure_inside(rect_image_clean, rect);
 
             IF_DEBUG std::cout << "Final rect " << rect << std::endl;
 
