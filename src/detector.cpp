@@ -20,7 +20,7 @@
 
 namespace {
 
-constexpr const bool DEBUG = false;
+constexpr const bool DEBUG = true;
 
 constexpr const bool SHOW_LINE_SEGMENTS = false;
 constexpr const bool SHOW_MERGED_LINE_SEGMENTS = false;
@@ -393,7 +393,7 @@ std::vector<cv::Point2f> to_float_points(const std::vector<cv::Point>& vec){
 
 } //end of anonymous namespace
 
-std::vector<line_t> detect_lines(const cv::Mat& source_image, cv::Mat& dest_image){
+std::vector<line_t> detect_lines(const cv::Mat& source_image, cv::Mat& dest_image, bool mixed){
     cv::Mat binary_image;
     sudoku_binarize(source_image, binary_image);
 
@@ -747,7 +747,7 @@ std::vector<line_t> detect_lines_binary(const cv::Mat& binary_image, cv::Mat& de
     return final_lines;
 }
 
-std::vector<cv::Rect> detect_grid(const cv::Mat& source_image, cv::Mat& dest_image, std::vector<line_t>& lines){
+std::vector<cv::Rect> detect_grid(const cv::Mat& source_image, cv::Mat& dest_image, std::vector<line_t>& lines, bool mixed){
     if(lines.empty()){
         return {};
     }
@@ -806,7 +806,7 @@ std::vector<cv::Rect> detect_grid(const cv::Mat& source_image, cv::Mat& dest_ima
     }
 }
 
-sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::vector<cv::Rect>& cells, std::vector<line_t>& lines){
+sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::vector<cv::Rect>& cells, std::vector<line_t>& lines, bool mixed){
     sudoku_grid grid;
     grid.source_image = source_image.clone(); //TODO constructor
 
@@ -947,7 +947,7 @@ sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::v
             return false;
         }), candidates.end());
 
-        IF_DEBUG std::cout << candidates.size() << " filtered  bounding rect found" << std::endl;
+        IF_DEBUG std::cout << candidates.size() << " filtered bounding rect found" << std::endl;
 
         std::size_t max_i = 0;
         decltype(bounding.area()) max = 0;
@@ -962,7 +962,7 @@ sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::v
             }
         }
 
-        if(max > 100){
+        if(max > 100 || (mixed && candidates.size() == 1)){
             auto& rect = candidates[max_i];
 
             rect.x -= 2;
@@ -1051,12 +1051,12 @@ sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::v
     return grid;
 }
 
-sudoku_grid detect(const cv::Mat& source_image, cv::Mat& dest_image){
+sudoku_grid detect(const cv::Mat& source_image, cv::Mat& dest_image, bool mixed){
     dest_image = source_image.clone();
 
-    auto lines = detect_lines(source_image, dest_image);
-    auto cells = detect_grid(source_image, dest_image, lines);
-    return split(source_image, dest_image, cells, lines);
+    auto lines = detect_lines(source_image, dest_image, mixed);
+    auto cells = detect_grid(source_image, dest_image, lines, mixed);
+    return split(source_image, dest_image, cells, lines, mixed);
 }
 
 sudoku_grid detect_binary(const cv::Mat& source_image, cv::Mat& dest_image){

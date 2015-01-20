@@ -157,10 +157,21 @@ void adapt_color(double ratio, Color& orig, const Color& blend){
     //}
 }
 
-int command_detect(int argc, char** argv, const std::string& command){
+int command_detect(int argc, char** argv, const std::string& str_command){
     if(argc < 3){
         std::cout << "Usage: sudoku detect <image>..." << std::endl;
         return -1;
+    }
+
+    bool mixed = false;
+
+    std::string command{str_command};
+    if(command == "detect_mixed"){
+        mixed = true;
+        command = "detect";
+    } else if(command == "detect_mixed_save"){
+        mixed = true;
+        command = "detect_save";
     }
 
     if(argc == 3 && command != "detect_save"){
@@ -174,7 +185,7 @@ int command_detect(int argc, char** argv, const std::string& command){
         }
 
         cv::Mat dest_image;
-        detect(source_image, dest_image);
+        detect(source_image, dest_image, mixed);
 
         cv::namedWindow("Sudoku Grid", cv::WINDOW_AUTOSIZE);
         cv::imshow("Sudoku Grid", dest_image);
@@ -194,7 +205,7 @@ int command_detect(int argc, char** argv, const std::string& command){
             }
 
             cv::Mat dest_image;
-            detect(source_image, dest_image);
+            detect(source_image, dest_image, mixed);
 
             image_source_path.insert(image_source_path.rfind('.'), ".lines");
             imwrite(image_source_path.c_str(), dest_image);
@@ -942,7 +953,7 @@ int main(int argc, char** argv){
 
     std::string command(argv[1]);
 
-    if(command == "detect" || command == "detect_save"){
+    if(command == "detect" || command == "detect_save" || command == "detect_mixed" || command == "detect_save_mixed"){
         return command_detect(argc, argv, command);
     } else if(command == "fill" || command == "fill_save"){
         return command_fill(argc, argv, command);

@@ -55,12 +55,12 @@ struct sudoku_grid {
 
 std::ostream& operator<<(std::ostream& os, const sudoku_grid& grid);
 
-std::vector<line_t> detect_lines(const cv::Mat& source_image, cv::Mat& dest_image);
+std::vector<line_t> detect_lines(const cv::Mat& source_image, cv::Mat& dest_image, bool mixed = false);
 std::vector<line_t> detect_lines_binary(const cv::Mat& source_image, cv::Mat& dest_image);
-std::vector<cv::Rect> detect_grid(const cv::Mat& source_image, cv::Mat& dest_image, std::vector<line_t>& lines);
-sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::vector<cv::Rect>& cells, std::vector<line_t>& lines);
+std::vector<cv::Rect> detect_grid(const cv::Mat& source_image, cv::Mat& dest_image, std::vector<line_t>& lines, bool mixed = false);
+sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::vector<cv::Rect>& cells, std::vector<line_t>& lines, bool mixed = false);
 
-sudoku_grid detect(const cv::Mat& source_image, cv::Mat& dest_image);
+sudoku_grid detect(const cv::Mat& source_image, cv::Mat& dest_image, bool mixed = false);
 sudoku_grid detect_binary(const cv::Mat& source_image, cv::Mat& dest_image);
 
 #endif
