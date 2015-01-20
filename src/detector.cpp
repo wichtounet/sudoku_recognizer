@@ -33,7 +33,7 @@ constexpr const bool SHOW_HULL = false;
 constexpr const bool SHOW_HULL_FILL = false;
 constexpr const bool SHOW_TL_BR = false;
 constexpr const bool SHOW_CELLS = true;
-constexpr const bool SHOW_GRID_NUMBERS= true;
+constexpr const bool SHOW_GRID_NUMBERS= false;
 constexpr const bool SHOW_CHAR_CELLS = true;
 constexpr const bool SHOW_REGRID = false;
 
@@ -862,41 +862,26 @@ sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::v
         std::vector<std::vector<cv::Point>> contours;
         std::vector<cv::Vec4i> hierarchy;
 
-        //if(mixed){
-            //cv::Mat rect_image(source_image, bounding);
-            ////cv::cvtColor(rect_image, rect_image, CV_RGB2GRAY);
-            ////cv::blur(rect_image, rect_image, cv::Size(3,3));
-            //cv::Mat rect_image_binary = rect_image.clone();
-            //sudoku_binarize(rect_image, rect_image_binary);
+        if(mixed){
+            cv::Mat rect_image(source_image, bounding);
+            cv::Mat rect_image_gray = rect_image.clone();
+            cv::cvtColor(rect_image, rect_image_gray, CV_RGB2GRAY);
+            cv::Mat rect_image_binary = rect_image_gray.clone();
+            cell_binarize(rect_image_gray, rect_image_binary);
 
-            //cv::Canny(rect_image_binary, rect_image_binary, 4, 12);
+            cv::Canny(rect_image_binary, rect_image_binary, 4, 12);
 
-            //cv::findContours(rect_image_binary, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, cv::Point(0,0));
-        //} else {
+            cv::findContours(rect_image_binary, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, cv::Point(0,0));
+        } else {
             cv::Mat rect_image = rect_image_clean.clone();
 
             cv::Canny(rect_image, rect_image, 4, 12);
 
             cv::findContours(rect_image, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, cv::Point(0,0));
-        //}
-
-            //cv::RNG rng(666);
-        //if(n+1 == 76){
-            //for( int i = 0; i< contours.size(); i++ )
-            //{
-                //auto mu = cv::moments(contours[i], false);
-                //cv::Point2f mc(mu.m10 / mu.m00, mu.m01 / mu.m00);
-
-                //if(!(std::isnan(mc.x) || std::isnan(mc.y))){
-                //}
-            //}
-        //}
+        }
 
         IF_DEBUG std::cout << "n=" << (n+1) << std::endl;
         IF_DEBUG std::cout << contours.size() << " contours found" << std::endl;
-
-        auto width = bounding.width * 0.75f;
-        auto height = bounding.height * 0.75f;
 
         std::vector<cv::Rect> candidates;
 
@@ -904,36 +889,50 @@ sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::v
         for(std::size_t i = 0; i < contours.size(); ++i){
             auto rect = cv::boundingRect(contours[i]);
 
-            //if(mixed){
-                //auto mu = cv::moments(contours[i], true);
-                //cv::Point2f mc(mu.m10 / mu.m00, mu.m01 / mu.m00);
+            //Avoid duplicates
+            if(std::find(candidates.begin(), candidates.end(), rect) != candidates.end()){
+                continue;
+            }
 
-                //std::cout << mc << std::endl;
-
-                //if(std::isnan(mc.x) || std::isnan(mc.y)){
-                    //continue;
-                //}
-
-                //if(mc.x < 10 || mc.y < 10){
-                    //continue;
-                //}
-
-                //if(mc.x > bounding.width - 10 || mc.y > bounding.height - 10){
-                    //continue;
-                //}
-
-                //cv::Scalar color = cv::Scalar( rng.uniform(0, 255), rng.uniform(0,255), rng.uniform(0,255) );
-                //cv::drawContours( dest_image(bounding), contours, i, color, 2, 8, hierarchy, 0, cv::Point() );
-
-                //candidates.push_back(rect);
-            //} else {
-                if(rect.height <= height && rect.width <= width && std::find(candidates.begin(), candidates.end(), rect) == candidates.end()){
-                    candidates.push_back(rect);
+            if(mixed){
+                if(rect.width > 0.8 * bounding.width || rect.height > 0.8 * bounding.height){
+                    continue;
                 }
-            //}
+
+                //Ideally this should be performed with cv::Moments and mass center computation
+                //Unfortunately, it does not seem to work (lots of NaN)
+                cv::Point2f mc(rect.x + rect.width / 2.0, rect.y + rect.height / 2.0);
+
+                if(mc.x < 10 || mc.y < 10){
+                    continue;
+                }
+
+                if(mc.x > bounding.width - 10 || mc.y > bounding.height - 10){
+                    continue;
+                }
+
+                //Ideally this should be computed with contourArea
+                //Unfortunately, it does not seem to work very well with complex contours
+                std::vector<cv::Point> hull;
+                cv::convexHull(contours[i], hull, false);
+                auto area = cv::contourArea(hull);
+
+                if(area < 12.0){
+                    continue;
+                }
+            } else {
+                if(rect.width > 0.75 * bounding.width || rect.height > 0.75 * bounding.height){
+                    continue;
+                }
+            }
+
+            candidates.push_back(rect);
         }
 
         IF_DEBUG std::cout << candidates.size() << " filtered candidates found" << std::endl;
+
+        auto width = bounding.width * 0.75f;
+        auto height = bounding.height * 0.75f;
 
         bool merged;
         do {
@@ -968,7 +967,7 @@ sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::v
         IF_DEBUG std::cout << candidates.size() << " merged candidates found" << std::endl;
 
         if(!(mixed && candidates.size() == 1)){
-            candidates.erase(std::remove_if(candidates.begin(), candidates.end(), [&rect_image_clean,height,width](auto rect){
+            candidates.erase(std::remove_if(candidates.begin(), candidates.end(), [&rect_image_clean,height,width,mixed](auto rect){
                 ensure_inside(rect_image_clean, rect);
 
                 auto dim = std::max(rect.width, rect.height);
@@ -977,7 +976,7 @@ sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::v
                 tmp_square = cv::Scalar(255,255,255);
                 tmp_rect.copyTo(tmp_square(cv::Rect((dim - rect.width) / 2, (dim - rect.height) / 2, rect.width, rect.height)));
 
-                if(fill_factor(tmp_square) > 0.95f){
+                if(!mixed && fill_factor(tmp_square) > 0.95f){
                     return true;
                 }
 
@@ -1048,10 +1047,10 @@ sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::v
 
             IF_DEBUG std::cout << "\tfill_factor=" << fill << std::endl;
 
-            if(fill < 0.95f){
+            if(fill < 0.95f || mixed){
                 auto min_distance = 1000000.0f;
 
-                if(fill > 0.85f){
+                if(fill > 0.85f || mixed){
                     for(auto& line : lines){
                         auto local_distance = 0.0f;
 
@@ -1066,7 +1065,7 @@ sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::v
 
                 IF_DEBUG std::cout << "\tmin_distance=" << min_distance << std::endl;
 
-                if(min_distance >= 50.0f){
+                if(min_distance >= 50.0f || mixed){
                     //Resize the square to the cell size
                     cv::Mat big_square(cv::Size(CELL_SIZE, CELL_SIZE), final_square.type());
                     cv::resize(final_square, big_square, big_square.size(), 0, 0, cv::INTER_CUBIC);
