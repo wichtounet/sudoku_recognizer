@@ -970,11 +970,23 @@ int command_time(int argc, char** argv, const std::string& /*command*/){
     return 0;
 }
 
+void print_usage(){
+    std::cout << "Usage: sudoku <command> file [file...]" << std::endl;
+    std::cout << "Supported commands: " << std::endl;
+    std::cout << " * detect/detect_save" << std::endl;
+    std::cout << " * detect_mixed/detect_mixed_save" << std::endl;
+    std::cout << " * fill/fill_save" << std::endl;
+    std::cout << " * train" << std::endl;
+    std::cout << " * recog" << std::endl;
+    std::cout << " * recog_binary" << std::endl;
+    std::cout << " * time" << std::endl;
+}
+
 } //end of anonymous namespace
 
 int main(int argc, char** argv){
     if(argc < 2){
-        std::cout << "Usage: sudoku <command> <options>" << std::endl;
+        print_usage();
         return -1;
     }
 
@@ -994,7 +1006,7 @@ int main(int argc, char** argv){
         return command_time(argc, argv, command);
     }
 
-    std::cout << "Invalid command \"" << command << "\"" << std::endl;
+    print_usage();
 
     return -1;
 }
