@@ -152,7 +152,7 @@ using dbn_t = dll::dbn_desc<
 using dbn_p = std::unique_ptr<dbn_t>;
 
 template<typename Color>
-void adapt_color(double ratio, Color& orig, const Color& blend){
+void adapt_color(double /*ratio*/, Color& orig, const Color& blend){
     //if(ratio * blend > 25){
         orig = /*ratio * */ blend;
     //}

@@ -397,10 +397,10 @@ std::vector<line_t> detect_lines(const cv::Mat& source_image, cv::Mat& dest_imag
     cv::Mat binary_image;
     sudoku_binarize(source_image, binary_image);
 
-    return detect_lines_binary(binary_image, dest_image);
+    return detect_lines_binary(binary_image, dest_image, mixed);
 }
 
-std::vector<line_t> detect_lines_binary(const cv::Mat& binary_image, cv::Mat& dest_image){
+std::vector<line_t> detect_lines_binary(const cv::Mat& binary_image, cv::Mat& dest_image, bool /*mixed*/){
     std::vector<line_t> final_lines;
 
     //1. Detect lines
@@ -747,7 +747,7 @@ std::vector<line_t> detect_lines_binary(const cv::Mat& binary_image, cv::Mat& de
     return final_lines;
 }
 
-std::vector<cv::Rect> detect_grid(const cv::Mat& source_image, cv::Mat& dest_image, std::vector<line_t>& lines, bool mixed){
+std::vector<cv::Rect> detect_grid(const cv::Mat& source_image, cv::Mat& dest_image, std::vector<line_t>& lines, bool /*mixed*/){
     if(lines.empty()){
         return {};
     }
@@ -1116,10 +1116,10 @@ sudoku_grid detect(const cv::Mat& source_image, cv::Mat& dest_image, bool mixed)
     return split(source_image, dest_image, cells, lines, mixed);
 }
 
-sudoku_grid detect_binary(const cv::Mat& source_image, cv::Mat& dest_image){
+sudoku_grid detect_binary(const cv::Mat& source_image, cv::Mat& dest_image, bool mixed){
     dest_image = source_image.clone();
 
-    auto lines = detect_lines_binary(source_image, dest_image);
+    auto lines = detect_lines_binary(source_image, dest_image, mixed);
     auto cells = detect_grid(source_image, dest_image, lines);
     return split(source_image, dest_image, cells, lines);
 }
