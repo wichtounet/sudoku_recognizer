@@ -12,9 +12,8 @@
 #include "cpp_utils/stop_watch.hpp"
 
 #include "dll/dbn.hpp"
-#include "dll/layer.hpp"
-#include "dll/labels.hpp"
 #include "dll/test.hpp"
+#include "dll/labels.hpp"
 
 #include "mnist/mnist_reader.hpp"
 #include "mnist/mnist_utils.hpp"
@@ -30,8 +29,8 @@ constexpr const std::size_t size_1 = 60000;
 constexpr const std::size_t size_2 = 10000;
 constexpr const std::size_t n_colors = 6;
 
-vector<double> mat_to_image(const cv::Mat& mat){
-    vector<double> image(CELL_SIZE * CELL_SIZE);
+std::vector<double> mat_to_image(const cv::Mat& mat){
+    std::vector<double> image(CELL_SIZE * CELL_SIZE);
 
     assert(mat.rows == CELL_SIZE);
     assert(mat.cols == CELL_SIZE);
@@ -50,7 +49,7 @@ vector<double> mat_to_image(const cv::Mat& mat){
 }
 
 struct dataset {
-    std::vector<vector<double>> training_images;
+    std::vector<std::vector<double>> training_images;
     std::vector<uint8_t> training_labels;
 
     std::vector<std::string> source_files;
@@ -142,11 +141,13 @@ dataset get_dataset(int argc, char** argv, bool quiet = false){
     return ds;
 }
 
-typedef dll::dbn<
-    dll::layer<CELL_SIZE * CELL_SIZE, 300, dll::momentum, dll::batch_size<10>, dll::in_dbn, dll::init_weights>,
-    dll::layer<300, 300, dll::momentum, dll::batch_size<10>, dll::in_dbn>,
-    dll::layer<300, 500, dll::momentum, dll::batch_size<10>, dll::in_dbn>,
-    dll::layer<500, 9, dll::momentum, dll::batch_size<10>, dll::in_dbn, dll::hidden_unit<dll::Type::SOFTMAX>>> dbn_t;
+using dbn_t = dll::dbn_desc<
+    dll::dbn_layers<
+        dll::rbm_desc<CELL_SIZE * CELL_SIZE, 300, dll::momentum, dll::batch_size<10>, dll::init_weights>::rbm_t,
+        dll::rbm_desc<300, 300, dll::momentum, dll::batch_size<10>>::rbm_t,
+        dll::rbm_desc<300, 500, dll::momentum, dll::batch_size<10>>::rbm_t,
+        dll::rbm_desc<500, 9, dll::momentum, dll::batch_size<10>, dll::hidden<dll::unit_type::SOFTMAX>>::rbm_t
+    >>::dbn_t;
 
 using dbn_p = std::unique_ptr<dbn_t>;
 
@@ -462,16 +463,14 @@ int command_train(int argc, char** argv, const std::string& /*command*/){
     std::cout << "Train with " << ds.source_images.size() << " sudokus" << std::endl;
     std::cout << "Train with " << ds.training_images.size() << " cells" << std::endl;
 
-    auto labels = dll::make_fake(ds.training_labels);
-
-    auto dbn = make_unique<dbn_t>();
+    auto dbn = std::make_unique<dbn_t>();
     dbn->display();
 
     std::cout << "Start pretraining" << std::endl;
     dbn->pretrain(ds.training_images, 20);
 
     std::cout << "Start fine-tuning" << std::endl;
-    dbn->fine_tune(ds.training_images, labels, 10, 100);
+    dbn->fine_tune(ds.training_images, ds.training_labels, 10, 100);
 
     std::ofstream os("dbn.dat", std::ofstream::binary);
     dbn->store(os);
@@ -482,7 +481,7 @@ int command_train(int argc, char** argv, const std::string& /*command*/){
 int command_recog(int argc, char** argv, const std::string& command){
     std::string image_source_path(argv[2]);
 
-    auto dbn = make_unique<dbn_t>();
+    auto dbn = std::make_unique<dbn_t>();
 
     std::string dbn_path = "final.dat";
     if(argc > 3){
@@ -588,8 +587,8 @@ int command_recog(int argc, char** argv, const std::string& command){
                 } else {
                     auto& cell_mat = cell.final_mat;
 
-                    auto weights = dbn->predict_weights(mat_to_image(cell_mat));
-                    answer = dbn->predict_final(weights)+1;
+                    auto weights = dbn->activation_probabilities(mat_to_image(cell_mat));
+                    answer = dbn->predict_label(weights)+1;
                     for(std::size_t x = 0; x < weights.size(); ++x){
                         if(answer != x + 1 && weights(x) > 1e-5){
                             next.push_back(std::make_tuple(i * 9 + j, x + 1, weights(x)));
@@ -640,7 +639,7 @@ int command_test(int argc, char** argv, const std::string& /*command*/){
     std::cout << "Test with " << ds.source_images.size() << " sudokus" << std::endl;
     std::cout << "Test with " << ds.training_images.size() << " cells" << std::endl;
 
-    auto dbn = make_unique<dbn_t>();
+    auto dbn = std::make_unique<dbn_t>();
 
     dbn->display();
 
@@ -673,11 +672,11 @@ int command_test(int argc, char** argv, const std::string& /*command*/){
 
                 auto fill = fill_factor(cell_mat);
 
-                auto weights = dbn->predict_weights(mat_to_image(cell_mat));
+                auto weights = dbn->activation_probabilities(mat_to_image(cell_mat));
                 if(fill == 1.0f){
                     answer = 0;
                 } else {
-                    answer = dbn->predict_final(weights)+1;
+                    answer = dbn->predict_label(weights)+1;
                     //std::cout << weights[answer-1] << std::endl;
                     //if(weights[answer-1] < 1e5){
                     //    answer = 0;
@@ -734,7 +733,7 @@ int command_test(int argc, char** argv, const std::string& /*command*/){
 }
 
 int command_time(int argc, char** argv, const std::string& /*command*/){
-        auto dbn = make_unique<dbn_t>();
+        auto dbn = std::make_unique<dbn_t>();
 
         std::ifstream is("dbn.dat", std::ofstream::binary);
         dbn->load(is);
@@ -886,8 +885,8 @@ int command_time(int argc, char** argv, const std::string& /*command*/){
                         if(cell.empty()){
                             answer = 0;
                         } else {
-                            auto weights = dbn->predict_weights(mat_to_image(cell.final_mat));
-                            answer = dbn->predict_final(weights)+1;
+                            auto weights = dbn->activation_probabilities(mat_to_image(cell.final_mat));
+                            answer = dbn->predict_label(weights)+1;
                         }
                     }
                 }
@@ -912,8 +911,8 @@ int command_time(int argc, char** argv, const std::string& /*command*/){
                         if(cell.empty()){
                             answer = 0;
                         } else {
-                            auto weights = dbn->predict_weights(mat_to_image(cell.final_mat));
-                            answer = dbn->predict_final(weights)+1;
+                            auto weights = dbn->activation_probabilities(mat_to_image(cell.final_mat));
+                            answer = dbn->predict_label(weights)+1;
                         }
                     }
                 }
@@ -952,8 +951,8 @@ int command_time(int argc, char** argv, const std::string& /*command*/){
                         if(cell.empty()){
                             answer = 0;
                         } else {
-                            auto weights = dbn->predict_weights(mat_to_image(cell.final_mat));
-                            answer = dbn->predict_final(weights)+1;
+                            auto weights = dbn->activation_probabilities(mat_to_image(cell.final_mat));
+                            answer = dbn->predict_label(weights)+1;
                         }
                     }
                 }
