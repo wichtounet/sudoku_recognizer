@@ -28,8 +28,18 @@
 
 namespace {
 
-constexpr const std::size_t size_1 = 60000;
-constexpr const std::size_t size_2 = 10000;
+struct config {
+    std::vector<std::string> args;
+    std::vector<std::string> files;
+    std::string command;
+    bool subset = false;
+    bool mixed = false;
+    bool quiet = false;
+};
+
+//These constants need to be sync when changing MNIST dataset and the fill colors
+constexpr const std::size_t mnist_size_1 = 60000;
+constexpr const std::size_t mnist_size_2 = 10000;
 constexpr const std::size_t n_colors = 6;
 
 std::vector<double> mat_to_image(const cv::Mat& mat){
@@ -102,13 +112,11 @@ cv::Mat open_image(const std::string& path, bool resize = true){
     return source_image;
 }
 
-dataset get_dataset(int argc, char** argv, bool mixed = false, bool quiet = false){
+dataset get_dataset(const config& conf){
     dataset ds;
 
-    for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
-        std::string image_source_path(argv[i]);
-
-        if(!quiet){
+    for(auto& image_source_path : conf.files){
+        if(!conf.quiet){
             std::cout << image_source_path << std::endl;
         }
 
@@ -122,7 +130,7 @@ dataset get_dataset(int argc, char** argv, bool mixed = false, bool quiet = fals
         auto data = read_data(image_source_path);
 
         cv::Mat dest_image;
-        auto grid = detect(source_image, dest_image, mixed);
+        auto grid = detect(source_image, dest_image, conf.mixed);
 
         for(size_t i = 0; i < 9; ++i){
             for(size_t j = 0; j < 9; ++j){
@@ -168,25 +176,14 @@ void adapt_color(double /*ratio*/, Color& orig, const Color& blend){
     //}
 }
 
-int command_detect(int argc, char** argv, const std::string& str_command){
-    if(argc < 3){
+int command_detect(const config& conf){
+    if(conf.files.empty()){
         std::cout << "Usage: sudoku detect <image>..." << std::endl;
         return -1;
     }
 
-    bool mixed = false;
-
-    std::string command{str_command};
-    if(command == "detect_mixed"){
-        mixed = true;
-        command = "detect";
-    } else if(command == "detect_mixed_save"){
-        mixed = true;
-        command = "detect_save";
-    }
-
-    if(argc == 3 && command != "detect_save"){
-        std::string image_source_path(argv[2]);
+    if(conf.files.size() == 1 && conf.command != "detect_save"){
+        std::string image_source_path{conf.files.front()};
 
         auto source_image = open_image(image_source_path);
 
@@ -196,16 +193,14 @@ int command_detect(int argc, char** argv, const std::string& str_command){
         }
 
         cv::Mat dest_image;
-        detect(source_image, dest_image, mixed);
+        detect(source_image, dest_image, conf.mixed);
 
         cv::namedWindow("Sudoku Grid", cv::WINDOW_AUTOSIZE);
         cv::imshow("Sudoku Grid", dest_image);
 
         cv::waitKey(0);
     } else {
-        for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
-            std::string image_source_path(argv[i]);
-
+        for(auto image_source_path : conf.files){
             std::cout << image_source_path << std::endl;
 
             auto source_image = open_image(image_source_path);
@@ -216,7 +211,7 @@ int command_detect(int argc, char** argv, const std::string& str_command){
             }
 
             cv::Mat dest_image;
-            detect(source_image, dest_image, mixed);
+            detect(source_image, dest_image, conf.mixed);
 
             image_source_path.insert(image_source_path.rfind('.'), ".lines");
             imwrite(image_source_path.c_str(), dest_image);
@@ -231,7 +226,7 @@ cv::Mat fill_image(const std::string& source, Dataset& mnist_dataset, const std:
     static std::random_device rd{};
     static std::default_random_engine rand_engine{rd()};
 
-    static std::uniform_int_distribution<std::size_t> digit_distribution(0, size_1 + size_2);
+    static std::uniform_int_distribution<std::size_t> digit_distribution(0, mnist_size_1 + mnist_size_2);
     static std::uniform_int_distribution<int> offset_distribution(-3, 3);
     static std::uniform_int_distribution<std::size_t> color_distribution(0, n_colors - 1);
 
@@ -340,7 +335,7 @@ cv::Mat fill_image(const std::string& source, Dataset& mnist_dataset, const std:
             //Note to self: This is pretty stupid (theoretical possible infinite loop)
             auto r = digit_generator();
             while(true){
-                auto label = r < size_1 ? mnist_dataset.training_labels[r] : mnist_dataset.test_labels[r - size_1];
+                auto label = r < mnist_size_1 ? mnist_dataset.training_labels[r] : mnist_dataset.test_labels[r - mnist_size_1];
 
                 if(label == cell.value()){
                     break;
@@ -351,7 +346,7 @@ cv::Mat fill_image(const std::string& source, Dataset& mnist_dataset, const std:
 
             //Get the digit from MNIST
 
-            auto image = r < size_1 ? mnist_dataset.training_images[r] : mnist_dataset.test_images[r - size_1];
+            auto image = r < mnist_size_1 ? mnist_dataset.training_images[r] : mnist_dataset.test_images[r - mnist_size_1];
 
             cv::Mat image_mat(28, 28, CV_8U);
             for(std::size_t xx = 0; xx < 28; ++xx){
@@ -411,8 +406,8 @@ cv::Mat fill_image(const std::string& source, Dataset& mnist_dataset, const std:
     return dest_image;
 }
 
-int command_fill(int argc, char** argv, const std::string& command){
-    if(argc < 3){
+int command_fill(const config& conf){
+    if(conf.files.empty()){
         std::cout << "Usage: sudoku fill <image>..." << std::endl;
         return -1;
     }
@@ -435,8 +430,8 @@ int command_fill(int argc, char** argv, const std::string& command){
         return -1;
     }
 
-    if(mnist_dataset.training_images.size() != size_1 || mnist_dataset.test_images.size() != size_2){
-        std::cout << "Constants size_1 and size_2 need to be updated!" << std::endl;
+    if(mnist_dataset.training_images.size() != mnist_size_1 || mnist_dataset.test_images.size() != mnist_size_2){
+        std::cout << "Constants mnist_size_1 and mnist_size_2 need to be updated!" << std::endl;
         return -1;
     }
 
@@ -447,8 +442,8 @@ int command_fill(int argc, char** argv, const std::string& command){
 
     //mnist::binarize(mnist_dataset);
 
-    if(argc == 3 && command != "fill_save"){
-        std::string image_source_path(argv[2]);
+    if(conf.files.size() == 1 && conf.command != "fill_save"){
+        std::string image_source_path(conf.files.front());
 
         auto dest_image = fill_image(image_source_path, mnist_dataset, colors, false);
 
@@ -457,9 +452,7 @@ int command_fill(int argc, char** argv, const std::string& command){
 
         cv::waitKey(0);
     } else {
-        for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
-            std::string image_source_path(argv[i]);
-
+        for(auto& image_source_path : conf.files){
             fill_image(image_source_path, mnist_dataset, colors, true);
         }
     }
@@ -467,24 +460,20 @@ int command_fill(int argc, char** argv, const std::string& command){
     return 0;
 }
 
-int command_train(int argc, char** argv, const std::string& str_command){
-    bool mixed = str_command == "train_mixed";
-
-    auto ds = get_dataset(argc, argv, mixed);
+int command_train(const config& conf){
+    auto ds = get_dataset(conf);
 
     std::cout << "Train with " << ds.source_images.size() << " sudokus" << std::endl;
     std::cout << "Train with " << ds.training_images.size() << " cells" << std::endl;
 
-    if(mixed){
+    if(conf.mixed){
         auto dbn = std::make_unique<mixed_dbn_t>();
         dbn->display();
 
         std::cout << "Start pretraining" << std::endl;
         dbn->pretrain(ds.training_images, 20);
 
-        auto result = dbn->svm_train(ds.training_images, ds.training_labels);
-
-        std::cout << "SVM training result: " << result << std::endl;
+        dbn->svm_train(ds.training_images, ds.training_labels);
 
         auto test_error = dll::test_set(dbn, ds.training_images, ds.training_labels, dll::svm_predictor());
         std::cout << "training_error:" << test_error << std::endl;
@@ -508,14 +497,14 @@ int command_train(int argc, char** argv, const std::string& str_command){
     return 0;
 }
 
-int command_recog(int argc, char** argv, const std::string& command){
-    std::string image_source_path(argv[2]);
+int command_recog(const config& conf){
+    std::string image_source_path(conf.files.front());
 
     auto dbn = std::make_unique<dbn_t>();
 
     std::string dbn_path = "final.dat";
-    if(argc > 3){
-        dbn_path = argv[3];
+    if(conf.files.size() > 1){
+        dbn_path = conf.files[1];
     }
 
     std::ifstream is(dbn_path, std::ofstream::binary);
@@ -531,7 +520,7 @@ int command_recog(int argc, char** argv, const std::string& command){
 
     sudoku_grid grid;
 
-    if(command == "recog"){
+    if(conf.command == "recog"){
         source_image = open_image(image_source_path);
 
         if (!source_image.data){
@@ -540,7 +529,7 @@ int command_recog(int argc, char** argv, const std::string& command){
         }
 
         grid = detect(source_image, dest_image);
-    } else if(command == "recog_binary"){
+    } else if(conf.command == "recog_binary"){
         std::ifstream is(image_source_path);
 
         std::size_t rows = 0;
@@ -663,8 +652,8 @@ int command_recog(int argc, char** argv, const std::string& command){
     return 0;
 }
 
-int command_test(int argc, char** argv, const std::string& /*command*/){
-    auto ds = get_dataset(argc, argv);
+int command_test(const config& conf){
+    auto ds = get_dataset(conf);
 
     std::cout << "Test with " << ds.source_images.size() << " sudokus" << std::endl;
     std::cout << "Test with " << ds.training_images.size() << " cells" << std::endl;
@@ -762,7 +751,7 @@ int command_test(int argc, char** argv, const std::string& /*command*/){
     return 0;
 }
 
-int command_time(int argc, char** argv, const std::string& /*command*/){
+int command_time(const config& conf){
         auto dbn = std::make_unique<dbn_t>();
 
         std::ifstream is("dbn.dat", std::ofstream::binary);
@@ -773,14 +762,12 @@ int command_time(int argc, char** argv, const std::string& /*command*/){
 
             std::vector<double> il_sum;
 
-            for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
-                std::string image_source_path(argv[i]);
+            for(auto& image_source_path : conf.files){
                 open_image(image_source_path);
             }
 
-            for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
+            for(auto& image_source_path : conf.files){
                 cpp::stop_watch<std::chrono::microseconds> il_watch;
-                std::string image_source_path(argv[i]);
 
                 open_image(image_source_path);
 
@@ -799,15 +786,13 @@ int command_time(int argc, char** argv, const std::string& /*command*/){
 
             std::vector<double> ld_sum;
 
-            for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
-                std::string image_source_path(argv[i]);
+            for(auto& image_source_path : conf.files){
                 auto source_image = open_image(image_source_path);
                 auto dest_image = source_image.clone();
                 detect_lines(source_image, dest_image);
             }
 
-            for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
-                std::string image_source_path(argv[i]);
+            for(auto& image_source_path : conf.files){
                 auto source_image = open_image(image_source_path);
 
                 cpp::stop_watch<std::chrono::microseconds> ld_watch;
@@ -830,16 +815,14 @@ int command_time(int argc, char** argv, const std::string& /*command*/){
 
             std::vector<double> gd_sum;
 
-            for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
-                std::string image_source_path(argv[i]);
+            for(auto& image_source_path : conf.files){
                 auto source_image = open_image(image_source_path);
                 auto dest_image = source_image.clone();
                 auto lines = detect_lines(source_image, dest_image);
                 detect_grid(source_image, dest_image, lines);
             }
 
-            for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
-                std::string image_source_path(argv[i]);
+            for(auto& image_source_path : conf.files){
                 auto source_image = open_image(image_source_path);
                 auto dest_image = source_image.clone();
                 auto lines = detect_lines(source_image, dest_image);
@@ -863,8 +846,7 @@ int command_time(int argc, char** argv, const std::string& /*command*/){
 
             std::vector<double> dd_sum;
 
-            for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
-                std::string image_source_path(argv[i]);
+            for(auto& image_source_path : conf.files){
                 auto source_image = open_image(image_source_path);
                 auto dest_image = source_image.clone();
                 auto lines = detect_lines(source_image, dest_image);
@@ -872,8 +854,7 @@ int command_time(int argc, char** argv, const std::string& /*command*/){
                 split(source_image, dest_image, cells, lines);
             }
 
-            for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
-                std::string image_source_path(argv[i]);
+            for(auto& image_source_path : conf.files){
                 auto source_image = open_image(image_source_path);
                 auto dest_image = source_image.clone();
                 auto lines = detect_lines(source_image, dest_image);
@@ -898,8 +879,7 @@ int command_time(int argc, char** argv, const std::string& /*command*/){
 
             std::vector<double> dr_sum;
 
-            for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
-                std::string image_source_path(argv[i]);
+            for(auto& image_source_path : conf.files){
                 auto source_image = open_image(image_source_path);
                 auto dest_image = source_image.clone();
                 auto lines = detect_lines(source_image, dest_image);
@@ -922,8 +902,7 @@ int command_time(int argc, char** argv, const std::string& /*command*/){
                 }
             }
 
-            for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
-                std::string image_source_path(argv[i]);
+            for(auto& image_source_path : conf.files){
                 auto source_image = open_image(image_source_path);
                 auto dest_image = source_image.clone();
                 auto lines = detect_lines(source_image, dest_image);
@@ -962,10 +941,9 @@ int command_time(int argc, char** argv, const std::string& /*command*/){
 
             std::vector<double> tot_sum;
 
-            for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
+            for(auto& image_source_path : conf.files){
                 cpp::stop_watch<std::chrono::microseconds> tot_watch;
 
-                std::string image_source_path(argv[i]);
                 auto source_image = open_image(image_source_path);
                 auto dest_image = source_image.clone();
                 auto lines = detect_lines(source_image, dest_image);
@@ -1001,15 +979,47 @@ int command_time(int argc, char** argv, const std::string& /*command*/){
 }
 
 void print_usage(){
-    std::cout << "Usage: sudoku <command> file [file...]" << std::endl;
+    std::cout << "Usage: sudoku [options] <command> file [file...]" << std::endl;
     std::cout << "Supported commands: " << std::endl;
     std::cout << " * detect/detect_save" << std::endl;
-    std::cout << " * detect_mixed/detect_mixed_save" << std::endl;
     std::cout << " * fill/fill_save" << std::endl;
     std::cout << " * train" << std::endl;
     std::cout << " * recog" << std::endl;
     std::cout << " * recog_binary" << std::endl;
     std::cout << " * time" << std::endl;
+    std::cout << "Supported options: " << std::endl;
+    std::cout << " -m : Mixed mode" << std::endl;
+    std::cout << " -s : Take only subsets" << std::endl;
+    std::cout << " -q : Quiet mode" << std::endl;
+}
+
+config parse_args(int argc, char** argv){
+    config conf;
+
+    for(std::size_t i = 1; i < static_cast<size_t>(argc); ++i){
+        conf.args.emplace_back(argv[i]);
+    }
+
+    std::size_t i = 0;
+    for(; i < conf.args.size(); ++i){
+        if(conf.args[i] == "-s"){
+            conf.subset = true;
+        } else if(conf.args[i] == "-m"){
+            conf.mixed = true;
+        } else if(conf.args[i] == "-q"){
+            conf.quiet = true;
+        } else {
+            break;
+        }
+    }
+
+    conf.command = conf.args[i++];
+
+    for(; i < conf.args.size(); ++i){
+        conf.files.push_back(conf.args[i]);
+    }
+
+    return conf;
 }
 
 } //end of anonymous namespace
@@ -1020,20 +1030,20 @@ int main(int argc, char** argv){
         return -1;
     }
 
-    std::string command(argv[1]);
+    auto conf = parse_args(argc, argv);
 
-    if(command == "detect" || command == "detect_save" || command == "detect_mixed" || command == "detect_mixed_save"){
-        return command_detect(argc, argv, command);
-    } else if(command == "fill" || command == "fill_save"){
-        return command_fill(argc, argv, command);
-    } else if(command == "train" || command == "train_mixed"){
-        return command_train(argc, argv, command);
-    } else if(command == "recog" || command == "recog_binary"){
-        return command_recog(argc, argv, command);
-    } else if(command == "test"){
-        return command_test(argc, argv, command);
-    } else if(command == "time"){
-        return command_time(argc, argv, command);
+    if(conf.command == "detect" || conf.command == "detect_save"){
+        return command_detect(conf);
+    } else if(conf.command == "fill" || conf.command == "fill_save"){
+        return command_fill(conf);
+    } else if(conf.command == "train"){
+        return command_train(conf);
+    } else if(conf.command == "recog" || conf.command == "recog_binary"){
+        return command_recog(conf);
+    } else if(conf.command == "test"){
+        return command_test(conf);
+    } else if(conf.command == "time"){
+        return command_time(conf);
     }
 
     print_usage();
