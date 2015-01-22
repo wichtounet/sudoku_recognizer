@@ -11,7 +11,10 @@
 
 #include "cpp_utils/stop_watch.hpp"
 
+#define DLL_SVM_SUPPORT
 #include "dll/dbn.hpp"
+#include "dll/conv_rbm.hpp"
+#include "dll/conv_dbn.hpp"
 #include "dll/test.hpp"
 #include "dll/labels.hpp"
 
@@ -99,7 +102,7 @@ cv::Mat open_image(const std::string& path, bool resize = true){
     return source_image;
 }
 
-dataset get_dataset(int argc, char** argv, bool quiet = false){
+dataset get_dataset(int argc, char** argv, bool mixed = false, bool quiet = false){
     dataset ds;
 
     for(size_t i = 2; i < static_cast<size_t>(argc); ++i){
@@ -119,7 +122,7 @@ dataset get_dataset(int argc, char** argv, bool quiet = false){
         auto data = read_data(image_source_path);
 
         cv::Mat dest_image;
-        auto grid = detect(source_image, dest_image);
+        auto grid = detect(source_image, dest_image, mixed);
 
         for(size_t i = 0; i < 9; ++i){
             for(size_t j = 0; j < 9; ++j){
@@ -140,6 +143,13 @@ dataset get_dataset(int argc, char** argv, bool quiet = false){
 
     return ds;
 }
+
+using mixed_dbn_t = dll::conv_dbn_desc<
+    dll::dbn_layers<
+        dll::conv_rbm_desc<32, 1, 20, 40, dll::momentum, dll::parallel, dll::batch_size<10>>::rbm_t,
+        dll::conv_rbm_desc<20, 40, 12, 20, dll::momentum, dll::parallel, dll::batch_size<10>>::rbm_t/*,
+        dll::conv_rbm_desc<10, 20, 6, 50, dll::momentum, dll::batch_size<25>>::rbm_t*/
+    >>::dbn_t;
 
 using dbn_t = dll::dbn_desc<
     dll::dbn_layers<
@@ -457,23 +467,43 @@ int command_fill(int argc, char** argv, const std::string& command){
     return 0;
 }
 
-int command_train(int argc, char** argv, const std::string& /*command*/){
-    auto ds = get_dataset(argc, argv);
+int command_train(int argc, char** argv, const std::string& str_command){
+    bool mixed = str_command == "train_mixed";
+
+    auto ds = get_dataset(argc, argv, mixed);
 
     std::cout << "Train with " << ds.source_images.size() << " sudokus" << std::endl;
     std::cout << "Train with " << ds.training_images.size() << " cells" << std::endl;
 
-    auto dbn = std::make_unique<dbn_t>();
-    dbn->display();
+    if(mixed){
+        auto dbn = std::make_unique<mixed_dbn_t>();
+        dbn->display();
 
-    std::cout << "Start pretraining" << std::endl;
-    dbn->pretrain(ds.training_images, 20);
+        std::cout << "Start pretraining" << std::endl;
+        dbn->pretrain(ds.training_images, 20);
 
-    std::cout << "Start fine-tuning" << std::endl;
-    dbn->fine_tune(ds.training_images, ds.training_labels, 10, 100);
+        auto result = dbn->svm_train(ds.training_images, ds.training_labels);
 
-    std::ofstream os("dbn.dat", std::ofstream::binary);
-    dbn->store(os);
+        std::cout << "SVM training result: " << result << std::endl;
+
+        auto test_error = dll::test_set(dbn, ds.training_images, ds.training_labels, dll::svm_predictor());
+        std::cout << "training_error:" << test_error << std::endl;
+
+        std::ofstream os("cdbn.dat", std::ofstream::binary);
+        dbn->store(os);
+    } else {
+        auto dbn = std::make_unique<dbn_t>();
+        dbn->display();
+
+        std::cout << "Start pretraining" << std::endl;
+        dbn->pretrain(ds.training_images, 20);
+
+        std::cout << "Start fine-tuning" << std::endl;
+        dbn->fine_tune(ds.training_images, ds.training_labels, 10, 100);
+
+        std::ofstream os("dbn.dat", std::ofstream::binary);
+        dbn->store(os);
+    }
 
     return 0;
 }
@@ -996,7 +1026,7 @@ int main(int argc, char** argv){
         return command_detect(argc, argv, command);
     } else if(command == "fill" || command == "fill_save"){
         return command_fill(argc, argv, command);
-    } else if(command == "train"){
+    } else if(command == "train" || command == "train_mixed"){
         return command_train(argc, argv, command);
     } else if(command == "recog" || command == "recog_binary"){
         return command_recog(argc, argv, command);

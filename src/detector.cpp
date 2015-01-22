@@ -20,7 +20,7 @@
 
 namespace {
 
-constexpr const bool DEBUG = true;
+constexpr const bool DEBUG = false;
 
 constexpr const bool SHOW_LINE_SEGMENTS = false;
 constexpr const bool SHOW_MERGED_LINE_SEGMENTS = false;
