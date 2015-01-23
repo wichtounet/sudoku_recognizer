@@ -9,6 +9,7 @@
 
 #include <opencv2/opencv.hpp>
 
+#include "cpp_utils/data.hpp"
 #include "cpp_utils/stop_watch.hpp"
 
 #define DLL_SVM_SUPPORT
@@ -123,7 +124,7 @@ cv::Mat open_image(const std::string& path, bool resize = true){
     return source_image;
 }
 
-dataset get_dataset(const config& conf){
+dataset get_dataset(const config& conf, bool gray = false){
     dataset ds;
 
     for(auto& image_source_path : conf.files){
@@ -147,7 +148,12 @@ dataset get_dataset(const config& conf){
             for(size_t j = 0; j < 9; ++j){
                 if(data.results[i][j]){
                     ds.all_labels.push_back(data.results[i][j]-1);
-                    ds.all_images.emplace_back(mat_to_image(grid(i, j).binary_mat));
+
+                    if(gray){
+                        ds.all_images.emplace_back(mat_to_image(grid(i, j).gray_mat));
+                    } else {
+                        ds.all_images.emplace_back(mat_to_image(grid(i, j).binary_mat));
+                    }
                 }
             }
         }
@@ -155,6 +161,10 @@ dataset get_dataset(const config& conf){
         ds.source_files.push_back(std::move(image_source_path));
         //TODO ds.source_images.push_back(std::move(mats));
         ds.source_data.push_back(std::move(data));
+    }
+
+    if(gray){
+        cpp::normalize_each(ds.all_images);
     }
 
     if(conf.subset){
@@ -190,7 +200,7 @@ dataset get_dataset(const config& conf){
 
 using mixed_dbn_t = dll::conv_dbn_desc<
     dll::dbn_layers<
-        dll::conv_rbm_desc<32, 1, 20, 40, dll::momentum, dll::parallel, dll::sparsity<dll::sparsity_method::LEE>, dll::batch_size<10>>::rbm_t,
+        dll::conv_rbm_desc<32, 1, 20, 40, dll::momentum, dll::parallel, dll::visible<dll::unit_type::GAUSSIAN>, dll::sparsity<dll::sparsity_method::LEE>, dll::batch_size<10>>::rbm_t,
         dll::conv_rbm_desc<20, 40, 12, 40, dll::momentum, dll::parallel, dll::sparsity<dll::sparsity_method::LEE>, dll::batch_size<10>>::rbm_t/*,
         dll::conv_rbm_desc<10, 20, 6, 50, dll::momentum, dll::batch_size<25>>::rbm_t*/
     >, dll::concatenate>::dbn_t;
@@ -497,7 +507,7 @@ int command_fill(const config& conf){
 }
 
 int command_train(const config& conf){
-    auto ds = get_dataset(conf);
+    auto ds = get_dataset(conf, conf.mixed);
 
     std::cout << "Train with " << ds.source_images.size() << " sudokus" << std::endl;
 
