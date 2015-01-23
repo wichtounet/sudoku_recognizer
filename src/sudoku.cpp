@@ -59,37 +59,27 @@ int command_detect(const config& conf){
         return -1;
     }
 
-    if(conf.files.size() == 1 && conf.command != "detect_save"){
-        std::string image_source_path{conf.files.front()};
+    bool view = conf.files.size() == 1 && conf.command != "detect_save";
+
+    for(auto image_source_path : conf.files){
+        std::cout << image_source_path << std::endl;
 
         auto source_image = open_image(image_source_path);
 
         if (!source_image.data){
             std::cout << "Invalid source_image" << std::endl;
-            return -1;
+            continue;
         }
 
         cv::Mat dest_image;
         detect(source_image, dest_image, conf.mixed);
 
-        cv::namedWindow("Sudoku Grid", cv::WINDOW_AUTOSIZE);
-        cv::imshow("Sudoku Grid", dest_image);
+        if(view){
+            cv::namedWindow("Sudoku Grid", cv::WINDOW_AUTOSIZE);
+            cv::imshow("Sudoku Grid", dest_image);
 
-        cv::waitKey(0);
-    } else {
-        for(auto image_source_path : conf.files){
-            std::cout << image_source_path << std::endl;
-
-            auto source_image = open_image(image_source_path);
-
-            if (!source_image.data){
-                std::cout << "Invalid source_image" << std::endl;
-                continue;
-            }
-
-            cv::Mat dest_image;
-            detect(source_image, dest_image, conf.mixed);
-
+            cv::waitKey(0);
+        } else {
             image_source_path.insert(image_source_path.rfind('.'), ".lines");
             imwrite(image_source_path.c_str(), dest_image);
         }
