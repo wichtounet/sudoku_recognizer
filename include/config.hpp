@@ -5,18 +5,24 @@
 //  http://opensource.org/licenses/MIT)
 //=======================================================================
 
-#ifndef IMAGE_UTILS_HPP
-#define IMAGE_UTILS_HPP
+#ifndef SUDOKU_CONFIG_HPP
+#define SUDOKU_CONFIG_HPP
 
 #include <vector>
 #include <string>
 
-#include <opencv2/opencv.hpp>
+struct config {
+    std::vector<std::string> args;
+    std::vector<std::string> files;
+    std::string command;
+    bool subset = false;
+    bool mixed = false;
+    bool quiet = false;
+    bool test = false;
+};
 
-float fill_factor(const cv::Mat& mat);
+void print_usage();
 
-std::vector<double> mat_to_image(const cv::Mat& mat);
-
-cv::Mat open_image(const std::string& path, bool resize = true);
+config parse_args(int argc, char** argv);
 
 #endif

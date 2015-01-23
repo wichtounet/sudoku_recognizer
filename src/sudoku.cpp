@@ -24,8 +24,10 @@
 
 #include "detector.hpp"
 #include "solver.hpp"
-#include "data.hpp"
+#include "dataset.hpp"
+#include "config.hpp"
 #include "image_utils.hpp"
+#include "utils.hpp"
 
 namespace {
 
@@ -33,170 +35,6 @@ namespace {
 constexpr const std::size_t mnist_size_1 = 60000;
 constexpr const std::size_t mnist_size_2 = 10000;
 constexpr const std::size_t n_colors = 6;
-
-//Real constants used to divide the dataset if necessary
-constexpr const std::size_t test_divide = 5;
-constexpr const std::size_t subset_divide = 10;
-
-struct config {
-    std::vector<std::string> args;
-    std::vector<std::string> files;
-    std::string command;
-    bool subset = false;
-    bool mixed = false;
-    bool quiet = false;
-    bool test = false;
-};
-
-struct dataset {
-    std::vector<std::vector<double>> all_images;
-    std::vector<uint8_t> all_labels;
-
-    std::vector<std::vector<double>> training_images;
-    std::vector<uint8_t> training_labels;
-
-    std::vector<std::vector<double>> test_images;
-    std::vector<uint8_t> test_labels;
-
-    std::vector<std::string> source_files;
-    std::vector<std::vector<cv::Mat>> source_images;
-    std::vector<gt_data> source_data;
-};
-
-std::vector<double> mat_to_image(const cv::Mat& mat){
-    std::vector<double> image(CELL_SIZE * CELL_SIZE);
-
-    assert(mat.rows == CELL_SIZE);
-    assert(mat.cols == CELL_SIZE);
-
-    for(size_t i = 0; i < static_cast<size_t>(mat.rows); ++i){
-        for(size_t j = 0; j < static_cast<size_t>(mat.cols); ++j){
-            auto value_c = static_cast<std::size_t>(mat.at<uint8_t>(i, j));
-
-            assert(value_c == 0 || value_c == 255);
-
-            image[i * mat.cols + j] = value_c == 0 ? 1.0 : 0.0;
-        }
-    }
-
-    return image;
-}
-
-double min(const std::vector<double>& vec){
-    return *std::min_element(vec.begin(), vec.end());
-}
-
-double max(const std::vector<double>& vec){
-    return *std::max_element(vec.begin(), vec.end());
-}
-
-double mean(const std::vector<double>& vec){
-    return std::accumulate(vec.begin(), vec.end(), 0.0) / vec.size();
-}
-
-double median(std::vector<double>& vec){
-    std::sort(vec.begin(), vec.end());
-
-    if(vec.size() % 2 == 0){
-        return vec[vec.size() / 2 + 1];
-    } else {
-        return (vec[vec.size() / 2] + vec[vec.size() / 2 + 1]) / 2.0;
-    }
-}
-
-cv::Mat open_image(const std::string& path, bool resize = true){
-    auto source_image = cv::imread(path.c_str(), 1);
-
-    if (!source_image.data){
-        return source_image;
-    }
-
-    if(resize && (source_image.rows > 800 || source_image.cols > 800)){
-        auto factor = 800.0f / std::max(source_image.rows, source_image.cols);
-
-        cv::Mat resized_image;
-
-        cv::resize(source_image, resized_image, cv::Size(), factor, factor, cv::INTER_AREA);
-
-        return resized_image;
-    }
-
-    return source_image;
-}
-
-dataset get_dataset(const config& conf, bool gray = false){
-    dataset ds;
-
-    for(auto& image_source_path : conf.files){
-        if(!conf.quiet){
-            std::cout << "Load and detect "<< image_source_path << std::endl;
-        }
-
-        auto source_image = open_image(image_source_path);
-
-        if (!source_image.data){
-            std::cout << "Invalid source_image" << std::endl;
-            continue;
-        }
-
-        auto data = read_data(image_source_path);
-
-        cv::Mat dest_image;
-        auto grid = detect(source_image, dest_image, conf.mixed);
-
-        for(size_t i = 0; i < 9; ++i){
-            for(size_t j = 0; j < 9; ++j){
-                if(data.results[i][j]){
-                    ds.all_labels.push_back(data.results[i][j]-1);
-
-                    if(gray){
-                        ds.all_images.emplace_back(mat_to_image(grid(i, j).gray_mat));
-                    } else {
-                        ds.all_images.emplace_back(mat_to_image(grid(i, j).binary_mat));
-                    }
-                }
-            }
-        }
-
-        ds.source_files.push_back(std::move(image_source_path));
-        //TODO ds.source_images.push_back(std::move(mats));
-        ds.source_data.push_back(std::move(data));
-    }
-
-    if(gray){
-        cpp::normalize_each(ds.all_images);
-    }
-
-    if(conf.subset){
-        std::size_t count = 0;
-        auto filter_lambda = [&count](auto&){ return count++ % subset_divide > 0; };
-        ds.all_labels.erase(std::remove_if(ds.all_labels.begin(), ds.all_labels.end(), filter_lambda), ds.all_labels.end());
-        count = 0;
-        ds.all_images.erase(std::remove_if(ds.all_images.begin(), ds.all_images.end(), filter_lambda), ds.all_images.end());
-    }
-
-    if(conf.test){
-        for(std::size_t i = 0; i < ds.all_images.size(); ++i){
-            if(i % test_divide == 0){
-                ds.test_labels.push_back(ds.all_labels[i]);
-                ds.test_images.push_back(ds.all_images[i]);
-            } else {
-                ds.training_labels.push_back(ds.all_labels[i]);
-                ds.training_images.push_back(ds.all_images[i]);
-            }
-        }
-    } else {
-        ds.training_labels = ds.all_labels;
-        ds.training_images = ds.all_images;
-    }
-
-    assert(ds.source_images.size() == ds.source_data.size());
-    assert(ds.all_images.size() == ds.all_labels.size());
-    assert(ds.training_images.size() == ds.training_labels.size());
-    assert(ds.test_images.size() == ds.test_labels.size());
-
-    return ds;
-}
 
 using mixed_dbn_t = dll::conv_dbn_desc<
     dll::dbn_layers<
@@ -214,13 +52,6 @@ using dbn_t = dll::dbn_desc<
     >>::dbn_t;
 
 using dbn_p = std::unique_ptr<dbn_t>;
-
-template<typename Color>
-void adapt_color(double /*ratio*/, Color& orig, const Color& blend){
-    //if(ratio * blend > 25){
-        orig = /*ratio * */ blend;
-    //}
-}
 
 int command_detect(const config& conf){
     if(conf.files.empty()){
@@ -425,11 +256,9 @@ cv::Mat fill_image(const std::string& source, Dataset& mnist_dataset, const std:
                     if(mnist_color > 40){
                         auto& color = dest_image.at<cv::Vec3b>(cv::Point(xx + x_start, yy + y_start));
 
-                        auto ratio = mnist_color / 255.0;
-
-                        adapt_color(ratio, color[0], fill_color[0]);
-                        adapt_color(ratio, color[1], fill_color[1]);
-                        adapt_color(ratio, color[2], fill_color[2]);
+                        color[0] = fill_color[0];
+                        color[1] = fill_color[1];
+                        color[2] = fill_color[2];
                     }
                 }
             }
@@ -1039,52 +868,6 @@ int command_time(const config& conf){
         }
 
     return 0;
-}
-
-void print_usage(){
-    std::cout << "Usage: sudoku [options] <command> file [file...]" << std::endl;
-    std::cout << "Supported commands: " << std::endl;
-    std::cout << " * detect/detect_save" << std::endl;
-    std::cout << " * fill/fill_save" << std::endl;
-    std::cout << " * train" << std::endl;
-    std::cout << " * recog" << std::endl;
-    std::cout << " * recog_binary" << std::endl;
-    std::cout << " * time" << std::endl;
-    std::cout << "Supported options: " << std::endl;
-    std::cout << " -m : Mixed mode" << std::endl;
-    std::cout << " -s : Take only subsets" << std::endl;
-    std::cout << " -q : Quiet mode" << std::endl;
-}
-
-config parse_args(int argc, char** argv){
-    config conf;
-
-    for(std::size_t i = 1; i < static_cast<size_t>(argc); ++i){
-        conf.args.emplace_back(argv[i]);
-    }
-
-    std::size_t i = 0;
-    for(; i < conf.args.size(); ++i){
-        if(conf.args[i] == "-s"){
-            conf.subset = true;
-        } else if(conf.args[i] == "-m"){
-            conf.mixed = true;
-        } else if(conf.args[i] == "-q"){
-            conf.quiet = true;
-        } else if(conf.args[i] == "-t"){
-            conf.test = true;
-        } else {
-            break;
-        }
-    }
-
-    conf.command = conf.args[i++];
-
-    for(; i < conf.args.size(); ++i){
-        conf.files.push_back(conf.args[i]);
-    }
-
-    return conf;
 }
 
 } //end of anonymous namespace
