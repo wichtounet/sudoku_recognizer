@@ -644,230 +644,230 @@ int command_test(const config& conf){
 }
 
 int command_time(const config& conf){
-        auto dbn = std::make_unique<dbn_t>();
+    auto dbn = std::make_unique<dbn_t>();
 
-        std::ifstream is("dbn.dat", std::ofstream::binary);
-        dbn->load(is);
+    std::ifstream is("dbn.dat", std::ofstream::binary);
+    dbn->load(is);
 
-        {
-            //1. Image loading
+    {
+        //1. Image loading
 
-            std::vector<double> il_sum;
+        std::vector<double> il_sum;
 
-            for(auto& image_source_path : conf.files){
-                open_image(image_source_path);
-            }
-
-            for(auto& image_source_path : conf.files){
-                cpp::stop_watch<std::chrono::microseconds> il_watch;
-
-                open_image(image_source_path);
-
-                il_sum.push_back(il_watch.elapsed());
-            }
-
-            std::cout << "Image loading: " << std::endl;
-            std::cout << "\tmin: " << min(il_sum) << std::endl;
-            std::cout << "\tmax: " << max(il_sum) << std::endl;
-            std::cout << "\tmean: " << mean(il_sum) << std::endl;
-            std::cout << "\tmedian: " << median(il_sum) << std::endl;
+        for(auto& image_source_path : conf.files){
+            open_image(image_source_path);
         }
 
-        {
-            //2. Line detection
+        for(auto& image_source_path : conf.files){
+            cpp::stop_watch<std::chrono::microseconds> il_watch;
 
-            std::vector<double> ld_sum;
+            open_image(image_source_path);
 
-            for(auto& image_source_path : conf.files){
-                auto source_image = open_image(image_source_path);
-                auto dest_image = source_image.clone();
-                detect_lines(source_image, dest_image);
-            }
-
-            for(auto& image_source_path : conf.files){
-                auto source_image = open_image(image_source_path);
-
-                cpp::stop_watch<std::chrono::microseconds> ld_watch;
-
-                auto dest_image = source_image.clone();
-                detect_lines(source_image, dest_image);
-
-                ld_sum.push_back(ld_watch.elapsed());
-            }
-
-            std::cout << "Line Detection: " << std::endl;
-            std::cout << "\tmin: " << min(ld_sum) << std::endl;
-            std::cout << "\tmax: " << max(ld_sum) << std::endl;
-            std::cout << "\tmean: " << mean(ld_sum) << std::endl;
-            std::cout << "\tmedian: " << median(ld_sum) << std::endl;
+            il_sum.push_back(il_watch.elapsed());
         }
 
-        {
-            //2. Grid detection
+        std::cout << "Image loading: " << std::endl;
+        std::cout << "\tmin: " << min(il_sum) << std::endl;
+        std::cout << "\tmax: " << max(il_sum) << std::endl;
+        std::cout << "\tmean: " << mean(il_sum) << std::endl;
+        std::cout << "\tmedian: " << median(il_sum) << std::endl;
+    }
 
-            std::vector<double> gd_sum;
+    {
+        //2. Line detection
 
-            for(auto& image_source_path : conf.files){
-                auto source_image = open_image(image_source_path);
-                auto dest_image = source_image.clone();
-                auto lines = detect_lines(source_image, dest_image);
-                detect_grid(source_image, dest_image, lines);
-            }
+        std::vector<double> ld_sum;
 
-            for(auto& image_source_path : conf.files){
-                auto source_image = open_image(image_source_path);
-                auto dest_image = source_image.clone();
-                auto lines = detect_lines(source_image, dest_image);
-
-                cpp::stop_watch<std::chrono::microseconds> gd_watch;
-
-                detect_grid(source_image, dest_image, lines);
-
-                gd_sum.push_back(gd_watch.elapsed());
-            }
-
-            std::cout << "Grid Detection: " << std::endl;
-            std::cout << "\tmin: " << min(gd_sum) << std::endl;
-            std::cout << "\tmax: " << max(gd_sum) << std::endl;
-            std::cout << "\tmean: " << mean(gd_sum) << std::endl;
-            std::cout << "\tmedian: " << median(gd_sum) << std::endl;
+        for(auto& image_source_path : conf.files){
+            auto source_image = open_image(image_source_path);
+            auto dest_image = source_image.clone();
+            detect_lines(source_image, dest_image);
         }
 
-        {
-            //3. Digit Detection
+        for(auto& image_source_path : conf.files){
+            auto source_image = open_image(image_source_path);
 
-            std::vector<double> dd_sum;
+            cpp::stop_watch<std::chrono::microseconds> ld_watch;
 
-            for(auto& image_source_path : conf.files){
-                auto source_image = open_image(image_source_path);
-                auto dest_image = source_image.clone();
-                auto lines = detect_lines(source_image, dest_image);
-                auto cells = detect_grid(source_image, dest_image, lines);
-                split(source_image, dest_image, cells, lines);
-            }
+            auto dest_image = source_image.clone();
+            detect_lines(source_image, dest_image);
 
-            for(auto& image_source_path : conf.files){
-                auto source_image = open_image(image_source_path);
-                auto dest_image = source_image.clone();
-                auto lines = detect_lines(source_image, dest_image);
-                auto cells = detect_grid(source_image, dest_image, lines);
-
-                cpp::stop_watch<std::chrono::microseconds> dd_watch;
-
-                split(source_image, dest_image, cells, lines);
-
-                dd_sum.push_back(dd_watch.elapsed());
-            }
-
-            std::cout << "Digit Detection: " << std::endl;
-            std::cout << "\tmin: " << min(dd_sum) << std::endl;
-            std::cout << "\tmax: " << max(dd_sum) << std::endl;
-            std::cout << "\tmean: " << mean(dd_sum) << std::endl;
-            std::cout << "\tmedian: " << median(dd_sum) << std::endl;
+            ld_sum.push_back(ld_watch.elapsed());
         }
 
-        {
-            //4. Digit Recognition
+        std::cout << "Line Detection: " << std::endl;
+        std::cout << "\tmin: " << min(ld_sum) << std::endl;
+        std::cout << "\tmax: " << max(ld_sum) << std::endl;
+        std::cout << "\tmean: " << mean(ld_sum) << std::endl;
+        std::cout << "\tmedian: " << median(ld_sum) << std::endl;
+    }
 
-            std::vector<double> dr_sum;
+    {
+        //2. Grid detection
 
-            for(auto& image_source_path : conf.files){
-                auto source_image = open_image(image_source_path);
-                auto dest_image = source_image.clone();
-                auto lines = detect_lines(source_image, dest_image);
-                auto cells = detect_grid(source_image, dest_image, lines);
-                auto image = split(source_image, dest_image, cells, lines);
+        std::vector<double> gd_sum;
 
-                for(size_t i = 0; i < 9; ++i){
-                    for(size_t j = 0; j < 9; ++j){
-                        uint8_t answer;
+        for(auto& image_source_path : conf.files){
+            auto source_image = open_image(image_source_path);
+            auto dest_image = source_image.clone();
+            auto lines = detect_lines(source_image, dest_image);
+            detect_grid(source_image, dest_image, lines);
+        }
 
-                        auto& cell = image(i, j);
+        for(auto& image_source_path : conf.files){
+            auto source_image = open_image(image_source_path);
+            auto dest_image = source_image.clone();
+            auto lines = detect_lines(source_image, dest_image);
 
-                        if(cell.empty()){
-                            answer = 0;
-                        } else {
-                            auto weights = dbn->activation_probabilities(mat_to_image(cell.binary_mat));
-                            answer = dbn->predict_label(weights)+1;
-                        }
+            cpp::stop_watch<std::chrono::microseconds> gd_watch;
+
+            detect_grid(source_image, dest_image, lines);
+
+            gd_sum.push_back(gd_watch.elapsed());
+        }
+
+        std::cout << "Grid Detection: " << std::endl;
+        std::cout << "\tmin: " << min(gd_sum) << std::endl;
+        std::cout << "\tmax: " << max(gd_sum) << std::endl;
+        std::cout << "\tmean: " << mean(gd_sum) << std::endl;
+        std::cout << "\tmedian: " << median(gd_sum) << std::endl;
+    }
+
+    {
+        //3. Digit Detection
+
+        std::vector<double> dd_sum;
+
+        for(auto& image_source_path : conf.files){
+            auto source_image = open_image(image_source_path);
+            auto dest_image = source_image.clone();
+            auto lines = detect_lines(source_image, dest_image);
+            auto cells = detect_grid(source_image, dest_image, lines);
+            split(source_image, dest_image, cells, lines);
+        }
+
+        for(auto& image_source_path : conf.files){
+            auto source_image = open_image(image_source_path);
+            auto dest_image = source_image.clone();
+            auto lines = detect_lines(source_image, dest_image);
+            auto cells = detect_grid(source_image, dest_image, lines);
+
+            cpp::stop_watch<std::chrono::microseconds> dd_watch;
+
+            split(source_image, dest_image, cells, lines);
+
+            dd_sum.push_back(dd_watch.elapsed());
+        }
+
+        std::cout << "Digit Detection: " << std::endl;
+        std::cout << "\tmin: " << min(dd_sum) << std::endl;
+        std::cout << "\tmax: " << max(dd_sum) << std::endl;
+        std::cout << "\tmean: " << mean(dd_sum) << std::endl;
+        std::cout << "\tmedian: " << median(dd_sum) << std::endl;
+    }
+
+    {
+        //4. Digit Recognition
+
+        std::vector<double> dr_sum;
+
+        for(auto& image_source_path : conf.files){
+            auto source_image = open_image(image_source_path);
+            auto dest_image = source_image.clone();
+            auto lines = detect_lines(source_image, dest_image);
+            auto cells = detect_grid(source_image, dest_image, lines);
+            auto image = split(source_image, dest_image, cells, lines);
+
+            for(size_t i = 0; i < 9; ++i){
+                for(size_t j = 0; j < 9; ++j){
+                    uint8_t answer;
+
+                    auto& cell = image(i, j);
+
+                    if(cell.empty()){
+                        answer = 0;
+                    } else {
+                        auto weights = dbn->activation_probabilities(mat_to_image(cell.binary_mat));
+                        answer = dbn->predict_label(weights)+1;
+                    }
+                }
+            }
+        }
+
+        for(auto& image_source_path : conf.files){
+            auto source_image = open_image(image_source_path);
+            auto dest_image = source_image.clone();
+            auto lines = detect_lines(source_image, dest_image);
+            auto cells = detect_grid(source_image, dest_image, lines);
+            auto image = split(source_image, dest_image, cells, lines);
+
+            cpp::stop_watch<std::chrono::microseconds> dr_watch;
+
+            for(size_t i = 0; i < 9; ++i){
+                for(size_t j = 0; j < 9; ++j){
+                    uint8_t answer;
+
+                    auto& cell = image(i, j);
+
+                    if(cell.empty()){
+                        answer = 0;
+                    } else {
+                        auto weights = dbn->activation_probabilities(mat_to_image(cell.binary_mat));
+                        answer = dbn->predict_label(weights)+1;
                     }
                 }
             }
 
-            for(auto& image_source_path : conf.files){
-                auto source_image = open_image(image_source_path);
-                auto dest_image = source_image.clone();
-                auto lines = detect_lines(source_image, dest_image);
-                auto cells = detect_grid(source_image, dest_image, lines);
-                auto image = split(source_image, dest_image, cells, lines);
-
-                cpp::stop_watch<std::chrono::microseconds> dr_watch;
-
-                for(size_t i = 0; i < 9; ++i){
-                    for(size_t j = 0; j < 9; ++j){
-                        uint8_t answer;
-
-                        auto& cell = image(i, j);
-
-                        if(cell.empty()){
-                            answer = 0;
-                        } else {
-                            auto weights = dbn->activation_probabilities(mat_to_image(cell.binary_mat));
-                            answer = dbn->predict_label(weights)+1;
-                        }
-                    }
-                }
-
-                dr_sum.push_back(dr_watch.elapsed());
-            }
-
-            std::cout << "Digit Recognition: " << std::endl;
-            std::cout << "\tmin: " << min(dr_sum) << std::endl;
-            std::cout << "\tmax: " << max(dr_sum) << std::endl;
-            std::cout << "\tmean: " << mean(dr_sum) << std::endl;
-            std::cout << "\tmedian: " << median(dr_sum) << std::endl;
+            dr_sum.push_back(dr_watch.elapsed());
         }
 
-        {
-            //5. Total
+        std::cout << "Digit Recognition: " << std::endl;
+        std::cout << "\tmin: " << min(dr_sum) << std::endl;
+        std::cout << "\tmax: " << max(dr_sum) << std::endl;
+        std::cout << "\tmean: " << mean(dr_sum) << std::endl;
+        std::cout << "\tmedian: " << median(dr_sum) << std::endl;
+    }
 
-            std::vector<double> tot_sum;
+    {
+        //5. Total
 
-            for(auto& image_source_path : conf.files){
-                cpp::stop_watch<std::chrono::microseconds> tot_watch;
+        std::vector<double> tot_sum;
 
-                auto source_image = open_image(image_source_path);
-                auto dest_image = source_image.clone();
-                auto lines = detect_lines(source_image, dest_image);
-                auto cells = detect_grid(source_image, dest_image, lines);
-                auto image = split(source_image, dest_image, cells, lines);
+        for(auto& image_source_path : conf.files){
+            cpp::stop_watch<std::chrono::microseconds> tot_watch;
 
-                for(size_t i = 0; i < 9; ++i){
-                    for(size_t j = 0; j < 9; ++j){
-                        uint8_t answer;
+            auto source_image = open_image(image_source_path);
+            auto dest_image = source_image.clone();
+            auto lines = detect_lines(source_image, dest_image);
+            auto cells = detect_grid(source_image, dest_image, lines);
+            auto image = split(source_image, dest_image, cells, lines);
 
-                        auto& cell = image(i,j);
+            for(size_t i = 0; i < 9; ++i){
+                for(size_t j = 0; j < 9; ++j){
+                    uint8_t answer;
 
-                        if(cell.empty()){
-                            answer = 0;
-                        } else {
-                            auto weights = dbn->activation_probabilities(mat_to_image(cell.binary_mat));
-                            answer = dbn->predict_label(weights)+1;
-                        }
+                    auto& cell = image(i,j);
+
+                    if(cell.empty()){
+                        answer = 0;
+                    } else {
+                        auto weights = dbn->activation_probabilities(mat_to_image(cell.binary_mat));
+                        answer = dbn->predict_label(weights)+1;
                     }
                 }
-
-                tot_sum.push_back(tot_watch.elapsed());
             }
 
-            std::cout << "Total: " << std::endl;
-            std::cout << "\tmin: " << min(tot_sum) << std::endl;
-            std::cout << "\tmax: " << max(tot_sum) << std::endl;
-            std::cout << "\tmean: " << mean(tot_sum) << std::endl;
-            std::cout << "\tmedian: " << median(tot_sum) << std::endl;
+            tot_sum.push_back(tot_watch.elapsed());
         }
 
-    return 0;
+        std::cout << "Total: " << std::endl;
+        std::cout << "\tmin: " << min(tot_sum) << std::endl;
+        std::cout << "\tmax: " << max(tot_sum) << std::endl;
+        std::cout << "\tmean: " << mean(tot_sum) << std::endl;
+        std::cout << "\tmedian: " << median(tot_sum) << std::endl;
+    }
+
+return 0;
 }
 
 } //end of anonymous namespace
