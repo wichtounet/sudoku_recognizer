@@ -14,7 +14,11 @@
 
 struct sudoku_cell {
     bool m_empty = true;
-    cv::Mat final_mat;
+
+    cv::Mat binary_mat;  //Binary final cv::Mat
+    cv::Mat gray_mat;    //Gray final cv::Mat
+    cv::Mat color_mat;   //RGB final cv::Mat
+
     cv::Rect bounding;
     cv::Rect digit_bounding;
     uint8_t m_value = 0;

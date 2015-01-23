@@ -28,6 +28,15 @@
 
 namespace {
 
+//These constants need to be sync when changing MNIST dataset and the fill colors
+constexpr const std::size_t mnist_size_1 = 60000;
+constexpr const std::size_t mnist_size_2 = 10000;
+constexpr const std::size_t n_colors = 6;
+
+//Real constants used to divide the dataset if necessary
+constexpr const std::size_t test_divide = 5;
+constexpr const std::size_t subset_divide = 10;
+
 struct config {
     std::vector<std::string> args;
     std::vector<std::string> files;
@@ -35,12 +44,23 @@ struct config {
     bool subset = false;
     bool mixed = false;
     bool quiet = false;
+    bool test = false;
 };
 
-//These constants need to be sync when changing MNIST dataset and the fill colors
-constexpr const std::size_t mnist_size_1 = 60000;
-constexpr const std::size_t mnist_size_2 = 10000;
-constexpr const std::size_t n_colors = 6;
+struct dataset {
+    std::vector<std::vector<double>> all_images;
+    std::vector<uint8_t> all_labels;
+
+    std::vector<std::vector<double>> training_images;
+    std::vector<uint8_t> training_labels;
+
+    std::vector<std::vector<double>> test_images;
+    std::vector<uint8_t> test_labels;
+
+    std::vector<std::string> source_files;
+    std::vector<std::vector<cv::Mat>> source_images;
+    std::vector<gt_data> source_data;
+};
 
 std::vector<double> mat_to_image(const cv::Mat& mat){
     std::vector<double> image(CELL_SIZE * CELL_SIZE);
@@ -60,15 +80,6 @@ std::vector<double> mat_to_image(const cv::Mat& mat){
 
     return image;
 }
-
-struct dataset {
-    std::vector<std::vector<double>> training_images;
-    std::vector<uint8_t> training_labels;
-
-    std::vector<std::string> source_files;
-    std::vector<std::vector<cv::Mat>> source_images;
-    std::vector<gt_data> source_data;
-};
 
 double min(const std::vector<double>& vec){
     return *std::min_element(vec.begin(), vec.end());
@@ -117,7 +128,7 @@ dataset get_dataset(const config& conf){
 
     for(auto& image_source_path : conf.files){
         if(!conf.quiet){
-            std::cout << image_source_path << std::endl;
+            std::cout << "Load and detect "<< image_source_path << std::endl;
         }
 
         auto source_image = open_image(image_source_path);
@@ -135,8 +146,8 @@ dataset get_dataset(const config& conf){
         for(size_t i = 0; i < 9; ++i){
             for(size_t j = 0; j < 9; ++j){
                 if(data.results[i][j]){
-                    ds.training_labels.push_back(data.results[i][j]-1);
-                    ds.training_images.emplace_back(mat_to_image(grid(i, j).final_mat));
+                    ds.all_labels.push_back(data.results[i][j]-1);
+                    ds.all_images.emplace_back(mat_to_image(grid(i, j).binary_mat));
                 }
             }
         }
@@ -146,18 +157,43 @@ dataset get_dataset(const config& conf){
         ds.source_data.push_back(std::move(data));
     }
 
-    assert(ds.training_labels.size() == ds.training_images.size());
+    if(conf.subset){
+        std::size_t count = 0;
+        auto filter_lambda = [&count](auto&){ return count++ % subset_divide > 0; };
+        ds.all_labels.erase(std::remove_if(ds.all_labels.begin(), ds.all_labels.end(), filter_lambda), ds.all_labels.end());
+        count = 0;
+        ds.all_images.erase(std::remove_if(ds.all_images.begin(), ds.all_images.end(), filter_lambda), ds.all_images.end());
+    }
+
+    if(conf.test){
+        for(std::size_t i = 0; i < ds.all_images.size(); ++i){
+            if(i % test_divide == 0){
+                ds.test_labels.push_back(ds.all_labels[i]);
+                ds.test_images.push_back(ds.all_images[i]);
+            } else {
+                ds.training_labels.push_back(ds.all_labels[i]);
+                ds.training_images.push_back(ds.all_images[i]);
+            }
+        }
+    } else {
+        ds.training_labels = ds.all_labels;
+        ds.training_images = ds.all_images;
+    }
+
     assert(ds.source_images.size() == ds.source_data.size());
+    assert(ds.all_images.size() == ds.all_labels.size());
+    assert(ds.training_images.size() == ds.training_labels.size());
+    assert(ds.test_images.size() == ds.test_labels.size());
 
     return ds;
 }
 
 using mixed_dbn_t = dll::conv_dbn_desc<
     dll::dbn_layers<
-        dll::conv_rbm_desc<32, 1, 20, 40, dll::momentum, dll::parallel, dll::batch_size<10>>::rbm_t,
-        dll::conv_rbm_desc<20, 40, 12, 20, dll::momentum, dll::parallel, dll::batch_size<10>>::rbm_t/*,
+        dll::conv_rbm_desc<32, 1, 20, 40, dll::momentum, dll::parallel, dll::sparsity<dll::sparsity_method::LEE>, dll::batch_size<10>>::rbm_t,
+        dll::conv_rbm_desc<20, 40, 12, 40, dll::momentum, dll::parallel, dll::sparsity<dll::sparsity_method::LEE>, dll::batch_size<10>>::rbm_t/*,
         dll::conv_rbm_desc<10, 20, 6, 50, dll::momentum, dll::batch_size<25>>::rbm_t*/
-    >>::dbn_t;
+    >, dll::concatenate>::dbn_t;
 
 using dbn_t = dll::dbn_desc<
     dll::dbn_layers<
@@ -464,19 +500,30 @@ int command_train(const config& conf){
     auto ds = get_dataset(conf);
 
     std::cout << "Train with " << ds.source_images.size() << " sudokus" << std::endl;
+
     std::cout << "Train with " << ds.training_images.size() << " cells" << std::endl;
+
+    if(conf.test){
+        std::cout << "Test with " << ds.test_images.size() << " cells" << std::endl;
+    }
 
     if(conf.mixed){
         auto dbn = std::make_unique<mixed_dbn_t>();
         dbn->display();
 
+        dbn->layer<0>().pbias = 0.05;
+        dbn->layer<1>().pbias = 0.03;
+
         std::cout << "Start pretraining" << std::endl;
-        dbn->pretrain(ds.training_images, 20);
+        dbn->pretrain(ds.all_images, 20);
 
-        dbn->svm_train(ds.training_images, ds.training_labels);
+        dbn->svm_train(ds.all_images, ds.all_labels);
 
-        auto test_error = dll::test_set(dbn, ds.training_images, ds.training_labels, dll::svm_predictor());
-        std::cout << "training_error:" << test_error << std::endl;
+        std::cout << "training_error:" << dll::test_set(dbn, ds.training_images, ds.training_labels, dll::svm_predictor()) << std::endl;
+
+        if(conf.test){
+            std::cout << "test_error:" << dll::test_set(dbn, ds.test_images, ds.test_labels, dll::svm_predictor()) << std::endl;
+        }
 
         std::ofstream os("cdbn.dat", std::ofstream::binary);
         dbn->store(os);
@@ -489,6 +536,12 @@ int command_train(const config& conf){
 
         std::cout << "Start fine-tuning" << std::endl;
         dbn->fine_tune(ds.training_images, ds.training_labels, 10, 100);
+
+        std::cout << "training_error:" << dll::test_set(dbn, ds.training_images, ds.training_labels, dll::predictor()) << std::endl;
+
+        if(conf.test){
+            std::cout << "test_error:" << dll::test_set(dbn, ds.test_images, ds.test_labels, dll::predictor()) << std::endl;
+        }
 
         std::ofstream os("dbn.dat", std::ofstream::binary);
         dbn->store(os);
@@ -604,7 +657,7 @@ int command_recog(const config& conf){
                 if(cell.empty()){
                     answer = 0;
                 } else {
-                    auto& cell_mat = cell.final_mat;
+                    auto& cell_mat = cell.binary_mat;
 
                     auto weights = dbn->activation_probabilities(mat_to_image(cell_mat));
                     answer = dbn->predict_label(weights)+1;
@@ -656,7 +709,7 @@ int command_test(const config& conf){
     auto ds = get_dataset(conf);
 
     std::cout << "Test with " << ds.source_images.size() << " sudokus" << std::endl;
-    std::cout << "Test with " << ds.training_images.size() << " cells" << std::endl;
+    std::cout << "Test with " << ds.all_images.size() << " cells" << std::endl;
 
     auto dbn = std::make_unique<dbn_t>();
 
@@ -665,7 +718,7 @@ int command_test(const config& conf){
     std::ifstream is("dbn.dat", std::ofstream::binary);
     dbn->load(is);
 
-    auto error_rate = dll::test_set(dbn, ds.training_images, ds.training_labels, dll::predictor());
+    auto error_rate = dll::test_set(dbn, ds.all_images, ds.all_labels, dll::predictor());
 
     std::cout << std::endl;
     std::cout << "DBN Error rate (normal): " << 100.0 * error_rate << "%" << std::endl;
@@ -895,7 +948,7 @@ int command_time(const config& conf){
                         if(cell.empty()){
                             answer = 0;
                         } else {
-                            auto weights = dbn->activation_probabilities(mat_to_image(cell.final_mat));
+                            auto weights = dbn->activation_probabilities(mat_to_image(cell.binary_mat));
                             answer = dbn->predict_label(weights)+1;
                         }
                     }
@@ -920,7 +973,7 @@ int command_time(const config& conf){
                         if(cell.empty()){
                             answer = 0;
                         } else {
-                            auto weights = dbn->activation_probabilities(mat_to_image(cell.final_mat));
+                            auto weights = dbn->activation_probabilities(mat_to_image(cell.binary_mat));
                             answer = dbn->predict_label(weights)+1;
                         }
                     }
@@ -959,7 +1012,7 @@ int command_time(const config& conf){
                         if(cell.empty()){
                             answer = 0;
                         } else {
-                            auto weights = dbn->activation_probabilities(mat_to_image(cell.final_mat));
+                            auto weights = dbn->activation_probabilities(mat_to_image(cell.binary_mat));
                             answer = dbn->predict_label(weights)+1;
                         }
                     }
@@ -1008,6 +1061,8 @@ config parse_args(int argc, char** argv){
             conf.mixed = true;
         } else if(conf.args[i] == "-q"){
             conf.quiet = true;
+        } else if(conf.args[i] == "-t"){
+            conf.test = true;
         } else {
             break;
         }

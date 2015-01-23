@@ -35,7 +35,9 @@ constexpr const bool SHOW_TL_BR = false;
 constexpr const bool SHOW_CELLS = true;
 constexpr const bool SHOW_GRID_NUMBERS= false;
 constexpr const bool SHOW_CHAR_CELLS = true;
-constexpr const bool SHOW_REGRID = false;
+constexpr const bool SHOW_REGRID = true;
+constexpr const bool SHOW_REGRID_COLOR = true;
+constexpr const bool SHOW_REGRID_GRAY = true;
 
 #define IF_DEBUG if(DEBUG)
 
@@ -806,6 +808,26 @@ std::vector<cv::Rect> detect_grid(const cv::Mat& source_image, cv::Mat& dest_ima
     }
 }
 
+void show_regrid(sudoku_grid& grid, int mode){
+    if((mode == 0 && SHOW_REGRID) || (mode == 1 && SHOW_REGRID_GRAY) || (mode == 2 && SHOW_REGRID_COLOR)){
+        cv::Mat remat(cv::Size(CELL_SIZE * 9, CELL_SIZE * 9), mode == 2 ? grid(0,0).color_mat.type() : grid(0,0).binary_mat.type());
+
+        for(std::size_t i = 0; i < 9; ++i){
+            for(std::size_t j = 0; j < 9; ++j){
+                const auto& mat =
+                        mode == 0 ? grid(i, j).binary_mat :
+                        mode == 1 ? grid(i, j).gray_mat :
+                                    grid(i, j).color_mat;
+
+                mat.copyTo(remat(cv::Rect(i * CELL_SIZE, j * CELL_SIZE, CELL_SIZE, CELL_SIZE)));
+            }
+        }
+
+        cv::namedWindow("Sudoku Final " + std::to_string(mode), cv::WINDOW_AUTOSIZE);
+        cv::imshow("Sudoku Final " + std::to_string(mode), remat);
+    }
+}
+
 sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::vector<cv::Rect>& cells, std::vector<line_t>& lines, bool mixed){
     sudoku_grid grid;
     grid.source_image = source_image.clone(); //TODO constructor
@@ -846,13 +868,14 @@ sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::v
         grid.cells.emplace_back();
         auto& cell = grid.cells.back();
 
-        cell.final_mat = cv::Mat(cv::Size(CELL_SIZE, CELL_SIZE), source.type());
+        cell.binary_mat = cv::Mat(cv::Size(CELL_SIZE, CELL_SIZE), source.type());
+        cell.gray_mat = cv::Mat(cv::Size(CELL_SIZE, CELL_SIZE), source.type());
+        cell.color_mat = cv::Mat(cv::Size(CELL_SIZE, CELL_SIZE), source_image.type());
         cell.bounding = ensure_inside(source, cells[n]);
 
-        auto& cell_mat = cell.final_mat;
         const auto& bounding = cell.bounding;
 
-        cell_mat = cv::Scalar(255);
+        cell.binary_mat = cv::Scalar(255);
 
         //Clear bounding image of  the cell
         cv::Mat rect_image_clean(source, bounding);
@@ -1036,14 +1059,33 @@ sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::v
             auto dim = std::max(rect.width, rect.height);
 
             //Extract the cell from the source image (binary)
-            const cv::Mat final_rect(source, big_rect);
+            const cv::Mat binary_final_rect(source, big_rect);
 
             //Make the image square
-            cv::Mat final_square(cv::Size(dim, dim), final_rect.type());
-            final_square = cv::Scalar(255,255,255);
-            final_rect.copyTo(final_square(cv::Rect((dim - rect.width) / 2, (dim - rect.height) / 2, rect.width, rect.height)));
+            cv::Mat binary_final_square(cv::Size(dim, dim), binary_final_rect.type());
+            binary_final_square = cv::Scalar(255,255,255);
+            binary_final_rect.copyTo(binary_final_square(cv::Rect((dim - rect.width) / 2, (dim - rect.height) / 2, rect.width, rect.height)));
 
-            auto fill = fill_factor(final_square);
+            //In color/gray mode, we cannot simple pad the image with black/white pixel, therefore we increase the size of the rect
+            auto color_square_rect = big_rect;
+
+            if(color_square_rect.width < color_square_rect.height){
+                color_square_rect.x -= (color_square_rect.height - color_square_rect.width) / 2;
+                color_square_rect.width = color_square_rect.height;
+            } else if(color_square_rect.height < color_square_rect.width){
+                color_square_rect.y -= (color_square_rect.width - color_square_rect.height) / 2;
+                color_square_rect.height = color_square_rect.width;
+            }
+
+            //Extract the gray and color images (not yet resized)
+
+            cv::Mat gray_final_square(source_image, color_square_rect);
+            cv::cvtColor(gray_final_square, gray_final_square, CV_RGB2GRAY);
+            cv::Mat color_final_square(source_image, color_square_rect);
+
+            //Prune the final candidates
+
+            auto fill = fill_factor(binary_final_square);
 
             IF_DEBUG std::cout << "\tfill_factor=" << fill << std::endl;
 
@@ -1067,11 +1109,18 @@ sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::v
 
                 if(min_distance >= 50.0f || mixed){
                     //Resize the square to the cell size
-                    cv::Mat big_square(cv::Size(CELL_SIZE, CELL_SIZE), final_square.type());
-                    cv::resize(final_square, big_square, big_square.size(), 0, 0, cv::INTER_CUBIC);
+                    cv::Mat big_square(cv::Size(CELL_SIZE, CELL_SIZE), binary_final_square.type());
+                    cv::resize(binary_final_square, big_square, big_square.size(), 0, 0, cv::INTER_CUBIC);
 
                     //Binarize again because resize goes back to GRAY
-                    cell_binarize(big_square, cell_mat);
+                    cell_binarize(big_square, cell.binary_mat);
+
+                    //Resize the color and gray squares
+
+                    cv::resize(gray_final_square, cell.gray_mat, cell.gray_mat.size(), 0, 0, cv::INTER_CUBIC);
+                    cv::resize(color_final_square, cell.color_mat, cell.color_mat.size(), 0, 0, cv::INTER_CUBIC);
+
+                    //Save the bounding rect
 
                     cell.digit_bounding = big_rect;
 
@@ -1081,7 +1130,7 @@ sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::v
                 }
             }
 
-            if(fill_factor(cell_mat) == 1.0f){
+            if(fill_factor(cell.binary_mat) == 1.0f){
                 cell.m_empty = true;
             } else {
                 cell.m_empty = false;
@@ -1089,21 +1138,9 @@ sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::v
         }
     }
 
-    if(SHOW_REGRID){
-        cv::Mat remat(cv::Size(CELL_SIZE * 9, CELL_SIZE * 9), grid(0,0).final_mat.type());
-
-        for(std::size_t i = 0; i < 9; ++i){
-            for(std::size_t j = 0; j < 9; ++j){
-                const auto& cell = grid(i, j);
-                const auto& mat = cell.final_mat;
-
-                mat.copyTo(remat(cv::Rect(i * CELL_SIZE, j * CELL_SIZE, CELL_SIZE, CELL_SIZE)));
-            }
-        }
-
-        cv::namedWindow("Sudoku Final", cv::WINDOW_AUTOSIZE);
-        cv::imshow("Sudoku Final", remat);
-    }
+    show_regrid(grid, 0);
+    show_regrid(grid, 1);
+    show_regrid(grid, 2);
 
     return grid;
 }
