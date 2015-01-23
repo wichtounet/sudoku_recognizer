@@ -15,7 +15,7 @@
 
 float fill_factor(const cv::Mat& mat);
 
-std::vector<double> mat_to_image(const cv::Mat& mat);
+std::vector<double> mat_to_image(const cv::Mat& mat, bool gray = true);
 
 cv::Mat open_image(const std::string& path, bool resize = true);
 

@@ -15,6 +15,7 @@
 #define DLL_SVM_SUPPORT
 #include "dll/dbn.hpp"
 #include "dll/conv_rbm.hpp"
+#include "dll/conv_rbm_mp.hpp"
 #include "dll/conv_dbn.hpp"
 #include "dll/test.hpp"
 #include "dll/labels.hpp"
@@ -36,12 +37,42 @@ constexpr const std::size_t mnist_size_1 = 60000;
 constexpr const std::size_t mnist_size_2 = 10000;
 constexpr const std::size_t n_colors = 6;
 
-using mixed_dbn_t = dll::conv_dbn_desc<
+using mixed_dbn_std_t = dll::conv_dbn_desc<
     dll::dbn_layers<
-        dll::conv_rbm_desc<32, 1, 20, 40, dll::momentum, dll::parallel, dll::visible<dll::unit_type::GAUSSIAN>, dll::sparsity<dll::sparsity_method::LEE>, dll::batch_size<10>>::rbm_t,
-        dll::conv_rbm_desc<20, 40, 12, 40, dll::momentum, dll::parallel, dll::sparsity<dll::sparsity_method::LEE>, dll::batch_size<10>>::rbm_t/*,
+        dll::conv_rbm_desc<32, 1, 21, 40,
+            dll::momentum,
+            dll::parallel,
+            dll::visible<dll::unit_type::GAUSSIAN>,
+            dll::sparsity<dll::sparsity_method::LEE>,
+            dll::batch_size<10>
+        >::rbm_t,
+        dll::conv_rbm_desc<21, 40, 16, 40,
+            dll::momentum,
+            dll::parallel,
+            dll::sparsity<dll::sparsity_method::LEE>,
+            dll::batch_size<10>>::rbm_t/*,
         dll::conv_rbm_desc<10, 20, 6, 50, dll::momentum, dll::batch_size<25>>::rbm_t*/
     >, dll::concatenate>::dbn_t;
+
+using mixed_dbn_pmp_t = dll::conv_dbn_desc<
+    dll::dbn_layers<
+        dll::conv_rbm_mp_desc<32, 1, 22, 40, 2,
+            dll::momentum,
+            dll::parallel,
+            dll::weight_decay<dll::decay_type::L2>,
+//            dll::visible<dll::unit_type::GAUSSIAN>,
+            dll::sparsity<dll::sparsity_method::LEE>,
+            dll::batch_size<10>
+        >::rbm_t,
+        dll::conv_rbm_mp_desc<11, 40, 6, 40, 2,
+            dll::momentum,
+            dll::parallel,
+            dll::sparsity<dll::sparsity_method::LEE>,
+            dll::batch_size<10>>::rbm_t/*,
+        dll::conv_rbm_desc<10, 20, 6, 50, dll::momentum, dll::batch_size<25>>::rbm_t*/
+    >, dll::concatenate>::dbn_t;
+
+using mixed_dbn_t = mixed_dbn_pmp_t;
 
 using dbn_t = dll::dbn_desc<
     dll::dbn_layers<
@@ -167,34 +198,6 @@ cv::Mat fill_image(const std::string& source, Dataset& mnist_dataset, const std:
     //Pick a random color for the whole sudoku
     const auto& fill_color = colors[color_generator()];
 
-    //double avg_width = 0.0;
-    //double avg_height = 0.0;
-    //std::size_t avg_cnt = 0;
-
-    //for(auto& cell : grid.cells){
-        //if(!cell.empty()){
-            //avg_width += cell.digit_bounding.width;
-            //avg_height += cell.digit_bounding.height;
-            //++avg_cnt;
-        //}
-    //}
-
-    //avg_width /= avg_cnt;
-    //avg_height /= avg_cnt;
-
-    //auto max_avg = 0.9 * std::max(avg_width, avg_height);
-
-    //if(max_avg > 28.0){
-        //if(resized){
-            //w_ratio *= (28.0 / max_avg);
-            //h_ratio *= (28.0 / max_avg);
-        //} else {
-            //w_ratio = (28.0 / max_avg);
-            //h_ratio = (28.0 / max_avg);
-            //resized = true;
-        //}
-    //}
-
     for(auto& cell : grid.cells){
         if(cell.empty()){
             auto& bounding_rect = cell.bounding;
@@ -305,20 +308,16 @@ int command_fill(const config& conf){
         return -1;
     }
 
-    //mnist::binarize(mnist_dataset);
+    bool view = conf.files.size() == 1 && conf.command != "fill_save";
 
-    if(conf.files.size() == 1 && conf.command != "fill_save"){
-        std::string image_source_path(conf.files.front());
+    for(auto& image_source_path : conf.files){
+        auto dest_image = fill_image(image_source_path, mnist_dataset, colors, !view);
 
-        auto dest_image = fill_image(image_source_path, mnist_dataset, colors, false);
+        if(view){
+            cv::namedWindow("Sudoku Grid", cv::WINDOW_AUTOSIZE);
+            cv::imshow("Sudoku Grid", dest_image);
 
-        cv::namedWindow("Sudoku Grid", cv::WINDOW_AUTOSIZE);
-        cv::imshow("Sudoku Grid", dest_image);
-
-        cv::waitKey(0);
-    } else {
-        for(auto& image_source_path : conf.files){
-            fill_image(image_source_path, mnist_dataset, colors, true);
+            cv::waitKey(0);
         }
     }
 
@@ -326,7 +325,11 @@ int command_fill(const config& conf){
 }
 
 int command_train(const config& conf){
-    auto ds = get_dataset(conf, conf.mixed);
+    auto gray = mixed_dbn_t::rbm_type<0>::visible_unit == dll::unit_type::GAUSSIAN;
+
+    std::cout << "Gray: " << gray << std::endl;
+
+    auto ds = get_dataset(conf, gray);
 
     std::cout << "Train with " << ds.source_images.size() << " sudokus" << std::endl;
 
@@ -340,13 +343,25 @@ int command_train(const config& conf){
         auto dbn = std::make_unique<mixed_dbn_t>();
         dbn->display();
 
-        dbn->layer<0>().pbias = 0.05;
-        dbn->layer<1>().pbias = 0.03;
+        //dbn->layer<0>().learning_rate /= 2.0;
+
+        dbn->layer<0>().pbias = 0.10;
+
+        dbn->layer<1>().pbias_lambda = 2;
+        dbn->layer<1>().pbias = 0.05;
 
         std::cout << "Start pretraining" << std::endl;
-        dbn->pretrain(ds.all_images, 20);
+        dbn->pretrain(ds.training_images, 25);
 
-        dbn->svm_train(ds.all_images, ds.all_labels);
+        svm_parameter parameters = dll::default_svm_parameters();
+
+        parameters.svm_type = C_SVC;
+        parameters.kernel_type = RBF;
+        parameters.probability = 1;
+        parameters.C = 2.8;
+        parameters.gamma = 0.0073;
+
+        dbn->svm_train(ds.training_images, ds.training_labels);
 
         std::cout << "training_error:" << dll::test_set(dbn, ds.training_images, ds.training_labels, dll::svm_predictor()) << std::endl;
 

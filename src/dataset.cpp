@@ -41,9 +41,9 @@ dataset get_dataset(const config& conf, bool gray){
                     ds.all_labels.push_back(data.results[i][j]-1);
 
                     if(gray){
-                        ds.all_images.emplace_back(mat_to_image(grid(i, j).gray_mat));
+                        ds.all_images.emplace_back(mat_to_image(grid(j, i).gray_mat, gray));
                     } else {
-                        ds.all_images.emplace_back(mat_to_image(grid(i, j).binary_mat));
+                        ds.all_images.emplace_back(mat_to_image(grid(j, i).binary_mat, gray));
                     }
                 }
             }
@@ -55,6 +55,12 @@ dataset get_dataset(const config& conf, bool gray){
     }
 
     if(gray){
+        for(auto& image : ds.all_images){
+            for(auto& pixel : image){
+                pixel = 255 - pixel;
+            }
+        }
+
         cpp::normalize_each(ds.all_images);
     }
 
