@@ -169,9 +169,9 @@ cv::Mat fill_image(const std::string& source, Dataset& mnist_dataset, const std:
 
     for(size_t i = 0; i < 9; ++i){
         for(size_t j = 0; j < 9; ++j){
-            auto& cell = grid(i, j);
+            auto& cell = grid(j, i);
 
-            cell.value() = data.results[j][i];
+            cell.value() = data.results[i][j];
             cell.m_empty = !cell.value();
         }
     }
@@ -191,7 +191,7 @@ cv::Mat fill_image(const std::string& source, Dataset& mnist_dataset, const std:
 
     for(size_t i = 0; i < 9; ++i){
         for(size_t j = 0; j < 9; ++j){
-            data.results[j][i] = grid(i, j).value();
+            data.results[i][j] = grid(j, i).value();
         }
     }
 
@@ -325,13 +325,9 @@ int command_fill(const config& conf){
 }
 
 int command_train(const config& conf){
-    auto gray = mixed_dbn_t::rbm_type<0>::visible_unit == dll::unit_type::GAUSSIAN;
+    auto ds = get_dataset(conf);
 
-    std::cout << "Gray: " << gray << std::endl;
-
-    auto ds = get_dataset(conf, gray);
-
-    std::cout << "Train with " << ds.source_images.size() << " sudokus" << std::endl;
+    std::cout << "Train with " << ds.source_grids.size() << " sudokus" << std::endl;
 
     std::cout << "Train with " << ds.training_images.size() << " cells" << std::endl;
 
@@ -358,10 +354,10 @@ int command_train(const config& conf){
         parameters.svm_type = C_SVC;
         parameters.kernel_type = RBF;
         parameters.probability = 1;
-        parameters.C = 2.8;
-        parameters.gamma = 0.0073;
+        parameters.C = 10;
+        parameters.gamma = 1.0 / (CELL_SIZE * CELL_SIZE);
 
-        dbn->svm_train(ds.training_images, ds.training_labels);
+        dbn->svm_train(ds.training_images, ds.training_labels, parameters);
 
         std::cout << "training_error:" << dll::test_set(dbn, ds.training_images, ds.training_labels, dll::svm_predictor()) << std::endl;
 
@@ -495,15 +491,13 @@ int command_recog(const config& conf){
 
         for(size_t i = 0; i < 9; ++i){
             for(size_t j = 0; j < 9; ++j){
-                auto& cell = grid(i, j);
+                auto& cell = grid(j, i);
 
                 std::size_t answer;
                 if(cell.empty()){
                     answer = 0;
                 } else {
-                    auto& cell_mat = cell.binary_mat;
-
-                    auto weights = dbn->activation_probabilities(mat_to_image(cell_mat));
+                    auto weights = dbn->activation_probabilities(cell.image(conf));
                     answer = dbn->predict_label(weights)+1;
                     for(std::size_t x = 0; x < weights.size(); ++x){
                         if(answer != x + 1 && weights(x) > 1e-5){
@@ -552,94 +546,137 @@ int command_recog(const config& conf){
 int command_test(const config& conf){
     auto ds = get_dataset(conf);
 
-    std::cout << "Test with " << ds.source_images.size() << " sudokus" << std::endl;
+    std::cout << "Test with " << ds.source_grids.size() << " sudokus" << std::endl;
     std::cout << "Test with " << ds.all_images.size() << " cells" << std::endl;
-
-    auto dbn = std::make_unique<dbn_t>();
-
-    dbn->display();
-
-    std::ifstream is("dbn.dat", std::ofstream::binary);
-    dbn->load(is);
-
-    auto error_rate = dll::test_set(dbn, ds.all_images, ds.all_labels, dll::predictor());
-
-    std::cout << std::endl;
-    std::cout << "DBN Error rate (normal): " << 100.0 * error_rate << "%" << std::endl;
 
     std::size_t sudoku_hits = 0;
     std::size_t cell_hits = 0;
     std::size_t zero_errors = 0;
     std::size_t dbn_errors = 0;
 
-    for(std::size_t i = 0; i < ds.source_images.size(); ++i){
-        const auto& image = ds.source_images[i];
-        const auto& data = ds.source_data[i];
+    if(conf.mixed){
+        auto dbn = std::make_unique<mixed_dbn_t>();
 
-        std::cout << ds.source_files[i] << std::endl;
+        dbn->display();
 
-        std::size_t local_hits = 0;
+        std::ifstream is("cdbn.dat", std::ofstream::binary);
+        dbn->load(is);
 
-        for(size_t i = 0; i < 9; ++i){
-            for(size_t j = 0; j < 9; ++j){
-                uint8_t answer;
+        for(std::size_t i = 0; i < ds.source_grids.size(); ++i){
+            const auto& grid = ds.source_grids[i];
 
-                auto& cell_mat = image[i * 9 + j];
+            if(!conf.quiet){
+                std::cout << grid.source_image_path << std::endl;
+            }
 
-                auto fill = fill_factor(cell_mat);
+            std::size_t local_hits = 0;
 
-                auto weights = dbn->activation_probabilities(mat_to_image(cell_mat));
-                if(fill == 1.0f){
-                    answer = 0;
-                } else {
-                    answer = dbn->predict_label(weights)+1;
-                    //std::cout << weights[answer-1] << std::endl;
-                    //if(weights[answer-1] < 1e5){
-                    //    answer = 0;
-                    //}
-                }
+            for(size_t i = 0; i < 9; ++i){
+                for(size_t j = 0; j < 9; ++j){
+                    auto& cell = grid(j,i);
+                    auto answer = dbn->svm_predict(cell.image(conf)) + 1;
+                    auto correct = cell.correct();
 
-                if(answer == data.results[i][j]){
-                    ++local_hits;
-                } else {
-                    if(!answer || !data.results[i][j]){
-                        ++zero_errors;
+                    if(answer == correct){
+                        ++local_hits;
                     } else {
                         ++dbn_errors;
-                    }
 
-                    std::cout << "ERROR: " << std::endl;
-                    std::cout << "\t where: " << i << ":" << j << std::endl;
-                    std::cout << "\t answer: " << static_cast<size_t>(answer) << std::endl;
-                    std::cout << "\t was: " << static_cast<size_t>(data.results[i][j]) << std::endl;
-                    std::cout << "\t fill_factor: " << fill << std::endl;
-
-                    std::cout << "\t weights: {";
-                    for(std::size_t i = 0; i < weights.size(); ++i){
-                        if(i > 0){
-                            std::cout << ",";
+                        if(!conf.quiet){
+                            std::cout << "ERROR: " << std::endl;
+                            std::cout << "\t where: " << i << ":" << j << std::endl;
+                            std::cout << "\t answer: " << static_cast<size_t>(answer) << std::endl;
+                            std::cout << "\t was: " << static_cast<size_t>(correct) << std::endl;
                         }
-                        std::cout << weights[i];
                     }
-                    std::cout << "}" << std::endl;
                 }
             }
-        }
 
-        if(local_hits == 81){
-            ++sudoku_hits;
-        }
+            if(local_hits == 81){
+                ++sudoku_hits;
+            }
 
-        cell_hits += local_hits;
+            cell_hits += local_hits;
+        }
+    } else {
+        auto dbn = std::make_unique<dbn_t>();
+
+        dbn->display();
+
+        std::ifstream is("dbn.dat", std::ofstream::binary);
+        dbn->load(is);
+
+        auto error_rate = dll::test_set(dbn, ds.all_images, ds.all_labels, dll::predictor());
+
+        std::cout << std::endl;
+        std::cout << "DBN Error rate (normal): " << 100.0 * error_rate << "%" << std::endl;
+
+        for(std::size_t i = 0; i < ds.source_grids.size(); ++i){
+            const auto& grid = ds.source_grids[i];
+
+            std::cout << grid.source_image_path << std::endl;
+
+            std::size_t local_hits = 0;
+
+            for(size_t i = 0; i < 9; ++i){
+                for(size_t j = 0; j < 9; ++j){
+                    uint8_t answer;
+                    auto correct = grid(j,i).correct();
+                    auto& cell_mat = grid(j,i).mat(conf);
+
+                    auto fill = fill_factor(cell_mat);
+
+                    auto weights = dbn->activation_probabilities(grid(j,i).image(conf));
+                    if(fill == 1.0f){
+                        answer = 0;
+                    } else {
+                        answer = dbn->predict_label(weights)+1;
+                    }
+
+                    if(answer == correct){
+                        ++local_hits;
+                    } else {
+                        if(!answer || !correct){
+                            ++zero_errors;
+                        } else {
+                            ++dbn_errors;
+                        }
+
+                        if(!conf.quiet){
+                            std::cout << "ERROR: " << std::endl;
+                            std::cout << "\t where: " << i << ":" << j << std::endl;
+                            std::cout << "\t answer: " << static_cast<size_t>(answer) << std::endl;
+                            std::cout << "\t was: " << static_cast<size_t>(correct) << std::endl;
+                            std::cout << "\t fill_factor: " << fill << std::endl;
+
+                            std::cout << "\t weights: {";
+                            for(std::size_t i = 0; i < weights.size(); ++i){
+                                if(i > 0){
+                                    std::cout << ",";
+                                }
+                                std::cout << weights[i];
+                            }
+                            std::cout << "}" << std::endl;
+                        }
+                    }
+                }
+            }
+
+            if(local_hits == 81){
+                ++sudoku_hits;
+            }
+
+            cell_hits += local_hits;
+        }
     }
 
-    auto total_s = static_cast<float>(ds.source_images.size());
-    auto total_c = total_s * 81.0f;
+    auto total_s = static_cast<double>(ds.source_grids.size());
+    auto total_c = total_s * 81.0;
 
     std::cout << "Cell Error Rate " << 100.0 * (total_c - cell_hits) / total_c << "% (" << (total_c - cell_hits) << "/" << total_c << ")" << std::endl;
     std::cout << "Sudoku Error Rate " << 100.0 * (total_s - sudoku_hits) / total_s << "% (" << (total_s - sudoku_hits) << "/" << total_s << ")" << std::endl;
 
-    if(zero_errors || dbn_errors){
+    if(!conf.mixed && (zero_errors || dbn_errors)){
         auto tot = zero_errors + dbn_errors;
         std::cout << "Zero errors: " << 100.0 * zero_errors / tot << "% (" << zero_errors << "/" << tot << ")" << std::endl;
         std::cout << "DBN errors: " << 100.0 * dbn_errors / tot << "% (" << dbn_errors << "/" << tot << ")" << std::endl;
@@ -792,7 +829,7 @@ int command_time(const config& conf){
                     if(cell.empty()){
                         answer = 0;
                     } else {
-                        auto weights = dbn->activation_probabilities(mat_to_image(cell.binary_mat));
+                        auto weights = dbn->activation_probabilities(cell.image(conf));
                         answer = dbn->predict_label(weights)+1;
                     }
                 }
@@ -817,7 +854,7 @@ int command_time(const config& conf){
                     if(cell.empty()){
                         answer = 0;
                     } else {
-                        auto weights = dbn->activation_probabilities(mat_to_image(cell.binary_mat));
+                        auto weights = dbn->activation_probabilities(cell.image(conf));
                         answer = dbn->predict_label(weights)+1;
                     }
                 }
@@ -856,7 +893,7 @@ int command_time(const config& conf){
                     if(cell.empty()){
                         answer = 0;
                     } else {
-                        auto weights = dbn->activation_probabilities(mat_to_image(cell.binary_mat));
+                        auto weights = dbn->activation_probabilities(cell.image(conf));
                         answer = dbn->predict_label(weights)+1;
                     }
                 }
@@ -884,6 +921,8 @@ int main(int argc, char** argv){
     }
 
     auto conf = parse_args(argc, argv);
+
+    conf.gray = conf.mixed && mixed_dbn_t::rbm_type<0>::visible_unit == dll::unit_type::GAUSSIAN;
 
     if(conf.command == "detect" || conf.command == "detect_save"){
         return command_detect(conf);

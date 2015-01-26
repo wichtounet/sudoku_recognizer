@@ -12,6 +12,9 @@
 
 #include <opencv2/opencv.hpp>
 
+#include "config.hpp"
+#include "image_utils.hpp"
+
 struct sudoku_cell {
     bool m_empty = true;
 
@@ -22,6 +25,7 @@ struct sudoku_cell {
     cv::Rect bounding;
     cv::Rect digit_bounding;
     uint8_t m_value = 0;
+    uint8_t m_correct = 0;      //This is the value coming from the ground truth in [0,9]
 
     bool empty() const {
         return m_empty;
@@ -34,10 +38,31 @@ struct sudoku_cell {
     uint8_t& value(){
         return m_value;
     }
+
+    uint8_t correct() const {
+        return m_correct;
+    }
+
+    uint8_t& correct(){
+        return m_correct;
+    }
+
+    const cv::Mat& mat(const config& conf) const {
+        if(conf.gray){
+            return gray_mat;
+        } else {
+            return binary_mat;
+        }
+    }
+
+    std::vector<double> image(const config& conf) const {
+        return mat_to_image(mat(conf), conf.gray);
+    }
 };
 
 struct sudoku_grid {
     std::vector<sudoku_cell> cells;
+    std::string source_image_path;
     cv::Mat source_image;
 
     sudoku_cell& operator()(std::size_t x, std::size_t y){
