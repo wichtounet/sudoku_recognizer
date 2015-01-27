@@ -15,7 +15,19 @@
 constexpr const std::size_t test_divide = 5;
 constexpr const std::size_t subset_divide = 10;
 
+void preprocess(std::vector<double>& image, const config& conf){
+    if(conf.gray){
+        for(auto& pixel : image){
+            pixel = 255 - pixel;
+        }
+
+        cpp::normalize(image);
+    }
+}
+
 dataset get_dataset(const config& conf){
+    std::cout << "Start loading dataset..." << std::endl;
+
     dataset ds;
 
     for(auto& image_source_path : conf.files){
@@ -39,11 +51,13 @@ dataset get_dataset(const config& conf){
 
         for(size_t i = 0; i < 9; ++i){
             for(size_t j = 0; j < 9; ++j){
-                grid(j, i).correct() = data.results[i][j];
+                auto& cell = grid(j, i);
+
+                cell.correct() = data.results[i][j];
 
                 if(data.results[i][j]){
                     ds.all_labels.push_back(data.results[i][j]-1);
-                    ds.all_images.emplace_back(mat_to_image(grid(j, i).mat(conf), conf.gray));
+                    ds.all_images.emplace_back(cell.image(conf));
                 }
             }
         }
@@ -51,14 +65,8 @@ dataset get_dataset(const config& conf){
         ds.source_grids.push_back(grid);
     }
 
-    if(conf.gray){
-        for(auto& image : ds.all_images){
-            for(auto& pixel : image){
-                pixel = 255 - pixel;
-            }
-        }
-
-        cpp::normalize_each(ds.all_images);
+    for(auto& image : ds.all_images){
+        preprocess(image, conf);
     }
 
     if(conf.subset){
@@ -88,6 +96,8 @@ dataset get_dataset(const config& conf){
     assert(ds.all_images.size() == ds.all_labels.size());
     assert(ds.training_images.size() == ds.training_labels.size());
     assert(ds.test_images.size() == ds.test_labels.size());
+
+    std::cout << "...dataset loaded" << std::endl;
 
     return ds;
 }
