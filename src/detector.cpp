@@ -29,13 +29,13 @@ constexpr const bool SHOW_FINAL_LINES = false;
 
 constexpr const bool SHOW_INTERSECTIONS = false;
 constexpr const bool SHOW_CLUSTERED_INTERSECTIONS = false;
-constexpr const bool SHOW_HULL = false;
+constexpr const bool SHOW_HULL = true;
 constexpr const bool SHOW_HULL_FILL = false;
 constexpr const bool SHOW_TL_BR = false;
 constexpr const bool SHOW_CELLS = true;
 constexpr const bool SHOW_GRID_NUMBERS= false;
 constexpr const bool SHOW_CHAR_CELLS = true;
-constexpr const bool SHOW_REGRID = true;
+constexpr const bool SHOW_REGRID = false;
 constexpr const bool SHOW_REGRID_COLOR = false;
 constexpr const bool SHOW_REGRID_GRAY = false;
 
@@ -55,11 +55,14 @@ void sudoku_binarize(const cv::Mat& source_image, cv::Mat& dest_image){
     cv::morphologyEx(dest_image, dest_image, cv::MORPH_DILATE, structure_elem);
 }
 
-void cell_binarize(const cv::Mat& gray_image, cv::Mat& dest_image){
+//Cell binarization can probably be improved a lot
+void cell_binarize(const cv::Mat& gray_image, cv::Mat& dest_image, bool mixed){
     dest_image = gray_image.clone();
     cv::adaptiveThreshold(gray_image, dest_image, 255, CV_ADAPTIVE_THRESH_MEAN_C, CV_THRESH_BINARY, 7, 2);
 
-    cv::medianBlur(dest_image, dest_image, 3);
+    if(!mixed){
+        cv::medianBlur(dest_image, dest_image, 3);
+    }
 }
 
 cv::Point2f find_intersection(const line_t& p1, const line_t& p2){
@@ -263,24 +266,9 @@ void draw_points(cv::Mat& dest_image, const std::vector<cv::Point2f>& points, co
     }
 }
 
-std::vector<cv::Point2f> compute_hull(const std::vector<cv::Point2f>& points, cv::Mat& dest_image){
+std::vector<cv::Point2f> compute_hull(const std::vector<cv::Point2f>& points){
     std::vector<cv::Point2f> hull;
     cv::convexHull(points, hull, false);
-
-    IF_DEBUG std::cout << "Hull of size " << hull.size() << " found" << std::endl;
-
-    if(SHOW_HULL){
-        for(std::size_t i = 0; i < hull.size(); ++i){
-            cv::line(dest_image, hull[i], hull[(i+1)%hull.size()], cv::Scalar(128,128,128), 2, CV_AA);
-        }
-    }
-
-    if(SHOW_HULL_FILL){
-        auto hull_i = cpp::vector_transform(hull.begin(), hull.end(),
-            [](auto& p) -> cv::Point2i {return {static_cast<int>(p.x), static_cast<int>(p.y)};});
-        std::vector<decltype(hull_i)> contours = {hull_i};
-        cv::fillPoly(dest_image, contours, cv::Scalar(128, 128, 0));
-    }
 
     return hull;
 }
@@ -305,6 +293,15 @@ std::vector<cv::Rect> compute_grid(const std::vector<cv::Point2f>& hull, cv::Mat
             } else {
                 prev = angle;
             }
+        }
+    }
+
+    if(corners.size() != 4){
+        std::vector<cv::Point2f> approx;
+        cv::approxPolyDP(cv::Mat(hull), approx, arcLength(cv::Mat(hull), true)*0.02, true);
+
+        if(approx.size() == 4){
+            corners = approx;
         }
     }
 
@@ -749,7 +746,7 @@ std::vector<line_t> detect_lines_binary(const cv::Mat& binary_image, cv::Mat& de
     return final_lines;
 }
 
-std::vector<cv::Rect> detect_grid(const cv::Mat& source_image, cv::Mat& dest_image, std::vector<line_t>& lines, bool /*mixed*/){
+std::vector<cv::Rect> detect_grid(const cv::Mat& source_image, cv::Mat& dest_image, std::vector<line_t>& lines, bool mixed){
     if(lines.empty()){
         return {};
     }
@@ -771,16 +768,18 @@ std::vector<cv::Rect> detect_grid(const cv::Mat& source_image, cv::Mat& dest_ima
 
     IF_DEBUG std::cout << points.size() << " clustered intersections found" << std::endl;
 
+    std::vector<cv::Point2f> hull;
+
     //If the detected lines are optimal, the number of intersection is 100
     //In that case, no need to more post processing, just get the grid around
     //the points
     if(points.size() == 100){
         IF_DEBUG std::cout << "POINTS PERFECT" << std::endl;
 
-        auto hull = compute_hull(points, dest_image);
-
-        return compute_grid(hull, dest_image);
+        hull = compute_hull(points);
     } else {
+        IF_DEBUG std::cout << "Contour Hull" << std::endl;
+
         cv::Mat dest_image_gray;
         sudoku_binarize(source_image, dest_image_gray);
 
@@ -791,6 +790,8 @@ std::vector<cv::Rect> detect_grid(const cv::Mat& source_image, cv::Mat& dest_ima
         std::vector<cv::Vec4i> hierarchy;
         cv::findContours(dest_image_gray, contours, hierarchy, CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE, cv::Point(0,0));
 
+        cv::RNG rng(12345);
+
         std::size_t max_c = 0;
 
         for(std::size_t i = 1; i < contours.size(); ++i){
@@ -800,12 +801,36 @@ std::vector<cv::Rect> detect_grid(const cv::Mat& source_image, cv::Mat& dest_ima
         }
 
         auto clusters = cluster(to_float_points(contours[max_c]));
-        auto points = gravity_points(clusters);
+        auto g_points = gravity_points(clusters);
 
-        auto hull = compute_hull(points, dest_image);
+        hull = compute_hull(g_points);
 
-        return compute_grid(hull, dest_image);
+        auto total_area = source_image.size().width * source_image.size().height;
+        auto hull_area = cv::contourArea(hull);
+        auto area_ratio = hull_area / total_area;
+
+        if(mixed && area_ratio < 0.1){
+            IF_DEBUG std::cout << "Discard contour hull because of ratio " << area_ratio << std::endl;
+            hull = compute_hull(points);
+        }
     }
+
+    IF_DEBUG std::cout << "Hull of size " << hull.size() << " found" << std::endl;
+
+    if(SHOW_HULL){
+        for(std::size_t i = 0; i < hull.size(); ++i){
+            cv::line(dest_image, hull[i], hull[(i+1)%hull.size()], cv::Scalar(128,128,128), 2, CV_AA);
+        }
+    }
+
+    if(SHOW_HULL_FILL){
+        auto hull_i = cpp::vector_transform(hull.begin(), hull.end(),
+            [](auto& p) -> cv::Point2i {return {static_cast<int>(p.x), static_cast<int>(p.y)};});
+        std::vector<decltype(hull_i)> contours = {hull_i};
+        cv::fillPoly(dest_image, contours, cv::Scalar(128, 128, 0));
+    }
+
+    return compute_grid(hull, dest_image);
 }
 
 void show_regrid(sudoku_grid& grid, int mode){
@@ -890,7 +915,7 @@ sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::v
             cv::Mat rect_image_gray = rect_image.clone();
             cv::cvtColor(rect_image, rect_image_gray, CV_RGB2GRAY);
             cv::Mat rect_image_binary = rect_image_gray.clone();
-            cell_binarize(rect_image_gray, rect_image_binary);
+            cell_binarize(rect_image_gray, rect_image_binary, mixed);
 
             cv::Canny(rect_image_binary, rect_image_binary, 4, 12);
 
@@ -1072,9 +1097,11 @@ sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::v
             if(color_square_rect.width < color_square_rect.height){
                 color_square_rect.x -= (color_square_rect.height - color_square_rect.width) / 2;
                 color_square_rect.width = color_square_rect.height;
+                color_square_rect.x = std::max(0, color_square_rect.x);
             } else if(color_square_rect.height < color_square_rect.width){
                 color_square_rect.y -= (color_square_rect.width - color_square_rect.height) / 2;
                 color_square_rect.height = color_square_rect.width;
+                color_square_rect.y = std::max(0, color_square_rect.y);
             }
 
             //Extract the gray and color images (not yet resized)
@@ -1113,7 +1140,7 @@ sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::v
                     cv::resize(binary_final_square, big_square, big_square.size(), 0, 0, cv::INTER_CUBIC);
 
                     //Binarize again because resize goes back to GRAY
-                    cell_binarize(big_square, cell.binary_mat);
+                    cell_binarize(big_square, cell.binary_mat, mixed);
 
                     //Resize the color and gray squares
 
