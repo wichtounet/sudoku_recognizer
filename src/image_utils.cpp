@@ -20,8 +20,8 @@ std::vector<double> mat_to_image(const cv::Mat& mat, bool gray){
     assert(mat.rows == CELL_SIZE);
     assert(mat.cols == CELL_SIZE);
 
-    for(size_t i = 0; i < static_cast<size_t>(mat.rows); ++i){
-        for(size_t j = 0; j < static_cast<size_t>(mat.cols); ++j){
+    for(std::size_t i = 0; i < static_cast<std::size_t>(mat.rows); ++i){
+        for(std::size_t j = 0; j < static_cast<std::size_t>(mat.cols); ++j){
             auto value_c = static_cast<std::size_t>(mat.at<uint8_t>(i, j));
 
             if(gray){
