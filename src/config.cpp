@@ -22,6 +22,7 @@ void print_usage(){
     std::cout << " -m : Mixed mode" << std::endl;
     std::cout << " -s : Take only subsets" << std::endl;
     std::cout << " -q : Quiet mode" << std::endl;
+    std::cout << " -g : Grid search during training" << std::endl;
 }
 
 config parse_args(int argc, char** argv){
@@ -41,6 +42,8 @@ config parse_args(int argc, char** argv){
             conf.quiet = true;
         } else if(conf.args[i] == "-t"){
             conf.test = true;
+        } else if(conf.args[i] == "-g"){
+            conf.grid = true;
         } else {
             break;
         }

@@ -19,6 +19,7 @@ struct config {
     bool mixed = false;
     bool quiet = false;
     bool test = false;
+    bool grid = false;
     bool gray = false;    //This is computed at compile-time
 };
 
