@@ -15,6 +15,7 @@
 #include "sudoku.hpp"
 
 constexpr const size_t CELL_SIZE = 32;
+constexpr const size_t BIG_CELL_SIZE = 48;
 
 typedef std::pair<cv::Point2f, cv::Point2f> line_t;
 typedef std::pair<cv::Point2f, cv::Point2f> grid_cell;
