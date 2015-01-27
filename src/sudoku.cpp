@@ -39,38 +39,39 @@ constexpr const std::size_t n_colors = 6;
 
 using mixed_dbn_std_t = dll::conv_dbn_desc<
     dll::dbn_layers<
-        dll::conv_rbm_desc<32, 1, 21, 40,
+        dll::conv_rbm_desc<CELL_SIZE, 1, 21, 40,
             dll::momentum,
             dll::parallel,
             dll::visible<dll::unit_type::GAUSSIAN>,
             dll::sparsity<dll::sparsity_method::LEE>,
-            dll::batch_size<10>
+            dll::batch_size<25>
         >::rbm_t,
         dll::conv_rbm_desc<21, 40, 16, 40,
             dll::momentum,
             dll::parallel,
             dll::sparsity<dll::sparsity_method::LEE>,
-            dll::batch_size<10>>::rbm_t/*,
+            dll::batch_size<25>>::rbm_t/*,
         dll::conv_rbm_desc<10, 20, 6, 50, dll::momentum, dll::batch_size<25>>::rbm_t*/
-    >, dll::concatenate>::dbn_t;
+    >, dll::svm_concatenate>::dbn_t;
 
 using mixed_dbn_pmp_t = dll::conv_dbn_desc<
     dll::dbn_layers<
-        dll::conv_rbm_mp_desc<32, 1, 22, 40, 2,
+        dll::conv_rbm_mp_desc<CELL_SIZE, 1, 22, 40, 2,
             dll::momentum,
             dll::parallel,
             dll::weight_decay<dll::decay_type::L2>,
-//            dll::visible<dll::unit_type::GAUSSIAN>,
+            dll::visible<dll::unit_type::GAUSSIAN>,
             dll::sparsity<dll::sparsity_method::LEE>,
-            dll::batch_size<10>
+            dll::batch_size<25>
         >::rbm_t,
         dll::conv_rbm_mp_desc<11, 40, 6, 40, 2,
             dll::momentum,
             dll::parallel,
+            dll::weight_decay<dll::decay_type::L2>,
             dll::sparsity<dll::sparsity_method::LEE>,
-            dll::batch_size<10>>::rbm_t/*,
+            dll::batch_size<25>>::rbm_t/*,
         dll::conv_rbm_desc<10, 20, 6, 50, dll::momentum, dll::batch_size<25>>::rbm_t*/
-    >, dll::concatenate>::dbn_t;
+    >, dll::svm_concatenate/*, dll::svm_scale*/>::dbn_t;
 
 using mixed_dbn_t = mixed_dbn_pmp_t;
 
@@ -325,6 +326,7 @@ int command_fill(const config& conf){
 }
 
 int command_train(const config& conf){
+    std::cout << mixed_dbn_t::full_output_size() << std::endl;
     auto ds = get_dataset(conf);
 
     std::cout << "Train with " << ds.source_grids.size() << " sudokus" << std::endl;
@@ -355,18 +357,40 @@ int command_train(const config& conf){
         parameters.kernel_type = RBF;
         parameters.probability = 1;
         parameters.C = 10;
-        parameters.gamma = 1.0 / (CELL_SIZE * CELL_SIZE);
+        parameters.gamma = 0.01;;
 
-        dbn->svm_train(ds.training_images, ds.training_labels, parameters);
+        if(conf.grid){
+            //Normal grid search
+            dbn->svm_grid_search(ds.training_images, ds.training_labels);
 
-        std::cout << "training_error:" << dll::test_set(dbn, ds.training_images, ds.training_labels, dll::svm_predictor()) << std::endl;
+            //Coarser grid search
 
-        if(conf.test){
-            std::cout << "test_error:" << dll::test_set(dbn, ds.test_images, ds.test_labels, dll::svm_predictor()) << std::endl;
+            svm::rbf_grid coarse_grid;
+            coarse_grid.c_first = 0;
+            coarse_grid.c_last = 100;
+            coarse_grid.c_steps = 10;
+            coarse_grid.c_search = svm::grid_search_type::LINEAR;
+
+            coarse_grid.gamma_first = 2e-5;
+            coarse_grid.gamma_last = 5e-2;
+            coarse_grid.gamma_steps = 7;
+            coarse_grid.gamma_search = svm::grid_search_type::EXP;
+
+            dbn->svm_grid_search(ds.training_images, ds.training_labels, 4, coarse_grid);
+        } else {
+            dbn->svm_train(ds.training_images, ds.training_labels, parameters);
+
+            auto training_error = dll::test_set(dbn, ds.training_images, ds.training_labels, dll::svm_predictor());
+            std::cout << "training_error:" << training_error  << std::endl;
+
+            if(conf.test){
+                auto test_error = dll::test_set(dbn, ds.test_images, ds.test_labels, dll::svm_predictor());
+                std::cout << "test_error:" << test_error << std::endl;
+            }
+
+            std::ofstream os("cdbn.dat", std::ofstream::binary);
+            dbn->store(os);
         }
-
-        std::ofstream os("cdbn.dat", std::ofstream::binary);
-        dbn->store(os);
     } else {
         auto dbn = std::make_unique<dbn_t>();
         dbn->display();
@@ -393,9 +417,7 @@ int command_train(const config& conf){
 int command_recog(const config& conf){
     std::string image_source_path(conf.files.front());
 
-    auto dbn = std::make_unique<dbn_t>();
-
-    std::string dbn_path = "final.dat";
+    std::string dbn_path = conf.mixed ? "cdbn.dat" : "final.dat";
     if(conf.files.size() > 1){
         dbn_path = conf.files[1];
     }
@@ -405,8 +427,6 @@ int command_recog(const config& conf){
         std::cerr << dbn_path << " does not exist or is not readable" << std::endl;
         return 1;
     }
-
-    dbn->load(is);
 
     cv::Mat source_image;
     cv::Mat dest_image;
@@ -421,7 +441,7 @@ int command_recog(const config& conf){
             return 1;
         }
 
-        grid = detect(source_image, dest_image);
+        grid = detect(source_image, dest_image, conf.mixed);
     } else if(conf.command == "recog_binary"){
         std::ifstream is(image_source_path);
 
@@ -474,7 +494,7 @@ int command_recog(const config& conf){
             ++i;
         }
 
-        grid = detect_binary(source_image, dest_image);
+        grid = detect_binary(source_image, dest_image, conf.mixed);
     }
 
     if(!grid.valid()){
@@ -489,23 +509,37 @@ int command_recog(const config& conf){
 
         std::array<std::array<int, 9>, 9> matrix;
 
-        for(size_t i = 0; i < 9; ++i){
-            for(size_t j = 0; j < 9; ++j){
-                auto& cell = grid(j, i);
+        if(conf.mixed){
+            auto dbn = std::make_unique<mixed_dbn_t>();
+            dbn->load(is);
 
-                std::size_t answer;
-                if(cell.empty()){
-                    answer = 0;
-                } else {
-                    auto weights = dbn->activation_probabilities(cell.image(conf));
-                    answer = dbn->predict_label(weights)+1;
-                    for(std::size_t x = 0; x < weights.size(); ++x){
-                        if(answer != x + 1 && weights(x) > 1e-5){
-                            next.push_back(std::make_tuple(i * 9 + j, x + 1, weights(x)));
+            for(size_t i = 0; i < 9; ++i){
+                for(size_t j = 0; j < 9; ++j){
+                    matrix[i][j] = dbn->svm_predict(grid(j, i).image(conf));
+                }
+            }
+        } else {
+            auto dbn = std::make_unique<dbn_t>();
+            dbn->load(is);
+
+            for(size_t i = 0; i < 9; ++i){
+                for(size_t j = 0; j < 9; ++j){
+                    auto& cell = grid(j, i);
+
+                    std::size_t answer;
+                    if(cell.empty()){
+                        answer = 0;
+                    } else {
+                        auto weights = dbn->activation_probabilities(cell.image(conf));
+                        answer = dbn->predict_label(weights)+1;
+                        for(std::size_t x = 0; x < weights.size(); ++x){
+                            if(answer != x + 1 && weights(x) > 1e-5){
+                                next.push_back(std::make_tuple(i * 9 + j, x + 1, weights(x)));
+                            }
                         }
                     }
+                    matrix[i][j] = answer;
                 }
-                matrix[i][j] = answer;
             }
         }
 
@@ -574,7 +608,11 @@ int command_test(const config& conf){
             for(size_t i = 0; i < 9; ++i){
                 for(size_t j = 0; j < 9; ++j){
                     auto& cell = grid(j,i);
-                    auto answer = dbn->svm_predict(cell.image(conf)) + 1;
+                    auto image = cell.image(conf);
+
+                    preprocess(image, conf);
+
+                    auto answer = dbn->svm_predict(image) + 1;
                     auto correct = cell.correct();
 
                     if(answer == correct){
