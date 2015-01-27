@@ -27,6 +27,10 @@ struct sudoku_cell {
     uint8_t m_value = 0;
     uint8_t m_correct = 0;      //This is the value coming from the ground truth in [0,9]
 
+    cv::Mat bounding_binary_mat;  //Binary final cv::Mat
+    cv::Mat bounding_gray_mat;    //Gray final cv::Mat
+    cv::Mat bounding_color_mat;   //RGB final cv::Mat
+
     bool empty() const {
         return m_empty;
     }
@@ -48,10 +52,18 @@ struct sudoku_cell {
     }
 
     const cv::Mat& mat(const config& conf) const {
-        if(conf.gray){
-            return gray_mat;
+        if(conf.big){
+            if(conf.gray){
+                return bounding_gray_mat;
+            } else {
+                return bounding_binary_mat;
+            }
         } else {
-            return binary_mat;
+            if(conf.gray){
+                return gray_mat;
+            } else {
+                return binary_mat;
+            }
         }
     }
 

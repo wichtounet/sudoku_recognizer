@@ -92,7 +92,6 @@ dataset get_dataset(const config& conf){
         ds.training_images = ds.all_images;
     }
 
-    assert(ds.source_images.size() == ds.source_data.size());
     assert(ds.all_images.size() == ds.all_labels.size());
     assert(ds.training_images.size() == ds.training_labels.size());
     assert(ds.test_images.size() == ds.test_labels.size());

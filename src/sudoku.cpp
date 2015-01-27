@@ -73,7 +73,26 @@ using mixed_dbn_pmp_t = dll::conv_dbn_desc<
         dll::conv_rbm_desc<10, 20, 6, 50, dll::momentum, dll::batch_size<25>>::rbm_t*/
     >, dll::svm_concatenate/*, dll::svm_scale*/>::dbn_t;
 
-using mixed_dbn_t = mixed_dbn_pmp_t;
+using mixed_dbn_pmp_big_t = dll::conv_dbn_desc<
+    dll::dbn_layers<
+        dll::conv_rbm_mp_desc<BIG_CELL_SIZE, 1, 32, 40, 2,
+            dll::momentum,
+            dll::parallel,
+            dll::weight_decay<dll::decay_type::L2>,
+            dll::visible<dll::unit_type::GAUSSIAN>,
+            dll::sparsity<dll::sparsity_method::LEE>,
+            dll::batch_size<25>
+        >::rbm_t,
+        dll::conv_rbm_mp_desc<16, 40, 10, 40, 2,
+            dll::momentum,
+            dll::parallel,
+            dll::weight_decay<dll::decay_type::L2>,
+            dll::sparsity<dll::sparsity_method::LEE>,
+            dll::batch_size<25>>::rbm_t/*,
+        dll::conv_rbm_desc<10, 20, 6, 50, dll::momentum, dll::batch_size<25>>::rbm_t*/
+    >, dll::svm_concatenate/*, dll::svm_scale*/>::dbn_t;
+
+using mixed_dbn_t = mixed_dbn_pmp_big_t;
 
 using dbn_t = dll::dbn_desc<
     dll::dbn_layers<
@@ -349,15 +368,15 @@ int command_train(const config& conf){
         dbn->layer<1>().pbias = 0.05;
 
         std::cout << "Start pretraining" << std::endl;
-        dbn->pretrain(ds.training_images, 25);
+        dbn->pretrain(ds.training_images, 20); //TODO Increase
 
         svm_parameter parameters = dll::default_svm_parameters();
 
         parameters.svm_type = C_SVC;
         parameters.kernel_type = RBF;
         parameters.probability = 1;
-        parameters.C = 10;
-        parameters.gamma = 0.01;;
+        parameters.C = 2.8;
+        parameters.gamma = 0.01;
 
         if(conf.grid){
             //Normal grid search
@@ -961,6 +980,10 @@ int main(int argc, char** argv){
     auto conf = parse_args(argc, argv);
 
     conf.gray = conf.mixed && mixed_dbn_t::rbm_type<0>::visible_unit == dll::unit_type::GAUSSIAN;
+    conf.big = conf.mixed && true; //Could be computed correctly as well
+
+    std::cout << "Gray: " << conf.gray << std::endl;;
+    std::cout << "Big: " << conf.big << std::endl;;
 
     if(conf.command == "detect" || conf.command == "detect_save"){
         return command_detect(conf);

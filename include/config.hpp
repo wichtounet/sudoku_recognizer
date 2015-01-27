@@ -21,6 +21,7 @@ struct config {
     bool test = false;
     bool grid = false;
     bool gray = false;    //This is computed at compile-time
+    bool big = false;     //This is computed at compile-time
 };
 
 void print_usage();

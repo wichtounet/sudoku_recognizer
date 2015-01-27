@@ -15,10 +15,7 @@ float fill_factor(const cv::Mat& mat){
 }
 
 std::vector<double> mat_to_image(const cv::Mat& mat, bool gray){
-    std::vector<double> image(CELL_SIZE * CELL_SIZE);
-
-    assert(mat.rows == CELL_SIZE);
-    assert(mat.cols == CELL_SIZE);
+    std::vector<double> image(mat.rows * mat.cols);
 
     for(std::size_t i = 0; i < static_cast<std::size_t>(mat.rows); ++i){
         for(std::size_t j = 0; j < static_cast<std::size_t>(mat.cols); ++j){

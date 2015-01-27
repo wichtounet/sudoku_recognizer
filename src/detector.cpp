@@ -35,9 +35,13 @@ constexpr const bool SHOW_TL_BR = false;
 constexpr const bool SHOW_CELLS = true;
 constexpr const bool SHOW_GRID_NUMBERS= false;
 constexpr const bool SHOW_CHAR_CELLS = true;
+
 constexpr const bool SHOW_REGRID = false;
 constexpr const bool SHOW_REGRID_COLOR = false;
 constexpr const bool SHOW_REGRID_GRAY = false;
+constexpr const bool SHOW_LARGE_REGRID = true;
+constexpr const bool SHOW_LARGE_REGRID_COLOR = true;
+constexpr const bool SHOW_LARGE_REGRID_GRAY = true;
 
 #define IF_DEBUG if(DEBUG)
 
@@ -834,23 +838,45 @@ std::vector<cv::Rect> detect_grid(const cv::Mat& source_image, cv::Mat& dest_ima
 }
 
 void show_regrid(sudoku_grid& grid, int mode){
-    if((mode == 0 && SHOW_REGRID) || (mode == 1 && SHOW_REGRID_GRAY) || (mode == 2 && SHOW_REGRID_COLOR)){
-        cv::Mat remat(cv::Size(CELL_SIZE * 9, CELL_SIZE * 9), mode == 2 ? grid(0,0).color_mat.type() : grid(0,0).binary_mat.type());
+    if((mode == 0 && SHOW_REGRID) || (mode == 1 && SHOW_REGRID_GRAY) || (mode == 2 && SHOW_REGRID_COLOR)
+        || (mode == 3 && SHOW_LARGE_REGRID) || (mode == 4 && SHOW_LARGE_REGRID_GRAY) || (mode == 5 && SHOW_LARGE_REGRID_COLOR)){
+        auto size = mode > 2 ? BIG_CELL_SIZE : CELL_SIZE;
+
+        cv::Mat remat(cv::Size(size * 9, size * 9), (mode == 2 || mode == 5) ? grid(0,0).color_mat.type() : grid(0,0).binary_mat.type());
 
         for(std::size_t i = 0; i < 9; ++i){
             for(std::size_t j = 0; j < 9; ++j){
                 const auto& mat =
                         mode == 0 ? grid(i, j).binary_mat :
                         mode == 1 ? grid(i, j).gray_mat :
-                                    grid(i, j).color_mat;
+                        mode == 2 ? grid(i, j).color_mat :
+                        mode == 3 ? grid(i, j).bounding_binary_mat :
+                        mode == 4 ? grid(i ,j).bounding_gray_mat :
+                                    grid(i, j).bounding_color_mat;
 
-                mat.copyTo(remat(cv::Rect(i * CELL_SIZE, j * CELL_SIZE, CELL_SIZE, CELL_SIZE)));
+                mat.copyTo(remat(cv::Rect(i * size, j * size, size, size)));
             }
         }
 
         cv::namedWindow("Sudoku Final " + std::to_string(mode), cv::WINDOW_AUTOSIZE);
         cv::imshow("Sudoku Final " + std::to_string(mode), remat);
     }
+}
+
+cv::Rect to_square(cv::Rect rect){
+    auto square = rect;
+
+    if(square.width < square.height){
+        square.x -= (square.height - square.width) / 2;
+        square.width = square.height;
+        square.x = std::max(0, square.x);
+    } else if(square.height < square.width){
+        square.y -= (square.width - square.height) / 2;
+        square.height = square.width;
+        square.y = std::max(0, square.y);
+    }
+
+    return square;
 }
 
 sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::vector<cv::Rect>& cells, std::vector<line_t>& lines, bool mixed){
@@ -896,11 +922,31 @@ sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::v
         cell.binary_mat = cv::Mat(cv::Size(CELL_SIZE, CELL_SIZE), source.type());
         cell.gray_mat = cv::Mat(cv::Size(CELL_SIZE, CELL_SIZE), source.type());
         cell.color_mat = cv::Mat(cv::Size(CELL_SIZE, CELL_SIZE), source_image.type());
+
+        cell.bounding_binary_mat = cv::Mat(cv::Size(BIG_CELL_SIZE, BIG_CELL_SIZE), source.type());
+        cell.bounding_gray_mat = cv::Mat(cv::Size(BIG_CELL_SIZE, BIG_CELL_SIZE), source.type());
+        cell.bounding_color_mat = cv::Mat(cv::Size(BIG_CELL_SIZE, BIG_CELL_SIZE), source_image.type());
+
+        cell.binary_mat = cv::Scalar(255);
+
         cell.bounding = ensure_inside(source, cells[n]);
 
         const auto& bounding = cell.bounding;
 
-        cell.binary_mat = cv::Scalar(255);
+        auto bounding_square = to_square(bounding);
+
+        cv::Mat bounding_color_mat(source_image, bounding_square);
+        cv::Mat bounding_gray_mat(source_image, bounding_square);
+        cv::cvtColor(bounding_color_mat, bounding_gray_mat, CV_RGB2GRAY);
+        //cv::Mat bounding_binary_mat(source, bounding_square);
+        //cv::Mat tmp_bounding_binary_mat(source, bounding_square);
+
+        cv::resize(bounding_color_mat, cell.bounding_color_mat, cv::Size(BIG_CELL_SIZE, BIG_CELL_SIZE), 0, 0, cv::INTER_CUBIC);
+        cv::resize(bounding_gray_mat, cell.bounding_gray_mat, cv::Size(BIG_CELL_SIZE, BIG_CELL_SIZE), 0, 0, cv::INTER_CUBIC);
+        //cv::resize(bounding_binary_mat, tmp_bounding_binary_mat, cv::Size(BIG_CELL_SIZE, BIG_CELL_SIZE), 0, 0, cv::INTER_CUBIC);
+
+        //Binarize again because resize goes back to GRAY
+        cell_binarize(cell.bounding_gray_mat, cell.bounding_binary_mat, false);
 
         //Clear bounding image of  the cell
         cv::Mat rect_image_clean(source, bounding);
@@ -1092,17 +1138,7 @@ sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::v
             binary_final_rect.copyTo(binary_final_square(cv::Rect((dim - rect.width) / 2, (dim - rect.height) / 2, rect.width, rect.height)));
 
             //In color/gray mode, we cannot simple pad the image with black/white pixel, therefore we increase the size of the rect
-            auto color_square_rect = big_rect;
-
-            if(color_square_rect.width < color_square_rect.height){
-                color_square_rect.x -= (color_square_rect.height - color_square_rect.width) / 2;
-                color_square_rect.width = color_square_rect.height;
-                color_square_rect.x = std::max(0, color_square_rect.x);
-            } else if(color_square_rect.height < color_square_rect.width){
-                color_square_rect.y -= (color_square_rect.width - color_square_rect.height) / 2;
-                color_square_rect.height = color_square_rect.width;
-                color_square_rect.y = std::max(0, color_square_rect.y);
-            }
+            auto color_square_rect = to_square(big_rect);
 
             //Extract the gray and color images (not yet resized)
 
@@ -1168,6 +1204,9 @@ sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::v
     show_regrid(grid, 0);
     show_regrid(grid, 1);
     show_regrid(grid, 2);
+    show_regrid(grid, 3);
+    show_regrid(grid, 4);
+    show_regrid(grid, 5);
 
     return grid;
 }
