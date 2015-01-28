@@ -20,6 +20,7 @@ struct config {
     bool quiet = false;
     bool test = false;
     bool grid = false;
+    bool oracle = false;
     bool gray = false;    //This is computed at compile-time
     bool big = false;     //This is computed at compile-time
 };

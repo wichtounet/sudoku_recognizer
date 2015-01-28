@@ -8,10 +8,9 @@
 #include "data.hpp"
 #include <fstream>
 
-gt_data read_data(const std::string& image_source_path){
-    std::string data_source_path(image_source_path);
-    data_source_path.replace(data_source_path.end() - 3, data_source_path.end(), "dat");
+namespace {
 
+gt_data read_metadata(const std::string& data_source_path){
     gt_data data;
     data.valid = true;
 
@@ -50,6 +49,24 @@ gt_data read_data(const std::string& image_source_path){
     }
 
     return data;
+}
+
+} //end of anonymous namespace
+
+gt_data read_data(const std::string& image_source_path){
+    std::string data_source_path(image_source_path);
+    data_source_path.replace(data_source_path.end() - 3, data_source_path.end(), "dat");
+
+    return read_metadata(data_source_path);
+}
+
+gt_data read_data_pure(const std::string& image_source_path){
+    std::string image_name(image_source_path.begin() + image_source_path.rfind('/'), image_source_path.end());
+
+    std::string data_source_path = "/home/wichtounet/dev/sudoku_dataset/images/" + image_name;
+    data_source_path.replace(data_source_path.end() - 3, data_source_path.end(), "dat");
+
+    return read_metadata(data_source_path);
 }
 
 void write_data(const std::string& image_source_path, const gt_data& data){

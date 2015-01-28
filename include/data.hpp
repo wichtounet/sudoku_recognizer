@@ -18,6 +18,8 @@ struct gt_data {
 };
 
 gt_data read_data(const std::string& path);
+gt_data read_data_pure(const std::string& path);
+
 void write_data(const std::string& path, const gt_data& data);
 
 #endif

@@ -60,7 +60,7 @@ using mixed_dbn_pmp_t = dll::conv_dbn_desc<
             dll::momentum,
             dll::parallel,
             dll::weight_decay<dll::decay_type::L2>,
-            dll::visible<dll::unit_type::GAUSSIAN>,
+            //dll::visible<dll::unit_type::GAUSSIAN>,
             dll::sparsity<dll::sparsity_method::LEE>,
             dll::batch_size<25>
         >::rbm_t,
@@ -79,7 +79,7 @@ using mixed_dbn_pmp_big_t = dll::conv_dbn_desc<
             dll::momentum,
             dll::parallel,
             dll::weight_decay<dll::decay_type::L2>,
-            dll::visible<dll::unit_type::GAUSSIAN>,
+            //dll::visible<dll::unit_type::GAUSSIAN>,
             dll::sparsity<dll::sparsity_method::LEE>,
             dll::batch_size<25>
         >::rbm_t,
@@ -92,7 +92,7 @@ using mixed_dbn_pmp_big_t = dll::conv_dbn_desc<
         dll::conv_rbm_desc<10, 20, 6, 50, dll::momentum, dll::batch_size<25>>::rbm_t*/
     >, dll::svm_concatenate/*, dll::svm_scale*/>::dbn_t;
 
-using mixed_dbn_t = mixed_dbn_pmp_big_t;
+using mixed_dbn_t = mixed_dbn_pmp_t;
 
 using dbn_t = dll::dbn_desc<
     dll::dbn_layers<
@@ -360,15 +360,15 @@ int command_train(const config& conf){
         auto dbn = std::make_unique<mixed_dbn_t>();
         dbn->display();
 
-        //dbn->layer<0>().learning_rate /= 2.0;
+        dbn->layer<1>().learning_rate *= 2.0;
 
         dbn->layer<0>().pbias = 0.10;
 
         dbn->layer<1>().pbias_lambda = 2;
-        dbn->layer<1>().pbias = 0.05;
+        dbn->layer<1>().pbias = 0.08;
 
         std::cout << "Start pretraining" << std::endl;
-        dbn->pretrain(ds.training_images, 20); //TODO Increase
+        dbn->pretrain(ds.training_images, 25); //TODO Increase
 
         svm_parameter parameters = dll::default_svm_parameters();
 
@@ -380,18 +380,18 @@ int command_train(const config& conf){
 
         if(conf.grid){
             //Normal grid search
-            dbn->svm_grid_search(ds.training_images, ds.training_labels);
+            //dbn->svm_grid_search(ds.training_images, ds.training_labels);
 
             //Coarser grid search
 
             svm::rbf_grid coarse_grid;
-            coarse_grid.c_first = 0;
-            coarse_grid.c_last = 100;
+            coarse_grid.c_first = 0.1;
+            coarse_grid.c_last = 20;
             coarse_grid.c_steps = 10;
             coarse_grid.c_search = svm::grid_search_type::LINEAR;
 
-            coarse_grid.gamma_first = 2e-5;
-            coarse_grid.gamma_last = 5e-2;
+            coarse_grid.gamma_first = 1e-4;
+            coarse_grid.gamma_last = 2e-2;
             coarse_grid.gamma_steps = 7;
             coarse_grid.gamma_search = svm::grid_search_type::EXP;
 
@@ -966,7 +966,7 @@ int command_time(const config& conf){
         std::cout << "\tmedian: " << median(tot_sum) << std::endl;
     }
 
-return 0;
+    return 0;
 }
 
 } //end of anonymous namespace
@@ -980,7 +980,7 @@ int main(int argc, char** argv){
     auto conf = parse_args(argc, argv);
 
     conf.gray = conf.mixed && mixed_dbn_t::rbm_type<0>::visible_unit == dll::unit_type::GAUSSIAN;
-    conf.big = conf.mixed && true; //Could be computed correctly as well
+    conf.big = conf.mixed && std::is_same<mixed_dbn_t, mixed_dbn_pmp_big_t>::value;
 
     std::cout << "Gray: " << conf.gray << std::endl;;
     std::cout << "Big: " << conf.big << std::endl;;

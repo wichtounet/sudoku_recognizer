@@ -32,6 +32,7 @@ struct dataset {
 };
 
 void preprocess(std::vector<double>& image, const config& conf);
+
 dataset get_dataset(const config& conf);
 
 #endif

@@ -29,7 +29,7 @@ constexpr const bool SHOW_FINAL_LINES = false;
 
 constexpr const bool SHOW_INTERSECTIONS = false;
 constexpr const bool SHOW_CLUSTERED_INTERSECTIONS = false;
-constexpr const bool SHOW_HULL = true;
+constexpr const bool SHOW_HULL = false;
 constexpr const bool SHOW_HULL_FILL = false;
 constexpr const bool SHOW_TL_BR = false;
 constexpr const bool SHOW_CELLS = true;
@@ -39,35 +39,11 @@ constexpr const bool SHOW_CHAR_CELLS = true;
 constexpr const bool SHOW_REGRID = false;
 constexpr const bool SHOW_REGRID_COLOR = false;
 constexpr const bool SHOW_REGRID_GRAY = false;
-constexpr const bool SHOW_LARGE_REGRID = true;
-constexpr const bool SHOW_LARGE_REGRID_COLOR = true;
-constexpr const bool SHOW_LARGE_REGRID_GRAY = true;
+constexpr const bool SHOW_LARGE_REGRID = false;
+constexpr const bool SHOW_LARGE_REGRID_COLOR = false;
+constexpr const bool SHOW_LARGE_REGRID_GRAY = false;
 
 #define IF_DEBUG if(DEBUG)
-
-void sudoku_binarize(const cv::Mat& source_image, cv::Mat& dest_image){
-    cv::Mat gray_image;
-    cv::cvtColor(source_image, gray_image, CV_RGB2GRAY);
-
-    cv::medianBlur(gray_image, gray_image, 5);
-
-    cv::adaptiveThreshold(gray_image, dest_image, 255, CV_ADAPTIVE_THRESH_MEAN_C, CV_THRESH_BINARY, 11, 2);
-
-    cv::medianBlur(dest_image, dest_image, 5);
-
-    auto structure_elem = cv::getStructuringElement(cv::MORPH_CROSS, cv::Size(3, 3));
-    cv::morphologyEx(dest_image, dest_image, cv::MORPH_DILATE, structure_elem);
-}
-
-//Cell binarization can probably be improved a lot
-void cell_binarize(const cv::Mat& gray_image, cv::Mat& dest_image, bool mixed){
-    dest_image = gray_image.clone();
-    cv::adaptiveThreshold(gray_image, dest_image, 255, CV_ADAPTIVE_THRESH_MEAN_C, CV_THRESH_BINARY, 7, 2);
-
-    if(!mixed){
-        cv::medianBlur(dest_image, dest_image, 3);
-    }
-}
 
 cv::Point2f find_intersection(const line_t& p1, const line_t& p2){
     float denom = (p1.first.x - p1.second.x)*(p2.first.y - p2.second.y) - (p1.first.y - p1.second.y)*(p2.first.x - p2.second.x);
@@ -395,6 +371,56 @@ std::vector<cv::Point2f> to_float_points(const std::vector<cv::Point>& vec){
 }
 
 } //end of anonymous namespace
+
+void show_regrid(sudoku_grid& grid, int mode){
+    if((mode == 0 && SHOW_REGRID) || (mode == 1 && SHOW_REGRID_GRAY) || (mode == 2 && SHOW_REGRID_COLOR)
+        || (mode == 3 && SHOW_LARGE_REGRID) || (mode == 4 && SHOW_LARGE_REGRID_GRAY) || (mode == 5 && SHOW_LARGE_REGRID_COLOR)){
+        auto size = mode > 2 ? BIG_CELL_SIZE : CELL_SIZE;
+
+        cv::Mat remat(cv::Size(size * 9, size * 9), (mode == 2 || mode == 5) ? grid(0,0).color_mat.type() : grid(0,0).binary_mat.type());
+
+        for(std::size_t i = 0; i < 9; ++i){
+            for(std::size_t j = 0; j < 9; ++j){
+                const auto& mat =
+                        mode == 0 ? grid(i, j).binary_mat :
+                        mode == 1 ? grid(i, j).gray_mat :
+                        mode == 2 ? grid(i, j).color_mat :
+                        mode == 3 ? grid(i, j).bounding_binary_mat :
+                        mode == 4 ? grid(i ,j).bounding_gray_mat :
+                                    grid(i, j).bounding_color_mat;
+
+                mat.copyTo(remat(cv::Rect(i * size, j * size, size, size)));
+            }
+        }
+
+        cv::namedWindow("Sudoku Final " + std::to_string(mode), cv::WINDOW_AUTOSIZE);
+        cv::imshow("Sudoku Final " + std::to_string(mode), remat);
+    }
+}
+
+void sudoku_binarize(const cv::Mat& source_image, cv::Mat& dest_image){
+    cv::Mat gray_image;
+    cv::cvtColor(source_image, gray_image, CV_RGB2GRAY);
+
+    cv::medianBlur(gray_image, gray_image, 5);
+
+    cv::adaptiveThreshold(gray_image, dest_image, 255, CV_ADAPTIVE_THRESH_MEAN_C, CV_THRESH_BINARY, 11, 2);
+
+    cv::medianBlur(dest_image, dest_image, 5);
+
+    auto structure_elem = cv::getStructuringElement(cv::MORPH_CROSS, cv::Size(3, 3));
+    cv::morphologyEx(dest_image, dest_image, cv::MORPH_DILATE, structure_elem);
+}
+
+//Cell binarization can probably be improved a lot
+void cell_binarize(const cv::Mat& gray_image, cv::Mat& dest_image, bool mixed){
+    dest_image = gray_image.clone();
+    cv::adaptiveThreshold(gray_image, dest_image, 255, CV_ADAPTIVE_THRESH_MEAN_C, CV_THRESH_BINARY, 7, 2);
+
+    if(!mixed){
+        cv::medianBlur(dest_image, dest_image, 3);
+    }
+}
 
 std::vector<line_t> detect_lines(const cv::Mat& source_image, cv::Mat& dest_image, bool mixed){
     cv::Mat binary_image;
@@ -837,32 +863,6 @@ std::vector<cv::Rect> detect_grid(const cv::Mat& source_image, cv::Mat& dest_ima
     return compute_grid(hull, dest_image);
 }
 
-void show_regrid(sudoku_grid& grid, int mode){
-    if((mode == 0 && SHOW_REGRID) || (mode == 1 && SHOW_REGRID_GRAY) || (mode == 2 && SHOW_REGRID_COLOR)
-        || (mode == 3 && SHOW_LARGE_REGRID) || (mode == 4 && SHOW_LARGE_REGRID_GRAY) || (mode == 5 && SHOW_LARGE_REGRID_COLOR)){
-        auto size = mode > 2 ? BIG_CELL_SIZE : CELL_SIZE;
-
-        cv::Mat remat(cv::Size(size * 9, size * 9), (mode == 2 || mode == 5) ? grid(0,0).color_mat.type() : grid(0,0).binary_mat.type());
-
-        for(std::size_t i = 0; i < 9; ++i){
-            for(std::size_t j = 0; j < 9; ++j){
-                const auto& mat =
-                        mode == 0 ? grid(i, j).binary_mat :
-                        mode == 1 ? grid(i, j).gray_mat :
-                        mode == 2 ? grid(i, j).color_mat :
-                        mode == 3 ? grid(i, j).bounding_binary_mat :
-                        mode == 4 ? grid(i ,j).bounding_gray_mat :
-                                    grid(i, j).bounding_color_mat;
-
-                mat.copyTo(remat(cv::Rect(i * size, j * size, size, size)));
-            }
-        }
-
-        cv::namedWindow("Sudoku Final " + std::to_string(mode), cv::WINDOW_AUTOSIZE);
-        cv::imshow("Sudoku Final " + std::to_string(mode), remat);
-    }
-}
-
 cv::Rect to_square(cv::Rect rect){
     auto square = rect;
 
@@ -933,7 +933,13 @@ sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::v
 
         const auto& bounding = cell.bounding;
 
-        auto bounding_square = to_square(bounding);
+        auto bounding_rect = bounding;
+        bounding_rect.x += 5;
+        bounding_rect.y += 5;
+        bounding_rect.width -= 10;
+        bounding_rect.height -= 10;
+
+        auto bounding_square = to_square(bounding_rect);
 
         cv::Mat bounding_color_mat(source_image, bounding_square);
         cv::Mat bounding_gray_mat(source_image, bounding_square);
