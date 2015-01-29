@@ -23,6 +23,7 @@ void print_usage(){
     std::cout << " -s : Take only subsets" << std::endl;
     std::cout << " -q : Quiet mode" << std::endl;
     std::cout << " -o : Oracle mode" << std::endl;
+    std::cout << " -r : Shuffle input files" << std::endl;
     std::cout << " -g : Grid search during training" << std::endl;
 }
 
@@ -47,6 +48,8 @@ config parse_args(int argc, char** argv){
             conf.grid = true;
         } else if(conf.args[i] == "-o"){
             conf.oracle = true;
+        } else if(conf.args[i] == "-r"){
+            conf.shuffle = true;
         } else {
             break;
         }

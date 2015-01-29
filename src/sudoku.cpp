@@ -360,7 +360,7 @@ int command_train(const config& conf){
         auto dbn = std::make_unique<mixed_dbn_t>();
         dbn->display();
 
-        dbn->layer<1>().learning_rate *= 2.0;
+        //dbn->layer<1>().learning_rate *= 2.0;
 
         dbn->layer<0>().pbias = 0.10;
 
@@ -375,8 +375,8 @@ int command_train(const config& conf){
         parameters.svm_type = C_SVC;
         parameters.kernel_type = RBF;
         parameters.probability = 1;
-        parameters.C = 2.8;
-        parameters.gamma = 0.01;
+        parameters.C = 2.3;
+        parameters.gamma = 0.035;
 
         if(conf.grid){
             //Normal grid search
@@ -984,6 +984,14 @@ int main(int argc, char** argv){
 
     std::cout << "Gray: " << conf.gray << std::endl;;
     std::cout << "Big: " << conf.big << std::endl;;
+
+    if(conf.shuffle){
+        std::cout << "Shuffle input" << std::endl;
+
+        std::random_device rd{};
+        std::default_random_engine rand_engine{rd()};
+        std::shuffle(conf.files.begin(), conf.files.end(), rand_engine);
+    }
 
     if(conf.command == "detect" || conf.command == "detect_save"){
         return command_detect(conf);

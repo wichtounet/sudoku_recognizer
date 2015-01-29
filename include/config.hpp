@@ -21,6 +21,7 @@ struct config {
     bool test = false;
     bool grid = false;
     bool oracle = false;
+    bool shuffle = false;
     bool gray = false;    //This is computed at compile-time
     bool big = false;     //This is computed at compile-time
 };
