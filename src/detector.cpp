@@ -1178,11 +1178,36 @@ sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::v
 
                 if(min_distance >= 50.0f || mixed){
                     //Resize the square to the cell size
-                    cv::Mat big_square(cv::Size(CELL_SIZE, CELL_SIZE), binary_final_square.type());
-                    cv::resize(binary_final_square, big_square, big_square.size(), 0, 0, cv::INTER_CUBIC);
+                    //cv::Mat big_square(cv::Size(CELL_SIZE, CELL_SIZE), binary_final_square.type());
+                    //cv::resize(binary_final_square, big_square, big_square.size(), 0, 0, cv::INTER_CUBIC);
 
-                    //Binarize again because resize goes back to GRAY
-                    cell_binarize(big_square, cell.binary_mat, mixed);
+                    ////Binarize again because resize goes back to GRAY
+                    //cell_binarize(big_square, cell.binary_mat, mixed);
+
+
+                    ///
+
+                    cv::Mat step_1(source_image, big_rect);
+                    cv::Mat step_2;
+                    cv::Mat step_3;
+                    cv::cvtColor(step_1, step_2, CV_RGB2GRAY);
+                    cell_binarize(step_2, step_3, mixed);
+
+                    //Make the image square
+                    cv::Mat step_4(cv::Size(dim, dim), step_3.type());
+                    step_4 = cv::Scalar(255,255,255);
+                    step_3.copyTo(step_4(cv::Rect((dim - rect.width) / 2, (dim - rect.height) / 2, rect.width, rect.height)));
+
+                    cv::Mat step_5(cv::Size(CELL_SIZE, CELL_SIZE), step_4.type());
+                    cv::resize(step_4, step_5, step_5.size(), 0, 0, cv::INTER_CUBIC);
+
+                    cell_binarize(step_5, cell.binary_mat, false);
+
+
+                    /////
+
+
+
 
                     //Resize the color and gray squares
 

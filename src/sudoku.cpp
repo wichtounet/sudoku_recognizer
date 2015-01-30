@@ -19,6 +19,7 @@
 #include "dll/conv_dbn.hpp"
 #include "dll/test.hpp"
 #include "dll/labels.hpp"
+#include "dll/ocv_visualizer.hpp"
 
 #include "mnist/mnist_reader.hpp"
 #include "mnist/mnist_utils.hpp"
@@ -56,7 +57,7 @@ using mixed_dbn_std_t = dll::conv_dbn_desc<
 
 using mixed_dbn_pmp_t = dll::conv_dbn_desc<
     dll::dbn_layers<
-        dll::conv_rbm_mp_desc<CELL_SIZE, 1, 22, 40, 2,
+        dll::conv_rbm_mp_desc<CELL_SIZE, 1, 22, 30, 2,
             dll::momentum,
             dll::parallel,
             dll::weight_decay<dll::decay_type::L2>,
@@ -64,14 +65,14 @@ using mixed_dbn_pmp_t = dll::conv_dbn_desc<
             dll::sparsity<dll::sparsity_method::LEE>,
             dll::batch_size<25>
         >::rbm_t,
-        dll::conv_rbm_mp_desc<11, 40, 6, 40, 2,
+        dll::conv_rbm_mp_desc<11, 30, 6, 30, 2,
             dll::momentum,
             dll::parallel,
             dll::weight_decay<dll::decay_type::L2>,
             dll::sparsity<dll::sparsity_method::LEE>,
             dll::batch_size<25>>::rbm_t/*,
         dll::conv_rbm_desc<10, 20, 6, 50, dll::momentum, dll::batch_size<25>>::rbm_t*/
-    >, dll::svm_concatenate/*, dll::svm_scale*/>::dbn_t;
+    >, dll::watcher<dll::opencv_dbn_visualizer>, dll::svm_concatenate/*, dll::svm_scale*/>::dbn_t;
 
 using mixed_dbn_pmp_big_t = dll::conv_dbn_desc<
     dll::dbn_layers<
@@ -360,12 +361,13 @@ int command_train(const config& conf){
         auto dbn = std::make_unique<mixed_dbn_t>();
         dbn->display();
 
-        //dbn->layer<1>().learning_rate *= 2.0;
+        //dbn->layer<0>().learning_rate *= 2.0;
 
-        dbn->layer<0>().pbias = 0.10;
+        dbn->layer<0>().pbias_lambda = 2;
+        dbn->layer<0>().pbias = 0.02;
 
         dbn->layer<1>().pbias_lambda = 2;
-        dbn->layer<1>().pbias = 0.08;
+        dbn->layer<1>().pbias = 0.01;
 
         std::cout << "Start pretraining" << std::endl;
         dbn->pretrain(ds.training_images, 25); //TODO Increase
@@ -375,8 +377,8 @@ int command_train(const config& conf){
         parameters.svm_type = C_SVC;
         parameters.kernel_type = RBF;
         parameters.probability = 1;
-        parameters.C = 2.3;
-        parameters.gamma = 0.035;
+        parameters.C = 2.8;
+        parameters.gamma = 0.001;
 
         if(conf.grid){
             //Normal grid search
@@ -615,12 +617,17 @@ int command_test(const config& conf){
         std::ifstream is("cdbn.dat", std::ofstream::binary);
         dbn->load(is);
 
+        auto error = dll::test_set(dbn, ds.training_images, ds.training_labels, dll::svm_predictor());
+        std::cout << "error:" << error  << std::endl;
+
         for(std::size_t i = 0; i < ds.source_grids.size(); ++i){
             const auto& grid = ds.source_grids[i];
 
             if(!conf.quiet){
                 std::cout << grid.source_image_path << std::endl;
             }
+
+            auto pure_data = read_data_pure(grid.source_image_path);
 
             std::size_t local_hits = 0;
 
@@ -644,6 +651,12 @@ int command_test(const config& conf){
                             std::cout << "\t where: " << i << ":" << j << std::endl;
                             std::cout << "\t answer: " << static_cast<size_t>(answer) << std::endl;
                             std::cout << "\t was: " << static_cast<size_t>(correct) << std::endl;
+
+                            if(pure_data.results[i][j]){
+                                std::cout  << "\t PRINTED DIGIT" << std::endl;
+                            } else {
+                                std::cout  << "\t HANDWRITTEN DIGIT" << std::endl;
+                            }
                         }
                     }
                 }
