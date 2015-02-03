@@ -1029,7 +1029,6 @@ sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::v
         //Clear bounding image of  the cell
         cv::Mat rect_image_clean(source, bounding);
 
-
         if(n < 100){
             cv::Mat rect_image(source_image, bounding);
             cv::Mat rect_image_gray = rect_image.clone();
@@ -1058,10 +1057,6 @@ sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::v
                 v -= min;
             }
 
-            //for(std::size_t i = 0; i < histo_y.size(); ++i){
-                //std::cout << (i * 10) << "," << histo_y[i] << std::endl;
-            //}
-
             int max_sx = 0;
             int max_lx = 0;
             std::tie(max_sx, max_lx) = find_best<true>(histo_x, width, 1, width * (2.0 / 3.0));
@@ -1070,24 +1065,10 @@ sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::v
             int max_ly = 0;
             std::tie(max_sy, max_ly) = find_best<false>(histo_y, height, height * (1.0 / 3.0), height * (7.0 / 8.0));
 
-
             cv::Rect rect(bounding.x + max_sx, bounding.y + max_sy, max_lx, max_ly);
 
             cv::rectangle(dest_image, rect, cv::Scalar(0, 255, 255));
-
-
-            //cv::line(dest_image,
-                //cv::Point2f(bounding.x + max_sx, bounding.y + bounding.height / 2),
-                //cv::Point2f(bounding.x + max_sx + max_lx, bounding.y + bounding.height / 2),
-                //cv::Scalar(0, 255, 255), 2, CV_AA);
-
-            //cv::line(dest_image,
-                //cv::Point2f(bounding.x + bouding.height, bounding.y + bounding.height / 2),
-                //cv::Point2f(bounding.x + max_sx + max_lx, bounding.y + bounding.height / 2),
-                //cv::Scalar(0, 255, 255), 2, CV_AA);
         }
-
-
 
         //Use contours detection to detect the candidates
 
@@ -1295,12 +1276,11 @@ sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::v
 
                 if(fill > 0.85f || mixed){
                     for(auto& line : lines){
-                        auto local_distance = 0.0f;
-
-                        local_distance += manhattan_distance(cv::Point2f(big_rect.x, big_rect.y), line);
-                        local_distance += manhattan_distance(cv::Point2f(big_rect.x + big_rect.width, big_rect.y), line);
-                        local_distance += manhattan_distance(cv::Point2f(big_rect.x, big_rect.y + big_rect.height), line);
-                        local_distance += manhattan_distance(cv::Point2f(big_rect.x + big_rect.width, big_rect.y + big_rect.height), line);
+                        float local_distance =
+                                manhattan_distance(cv::Point2f(big_rect.x, big_rect.y), line)
+                            +   manhattan_distance(cv::Point2f(big_rect.x + big_rect.width, big_rect.y), line)
+                            +   manhattan_distance(cv::Point2f(big_rect.x, big_rect.y + big_rect.height), line)
+                            +   manhattan_distance(cv::Point2f(big_rect.x + big_rect.width, big_rect.y + big_rect.height), line);
 
                         min_distance = std::min(min_distance, local_distance);
                     }
@@ -1309,16 +1289,6 @@ sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::v
                 IF_DEBUG std::cout << "\tmin_distance=" << min_distance << std::endl;
 
                 if(min_distance >= 50.0f || mixed){
-                    //Resize the square to the cell size
-                    //cv::Mat big_square(cv::Size(CELL_SIZE, CELL_SIZE), binary_final_square.type());
-                    //cv::resize(binary_final_square, big_square, big_square.size(), 0, 0, cv::INTER_CUBIC);
-
-                    ////Binarize again because resize goes back to GRAY
-                    //cell_binarize(big_square, cell.binary_mat, mixed);
-
-
-                    ///
-
                     cv::Mat step_1(source_image, big_rect);
                     cv::Mat step_2;
                     cv::Mat step_3;
@@ -1334,12 +1304,6 @@ sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::v
                     cv::resize(step_4, step_5, step_5.size(), 0, 0, cv::INTER_CUBIC);
 
                     cell_binarize(step_5, cell.binary_mat, false);
-
-
-                    /////
-
-
-
 
                     //Resize the color and gray squares
 
