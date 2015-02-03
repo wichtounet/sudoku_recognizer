@@ -16,6 +16,9 @@ debug: debug_sudoku
 
 all: release debug
 
+cppcheck:
+	cppcheck --enable=all --std=c++11 -I include src
+
 sonar: release
 	cppcheck --xml-version=2 --enable=all --std=c++11 -I include src 2> cppcheck_report.xml
 	/opt/sonar-runner/bin/sonar-runner
