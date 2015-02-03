@@ -34,7 +34,7 @@ constexpr const bool SHOW_HULL_FILL = false;
 constexpr const bool SHOW_TL_BR = false;
 constexpr const bool SHOW_CELLS = true;
 constexpr const bool SHOW_GRID_NUMBERS= false;
-constexpr const bool SHOW_CHAR_CELLS = true;
+constexpr const bool SHOW_CHAR_CELLS = false;
 
 constexpr const bool SHOW_REGRID = false;
 constexpr const bool SHOW_REGRID_COLOR = false;
@@ -879,6 +879,78 @@ cv::Rect to_square(cv::Rect rect){
     return square;
 }
 
+template<bool X>
+std::pair<std::size_t, std::size_t> find_best(std::vector<int>& histo, std::size_t width, std::size_t min_width, std::size_t max_width){
+    auto max = 0.0;
+    auto max_sx = 0;
+    auto max_l = 0;
+
+    auto w_cx_dx = 0.1;                 //find centers
+    auto w_fill_ratio = 0.58;           //find plateau
+    auto w_avg_avg = 0.1;               //find peaks
+    auto w_l_ratio = 0.32;              //find large zones
+
+    for(std::size_t sx = 0; sx < width; ++sx){
+        for(std::size_t l = min_width; l < max_width && sx + l < width; ++l){
+            //1. Displacement to the center (in [0,1])
+            auto cx_dx = 1.0 - std::fabs(width / 2.0 - (sx + l / 2.0)) / (width / 2.0);
+
+            //2. Max intensity (absolute)
+
+            auto max_intensity = 0;
+
+            for(std::size_t x = 0; x < l; ++x){
+                max_intensity = std::max(max_intensity, histo[sx + x]);
+            }
+
+            //Don't take risks
+            if(max_intensity == 0){
+                continue;
+            }
+
+            //3. Total area (absolute)
+
+            auto total_area = max_intensity * l;
+
+            //4. Area (absolute)
+
+            auto area = 0.0;
+
+            for(std::size_t x = 0; x < l; ++x){
+                area += histo[sx + x];
+            }
+
+            //4. Fill ratio (in [0,1])
+
+            auto fill_ratio = area / total_area;
+
+            //5. Average intensity (absolute)
+
+            auto avg = area / l;
+
+            //6. Averaged average intensity (in [0,1])
+
+            auto avg_avg = avg / *std::max_element(histo.begin(), histo.end());
+
+            //7. Length ratio (in [0,1])
+
+            auto l_ratio = static_cast<double>(l) / max_width;
+
+            //8. Final heuristic
+
+            auto f = w_avg_avg * avg_avg + w_fill_ratio * fill_ratio + w_cx_dx * cx_dx + w_l_ratio * l_ratio;
+
+            if(f > max){
+                max = f;
+                max_sx = sx;
+                max_l = l;
+            }
+        }
+    }
+
+    return {max_sx, max_l};
+}
+
 sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::vector<cv::Rect>& cells, std::vector<line_t>& lines, bool mixed){
     sudoku_grid grid;
     grid.source_image = source_image.clone(); //TODO constructor
@@ -956,6 +1028,66 @@ sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::v
 
         //Clear bounding image of  the cell
         cv::Mat rect_image_clean(source, bounding);
+
+
+        if(n < 100){
+            cv::Mat rect_image(source_image, bounding);
+            cv::Mat rect_image_gray = rect_image.clone();
+            cv::cvtColor(rect_image, rect_image_gray, CV_RGB2GRAY);
+
+            auto width = rect_image.size().width;
+            auto height = rect_image.size().height;
+
+            std::vector<int> histo_x(width, 0);
+            std::vector<int> histo_y(height, 0);
+
+            for(int x = 0; x < width; ++x){
+                for(int y = 0; y < height; ++y){
+                    histo_x[x] += 255 - rect_image_gray.at<uchar>(cv::Point(x, y));
+                    histo_y[y] += 255 - rect_image_gray.at<uchar>(cv::Point(x, y));
+                }
+            }
+
+            auto min = *std::min_element(histo_x.begin(), histo_x.end());
+            for(auto& v : histo_x){
+                v -= min;
+            }
+
+            min = *std::min_element(histo_y.begin(), histo_y.end());
+            for(auto& v : histo_y){
+                v -= min;
+            }
+
+            //for(std::size_t i = 0; i < histo_y.size(); ++i){
+                //std::cout << (i * 10) << "," << histo_y[i] << std::endl;
+            //}
+
+            int max_sx = 0;
+            int max_lx = 0;
+            std::tie(max_sx, max_lx) = find_best<true>(histo_x, width, 1, width * (2.0 / 3.0));
+
+            int max_sy = 0;
+            int max_ly = 0;
+            std::tie(max_sy, max_ly) = find_best<false>(histo_y, height, height * (1.0 / 3.0), height * (7.0 / 8.0));
+
+
+            cv::Rect rect(bounding.x + max_sx, bounding.y + max_sy, max_lx, max_ly);
+
+            cv::rectangle(dest_image, rect, cv::Scalar(0, 255, 255));
+
+
+            //cv::line(dest_image,
+                //cv::Point2f(bounding.x + max_sx, bounding.y + bounding.height / 2),
+                //cv::Point2f(bounding.x + max_sx + max_lx, bounding.y + bounding.height / 2),
+                //cv::Scalar(0, 255, 255), 2, CV_AA);
+
+            //cv::line(dest_image,
+                //cv::Point2f(bounding.x + bouding.height, bounding.y + bounding.height / 2),
+                //cv::Point2f(bounding.x + max_sx + max_lx, bounding.y + bounding.height / 2),
+                //cv::Scalar(0, 255, 255), 2, CV_AA);
+        }
+
+
 
         //Use contours detection to detect the candidates
 
