@@ -25,35 +25,13 @@
 #include "mnist/mnist_utils.hpp"
 
 #include "detector.hpp"
-#include "solver.hpp"
 #include "dataset.hpp"
 #include "config.hpp"
 #include "image_utils.hpp"
 #include "utils.hpp"
+#include "fill.hpp"
 
 namespace {
-
-//These constants need to be sync when changing MNIST dataset and the fill colors
-constexpr const std::size_t mnist_size_1 = 60000;
-constexpr const std::size_t mnist_size_2 = 10000;
-constexpr const std::size_t n_colors = 6;
-
-using mixed_dbn_std_t = dll::conv_dbn_desc<
-    dll::dbn_layers<
-        dll::conv_rbm_desc<CELL_SIZE, 1, 21, 40,
-            dll::momentum,
-            dll::parallel,
-            dll::visible<dll::unit_type::GAUSSIAN>,
-            dll::sparsity<dll::sparsity_method::LEE>,
-            dll::batch_size<25>
-        >::rbm_t,
-        dll::conv_rbm_desc<21, 40, 16, 40,
-            dll::momentum,
-            dll::parallel,
-            dll::sparsity<dll::sparsity_method::LEE>,
-            dll::batch_size<25>>::rbm_t/*,
-        dll::conv_rbm_desc<10, 20, 6, 50, dll::momentum, dll::batch_size<25>>::rbm_t*/
-    >, dll::svm_concatenate>::dbn_t;
 
 using mixed_dbn_pmp_t = dll::conv_dbn_desc<
     dll::dbn_layers<
@@ -138,161 +116,6 @@ int command_detect(const config& conf){
     }
 
     return 0;
-}
-
-template<typename Dataset>
-cv::Mat fill_image(const std::string& source, Dataset& mnist_dataset, const std::vector<cv::Vec3b>& colors, bool write){
-    static std::random_device rd{};
-    static std::default_random_engine rand_engine{rd()};
-
-    static std::uniform_int_distribution<std::size_t> digit_distribution(0, mnist_size_1 + mnist_size_2);
-    static std::uniform_int_distribution<int> offset_distribution(-3, 3);
-    static std::uniform_int_distribution<std::size_t> color_distribution(0, n_colors - 1);
-
-    static auto digit_generator = std::bind(digit_distribution, rand_engine);
-    static auto offset_generator = std::bind(offset_distribution, rand_engine);
-    static auto color_generator = std::bind(color_distribution, rand_engine);
-
-    std::cout << "Process image " << source << std::endl;
-
-    auto source_image = open_image(source);
-    auto original_image = open_image(source, false);
-
-    if (!source_image.data || !original_image.data){
-        std::cout << "Invalid source_image" << std::endl;
-        return original_image;
-    }
-
-    cv::Mat dest_image = original_image.clone();
-
-    //Detect if image was resized
-
-    bool resized = source_image.size() != original_image.size();
-    auto w_ratio = static_cast<double>(source_image.size().width) / original_image.size().width;
-    auto h_ratio = static_cast<double>(source_image.size().height) / original_image.size().height;
-
-    //Detect the grid/cells
-
-    cv::Mat detect_dest_image;
-    auto grid = detect(source_image, detect_dest_image);
-
-    if(!grid.valid()){
-        std::cout << "Invalid grid" << std::endl;
-    }
-
-    //We use the ground truth to complete/fix the detection pass
-
-    auto data = read_data(source);
-
-    if(!data.valid){
-        std::cout << "The ground truth data is not valid" << std::endl;
-    }
-
-    for(size_t i = 0; i < 9; ++i){
-        for(size_t j = 0; j < 9; ++j){
-            auto& cell = grid(j, i);
-
-            cell.value() = data.results[i][j];
-            cell.m_empty = !cell.value();
-        }
-    }
-
-    if(!is_valid(grid)){
-        std::cout << "The grid is not valid" << std::endl;
-    }
-
-    //Solve the grid (if it fails (bad detection/ground truth), random fill)
-
-    if(!solve(grid)){
-        std::cout << "The grid is not solvable" << std::endl;
-        solve_random(grid);
-    }
-
-    //Update the ground truth
-
-    for(size_t i = 0; i < 9; ++i){
-        for(size_t j = 0; j < 9; ++j){
-            data.results[i][j] = grid(j, i).value();
-        }
-    }
-
-    //Pick a random color for the whole sudoku
-    const auto& fill_color = colors[color_generator()];
-
-    for(auto& cell : grid.cells){
-        if(cell.empty()){
-            auto& bounding_rect = cell.bounding;
-
-            //Note to self: This is pretty stupid (theoretical possible infinite loop)
-            auto r = digit_generator();
-            while(true){
-                auto label = r < mnist_size_1 ? mnist_dataset.training_labels[r] : mnist_dataset.test_labels[r - mnist_size_1];
-
-                if(label == cell.value()){
-                    break;
-                }
-
-                r = digit_generator();
-            }
-
-            //Get the digit from MNIST
-
-            auto image = r < mnist_size_1 ? mnist_dataset.training_images[r] : mnist_dataset.test_images[r - mnist_size_1];
-
-            cv::Mat image_mat(28, 28, CV_8U);
-            for(std::size_t xx = 0; xx < 28; ++xx){
-                for(std::size_t yy = 0; yy < 28; ++yy){
-                    image_mat.at<uchar>(cv::Point(xx, yy)) = image[yy * 28 + xx];
-                }
-            }
-
-            //Center the digit inside the cell (plus some random offsets)
-
-            auto x_start = offset_generator() + bounding_rect.x + (bounding_rect.width - 28) / 2;
-            auto y_start = offset_generator() + bounding_rect.y + (bounding_rect.height - 28) / 2;
-
-            //Apply reverse ratio
-            if(resized){
-                cv::Mat resized;
-                cv::resize(image_mat, resized, cv::Size(), 1.0 / w_ratio, 1.0 / h_ratio, CV_INTER_CUBIC);
-                image_mat = resized;
-
-                x_start *= (1.0 / w_ratio);
-                y_start *= (1.0 / h_ratio);
-            }
-
-            //Draw the digit
-
-            for(int xx = 0; xx < image_mat.size().width; ++xx){
-                for(int yy = 0; yy < image_mat.size().height; ++yy){
-                    auto mnist_color = image_mat.at<uchar>(cv::Point(xx, yy));
-
-                    if(mnist_color > 40){
-                        auto& color = dest_image.at<cv::Vec3b>(cv::Point(xx + x_start, yy + y_start));
-
-                        color[0] = fill_color[0];
-                        color[1] = fill_color[1];
-                        color[2] = fill_color[2];
-                    }
-                }
-            }
-
-            //Apply a light blur on the drawed digit
-
-            cv::Rect mnist_rect(x_start, y_start, image_mat.size().width, image_mat.size().height);
-            cv::GaussianBlur(dest_image(mnist_rect), dest_image(mnist_rect), cv::Size(0,0), 1);
-        }
-    }
-
-    if(write){
-        std::string dest(source);
-        dest.insert(dest.rfind('.'), ".mixed");
-        imwrite(dest.c_str(), dest_image);
-
-        write_data(dest, data);
-    }
-
-    return dest_image;
 }
 
 int command_fill(const config& conf){
@@ -756,6 +579,11 @@ int command_test(const config& conf){
 }
 
 int command_time(const config& conf){
+    if(conf.mixed){
+        std::cout << "the time command does not support mixed mode" << std::endl;
+        return 1;
+    }
+
     auto dbn = std::make_unique<dbn_t>();
 
     std::ifstream is("dbn.dat", std::ofstream::binary);
@@ -995,12 +823,7 @@ int main(int argc, char** argv){
     conf.gray = conf.mixed && mixed_dbn_t::rbm_type<0>::visible_unit == dll::unit_type::GAUSSIAN;
     conf.big = conf.mixed && std::is_same<mixed_dbn_t, mixed_dbn_pmp_big_t>::value;
 
-    std::cout << "Gray: " << conf.gray << std::endl;;
-    std::cout << "Big: " << conf.big << std::endl;;
-
     if(conf.shuffle){
-        std::cout << "Shuffle input" << std::endl;
-
         std::random_device rd{};
         std::default_random_engine rand_engine{rd()};
         std::shuffle(conf.files.begin(), conf.files.end(), rand_engine);
