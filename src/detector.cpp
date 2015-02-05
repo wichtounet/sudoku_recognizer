@@ -1057,6 +1057,14 @@ sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::v
                 v -= min;
             }
 
+            if(n == 1){
+                std::cout << "[";
+                for(std::size_t i = 0; i < histo_x.size(); ++i){
+                    std::cout << histo_x[i] << ",";
+                }
+                std::cout << "]" << std::endl;
+            }
+
             int max_sx = 0;
             int max_lx = 0;
             std::tie(max_sx, max_lx) = find_best<true>(histo_x, width, 1, width * (2.0 / 3.0));
