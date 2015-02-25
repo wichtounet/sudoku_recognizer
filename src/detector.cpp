@@ -8,6 +8,7 @@
 #include <iostream>
 #include <numeric>
 #include <array>
+#include <fstream>
 
 #include <opencv2/opencv.hpp>
 
@@ -17,6 +18,10 @@
 #include "data.hpp"
 #include "trig_utils.hpp"
 #include "image_utils.hpp"
+
+#include "test_histogram.h"
+#include "initialization_model.h"
+#include "delta_coeff.h"
 
 namespace {
 
@@ -951,6 +956,62 @@ std::pair<std::size_t, std::size_t> find_best(std::vector<int>& histo, std::size
     return {max_sx, max_l};
 }
 
+std::pair<std::size_t, std::size_t> hmm_look(std::vector<int>& histo){
+    auto T = histo.size();
+
+    std::vector<double> test(T);
+    std::copy(histo.begin(), histo.end(), test.begin());
+
+    auto max = static_cast<double>(*std::max_element(test.begin(), test.end()));
+    auto min = static_cast<double>(*std::min_element(test.begin(), test.end()));
+
+    for(auto& t : test){
+        //std::cout << "before: " << t << std::endl;
+        t = (t - min) / (max - min);
+        //std::cout << "after: " << t << std::endl;
+    }
+
+    // example
+    double* res = delta_coeff_arr(test.data(), T, 2);
+    double* res2 = delta_2coeff_arr(test.data(), T, 2);
+
+    // allocate the memory
+    double* Test_Vect[3];
+    for (int i = 0; i < 3; i++){
+        Test_Vect[i] = new double[T];
+    }
+
+    for (std::size_t j = 0; j < T; j++){
+        Test_Vect[0][j] = test[j];
+        Test_Vect[1][j] = res[j];
+        Test_Vect[2][j] = res2[j];
+    }
+
+    free(res);
+    free(res2);
+
+    // number of classes
+    int NClasses = 1;
+    //int* Align = new int[T];
+    std::vector<int> Align(T);
+
+    static model_t * model = initialization_model("hmm/v2/Matrix_Fer.json");
+
+    test_histogram(model, Test_Vect, T, NClasses, Align.data());
+
+    auto start = std::distance(Align.begin(), std::find(Align.begin(), Align.end(), 4));
+    auto end = T - std::distance(Align.rbegin(), std::find(Align.rbegin(), Align.rend(), 4));
+
+    // free the allocated memory
+    for (int i = 0; i < 3; i++){
+        delete[] Test_Vect[i];
+    }
+
+    //delete[] Align;
+
+    return std::make_pair(start, end);
+}
+
 sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::vector<cv::Rect>& cells, std::vector<line_t>& lines, bool mixed){
     sudoku_grid grid;
     grid.source_image = source_image.clone(); //TODO constructor
@@ -1047,6 +1108,17 @@ sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::v
                 }
             }
 
+            if(n == 71){
+                for(auto& v : histo_x){
+                    std::cout << v << " ";
+                }
+                std::cout << std::endl;
+            }
+
+            std::size_t x_start, x_end, y_start, y_end;
+            std::tie(x_start, x_end) = hmm_look(histo_x);
+            std::tie(y_start, y_end) = hmm_look(histo_y);
+
             auto min = *std::min_element(histo_x.begin(), histo_x.end());
             for(auto& v : histo_x){
                 v -= min;
@@ -1057,13 +1129,9 @@ sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::v
                 v -= min;
             }
 
-            if(n == 1){
-                std::cout << "[";
-                for(std::size_t i = 0; i < histo_x.size(); ++i){
-                    std::cout << histo_x[i] << ",";
-                }
-                std::cout << "]" << std::endl;
-            }
+            cv::Rect rect(bounding.x + x_start, bounding.y + y_start, x_end - x_start, y_end - y_start);
+
+            cv::rectangle(dest_image, rect, cv::Scalar(0, 255, 255));
 
             int max_sx = 0;
             int max_lx = 0;
@@ -1073,9 +1141,8 @@ sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::v
             int max_ly = 0;
             std::tie(max_sy, max_ly) = find_best<false>(histo_y, height, height * (1.0 / 3.0), height * (7.0 / 8.0));
 
-            cv::Rect rect(bounding.x + max_sx, bounding.y + max_sy, max_lx, max_ly);
-
-            cv::rectangle(dest_image, rect, cv::Scalar(0, 255, 255));
+            //cv::Rect rect_h(bounding.x + max_sx, bounding.y + max_sy, max_lx, max_ly);
+            //cv::rectangle(dest_image, rect_h, cv::Scalar(255, 0, 0));
         }
 
         //Use contours detection to detect the candidates
