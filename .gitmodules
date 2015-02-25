@@ -13,3 +13,6 @@
 	path = make-utils
 	url = https://github.com/wichtounet/make-utils.git
 	branch = master
+[submodule "hmm"]
+	path = hmm
+	url = git@github.com:antonio86/HMM_lib.git
