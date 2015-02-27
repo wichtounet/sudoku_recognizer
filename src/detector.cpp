@@ -22,6 +22,7 @@
 #include "test_histogram.h"
 #include "initialization_model.h"
 #include "delta_coeff.h"
+#include "free_model.h"
 
 namespace {
 
@@ -956,7 +957,15 @@ std::pair<std::size_t, std::size_t> find_best(std::vector<int>& histo, std::size
     return {max_sx, max_l};
 }
 
-std::pair<std::size_t, std::size_t> hmm_look(std::vector<int>& histo){
+static model_t* x_model;
+static model_t* y_model;
+
+std::pair<std::size_t, std::size_t> hmm_look(std::vector<int>& histo, bool xxx){
+    if(!x_model){
+        x_model = initialization_model("hmm/Matrix_Fer_x.json");
+        y_model = initialization_model("hmm/Matrix_Fer_y.json");
+    }
+
     auto T = histo.size();
 
     std::vector<double> test(T);
@@ -995,9 +1004,7 @@ std::pair<std::size_t, std::size_t> hmm_look(std::vector<int>& histo){
     //int* Align = new int[T];
     std::vector<int> Align(T);
 
-    static model_t * model = initialization_model("hmm/v2/Matrix_Fer.json");
-
-    test_histogram(model, Test_Vect, T, NClasses, Align.data());
+    test_histogram(xxx ? x_model : y_model, Test_Vect, T, NClasses, Align.data());
 
     auto start = std::distance(Align.begin(), std::find(Align.begin(), Align.end(), 4));
     auto end = T - std::distance(Align.rbegin(), std::find(Align.rbegin(), Align.rend(), 4));
@@ -1108,16 +1115,17 @@ sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::v
                 }
             }
 
-            if(n == 71){
-                for(auto& v : histo_x){
-                    std::cout << v << " ";
-                }
-                std::cout << std::endl;
-            }
-
             std::size_t x_start, x_end, y_start, y_end;
-            std::tie(x_start, x_end) = hmm_look(histo_x);
-            std::tie(y_start, y_end) = hmm_look(histo_y);
+            std::tie(x_start, x_end) = hmm_look(histo_x, true);
+            std::tie(y_start, y_end) = hmm_look(histo_y, false);
+
+            std::cout << "[";
+            std::string comma = "";
+            for(auto& v : histo_y){
+                std::cout << comma << v;
+                comma = ",";
+            }
+            std::cout << "]" << std::endl;
 
             auto min = *std::min_element(histo_x.begin(), histo_x.end());
             for(auto& v : histo_x){
@@ -1418,7 +1426,14 @@ sudoku_grid detect(const cv::Mat& source_image, cv::Mat& dest_image, bool mixed)
 
     auto lines = detect_lines(source_image, dest_image, mixed);
     auto cells = detect_grid(source_image, dest_image, lines, mixed);
-    return split(source_image, dest_image, cells, lines, mixed);
+
+    auto ret = split(source_image, dest_image, cells, lines, mixed);
+
+    //if(model){
+        //free_model(model);
+    //}
+
+    return ret;
 }
 
 sudoku_grid detect_binary(const cv::Mat& source_image, cv::Mat& dest_image, bool mixed){
