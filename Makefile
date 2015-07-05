@@ -5,7 +5,9 @@ default: release
 include make-utils/flags.mk
 include make-utils/cpp-utils.mk
 
-CXX_FLAGS += -Idbn/etl/include -Ihmm/include -Idbn/nice_svm/include -Idbn/include -Imnist/include -Iinclude/cpp_utils -std=c++1y -stdlib=libc++
+$(eval $(call use_libcxx))
+
+CXX_FLAGS += -Idbn/etl/include -Ihmm/include -Idbn/nice_svm/include -Idbn/include -Imnist/include -Iinclude/cpp_utils
 LD_FLAGS  += -lopencv_core -lopencv_imgproc -lopencv_highgui -lsvm -pthreads
 
 $(eval $(call auto_folder_compile,src))
