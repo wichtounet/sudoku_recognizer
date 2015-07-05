@@ -6,6 +6,7 @@
 //=======================================================================
 
 #include <random>
+#include <functional>
 
 #include "solver.hpp"
 

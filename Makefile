@@ -8,7 +8,7 @@ include make-utils/cpp-utils.mk
 $(eval $(call use_libcxx))
 
 CXX_FLAGS += -Idbn/etl/include -Ihmm/include -Idbn/nice_svm/include -Idbn/include -Imnist/include -Iinclude/cpp_utils
-LD_FLAGS  += -lopencv_core -lopencv_imgproc -lopencv_highgui -lsvm -pthreads
+LD_FLAGS  += -lopencv_core -lopencv_imgproc -lopencv_highgui -lsvm -pthread
 
 $(eval $(call auto_folder_compile,src))
 $(eval $(call auto_simple_c_folder_compile,hmm/src))
