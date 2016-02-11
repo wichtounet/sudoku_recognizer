@@ -184,8 +184,6 @@ int command_train(const config& conf){
         auto dbn = std::make_unique<mixed_dbn_t>();
         dbn->display();
 
-        //dbn->layer<0>().learning_rate *= 2.0;
-
         dbn->layer<0>().pbias_lambda = 2;
         dbn->layer<0>().pbias = 0.02;
 
@@ -205,7 +203,7 @@ int command_train(const config& conf){
 
         if(conf.grid){
             //Normal grid search
-            //dbn->svm_grid_search(ds.training_images, ds.training_labels);
+            dbn->svm_grid_search(ds.training_images, ds.training_labels);
 
             //Coarser grid search
 

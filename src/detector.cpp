@@ -975,9 +975,7 @@ std::pair<std::size_t, std::size_t> hmm_look(std::vector<int>& histo, bool xxx){
     auto min = static_cast<double>(*std::min_element(test.begin(), test.end()));
 
     for(auto& t : test){
-        //std::cout << "before: " << t << std::endl;
         t = (t - min) / (max - min);
-        //std::cout << "after: " << t << std::endl;
     }
 
     // example
@@ -1001,7 +999,6 @@ std::pair<std::size_t, std::size_t> hmm_look(std::vector<int>& histo, bool xxx){
 
     // number of classes
     int NClasses = 1;
-    //int* Align = new int[T];
     std::vector<int> Align(T);
 
     test_histogram(xxx ? x_model : y_model, Test_Vect, T, NClasses, Align.data());
@@ -1084,12 +1081,9 @@ sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::v
         cv::Mat bounding_color_mat(source_image, bounding_square);
         cv::Mat bounding_gray_mat(source_image, bounding_square);
         cv::cvtColor(bounding_color_mat, bounding_gray_mat, CV_RGB2GRAY);
-        //cv::Mat bounding_binary_mat(source, bounding_square);
-        //cv::Mat tmp_bounding_binary_mat(source, bounding_square);
 
         cv::resize(bounding_color_mat, cell.bounding_color_mat, cv::Size(BIG_CELL_SIZE, BIG_CELL_SIZE), 0, 0, cv::INTER_CUBIC);
         cv::resize(bounding_gray_mat, cell.bounding_gray_mat, cv::Size(BIG_CELL_SIZE, BIG_CELL_SIZE), 0, 0, cv::INTER_CUBIC);
-        //cv::resize(bounding_binary_mat, tmp_bounding_binary_mat, cv::Size(BIG_CELL_SIZE, BIG_CELL_SIZE), 0, 0, cv::INTER_CUBIC);
 
         //Binarize again because resize goes back to GRAY
         cell_binarize(cell.bounding_gray_mat, cell.bounding_binary_mat, false);
@@ -1148,9 +1142,6 @@ sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::v
             int max_sy = 0;
             int max_ly = 0;
             std::tie(max_sy, max_ly) = find_best<false>(histo_y, height, height * (1.0 / 3.0), height * (7.0 / 8.0));
-
-            //cv::Rect rect_h(bounding.x + max_sx, bounding.y + max_sy, max_lx, max_ly);
-            //cv::rectangle(dest_image, rect_h, cv::Scalar(255, 0, 0));
         }
 
         //Use contours detection to detect the candidates
@@ -1427,13 +1418,7 @@ sudoku_grid detect(const cv::Mat& source_image, cv::Mat& dest_image, bool mixed)
     auto lines = detect_lines(source_image, dest_image, mixed);
     auto cells = detect_grid(source_image, dest_image, lines, mixed);
 
-    auto ret = split(source_image, dest_image, cells, lines, mixed);
-
-    //if(model){
-        //free_model(model);
-    //}
-
-    return ret;
+    return split(source_image, dest_image, cells, lines, mixed);
 }
 
 sudoku_grid detect_binary(const cv::Mat& source_image, cv::Mat& dest_image, bool mixed){

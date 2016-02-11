@@ -82,12 +82,7 @@ dataset get_dataset(const config& conf){
                     cell.digit_bounding.height = height;
 
                     cell.color_mat = cv::Mat(source_image, cell.digit_bounding);
-                    //cv::resize(color_final_square, cell.color_mat, cell.color_mat.size(), 0, 0, cv::INTER_CUBIC);
                     cv::cvtColor(cell.color_mat, cell.gray_mat, CV_RGB2GRAY);
-
-                    //cv::Mat binary_final_square(source, cell.digit_bounding);
-                    //cv::Mat binary_big_square(cv::Size(CELL_SIZE, CELL_SIZE), source.type());
-                    //cv::resize(binary_final_square, binary_big_square, binary_big_square.size(), 0, 0, cv::INTER_CUBIC);
 
                     cell_binarize(cell.gray_mat, cell.binary_mat, conf.mixed);
                 }
