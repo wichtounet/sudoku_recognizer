@@ -19,10 +19,12 @@
 #include "trig_utils.hpp"
 #include "image_utils.hpp"
 
+#ifdef HMM_EXPERIMENT
 #include "test_histogram.h"
 #include "initialization_model.h"
 #include "delta_coeff.h"
 #include "free_model.h"
+#endif
 
 namespace {
 
@@ -957,6 +959,8 @@ std::pair<std::size_t, std::size_t> find_best(std::vector<int>& histo, std::size
     return {max_sx, max_l};
 }
 
+#ifdef HMM_EXPERIMENT
+
 static model_t* x_model;
 static model_t* y_model;
 
@@ -1015,6 +1019,8 @@ std::pair<std::size_t, std::size_t> hmm_look(std::vector<int>& histo, bool xxx){
 
     return std::make_pair(start, end);
 }
+
+#endif
 
 sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::vector<cv::Rect>& cells, std::vector<line_t>& lines, bool mixed){
     sudoku_grid grid;
@@ -1091,6 +1097,7 @@ sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::v
         //Clear bounding image of  the cell
         cv::Mat rect_image_clean(source, bounding);
 
+#ifdef HMM_EXPERIMENT
         if(n < 100){
             cv::Mat rect_image(source_image, bounding);
             cv::Mat rect_image_gray = rect_image.clone();
@@ -1143,6 +1150,7 @@ sudoku_grid split(const cv::Mat& source_image, cv::Mat& dest_image, const std::v
             int max_ly = 0;
             std::tie(max_sy, max_ly) = find_best<false>(histo_y, height, height * (1.0 / 3.0), height * (7.0 / 8.0));
         }
+#endif
 
         //Use contours detection to detect the candidates
 
