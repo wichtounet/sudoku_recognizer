@@ -169,7 +169,6 @@ int command_fill(const config& conf){
 }
 
 int command_train(const config& conf){
-    std::cout << mixed_dbn_t::full_output_size() << std::endl;
     auto ds = get_dataset(conf);
 
     std::cout << "Train with " << ds.source_grids.size() << " sudokus" << std::endl;
