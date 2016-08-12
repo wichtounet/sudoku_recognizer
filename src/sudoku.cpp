@@ -37,6 +37,7 @@ namespace {
 using mixed_dbn_pmp_t = dll::dbn_desc<
     dll::dbn_layers<
         dll::conv_rbm_mp_desc_square<1, CELL_SIZE, 30, 22, 2,
+            dll::weight_type<double>,
             dll::momentum,
             dll::weight_decay<dll::decay_type::L2>,
             //dll::visible<dll::unit_type::GAUSSIAN>,
@@ -44,6 +45,7 @@ using mixed_dbn_pmp_t = dll::dbn_desc<
             dll::batch_size<25>
         >::layer_t,
         dll::conv_rbm_mp_desc_square<30, 11, 30, 6, 2,
+            dll::weight_type<double>,
             dll::momentum,
             dll::weight_decay<dll::decay_type::L2>,
             dll::sparsity<dll::sparsity_method::LEE>,
@@ -54,6 +56,7 @@ using mixed_dbn_pmp_t = dll::dbn_desc<
 using mixed_dbn_pmp_big_t = dll::dbn_desc<
     dll::dbn_layers<
         dll::conv_rbm_mp_desc_square<1, BIG_CELL_SIZE, 40, 32, 2,
+            dll::weight_type<double>,
             dll::momentum,
             dll::weight_decay<dll::decay_type::L2>,
             //dll::visible<dll::unit_type::GAUSSIAN>,
@@ -61,6 +64,7 @@ using mixed_dbn_pmp_big_t = dll::dbn_desc<
             dll::batch_size<25>
         >::layer_t,
         dll::conv_rbm_mp_desc_square<40, 16, 40, 10, 2,
+            dll::weight_type<double>,
             dll::momentum,
             dll::weight_decay<dll::decay_type::L2>,
             dll::sparsity<dll::sparsity_method::LEE>,
@@ -72,10 +76,10 @@ using mixed_dbn_t = mixed_dbn_pmp_t;
 
 using dbn_t = dll::dbn_desc<
     dll::dbn_layers<
-        dll::rbm_desc<CELL_SIZE * CELL_SIZE, 300, dll::momentum, dll::batch_size<10>, dll::init_weights>::layer_t,
-        dll::rbm_desc<300, 300, dll::momentum, dll::batch_size<10>>::layer_t,
-        dll::rbm_desc<300, 500, dll::momentum, dll::batch_size<10>>::layer_t,
-        dll::rbm_desc<500, 9, dll::momentum, dll::batch_size<10>, dll::hidden<dll::unit_type::SOFTMAX>>::layer_t
+        dll::rbm_desc<CELL_SIZE * CELL_SIZE, 300, dll::weight_type<double>, dll::momentum, dll::batch_size<10>, dll::init_weights>::layer_t,
+        dll::rbm_desc<300, 300, dll::weight_type<double>, dll::momentum, dll::batch_size<10>>::layer_t,
+        dll::rbm_desc<300, 500, dll::weight_type<double>, dll::momentum, dll::batch_size<10>>::layer_t,
+        dll::rbm_desc<500, 9, dll::weight_type<double>, dll::momentum, dll::batch_size<10>, dll::hidden<dll::unit_type::SOFTMAX>>::layer_t
     >, dll::batch_size<64>>::dbn_t;
 
 using dbn_p = std::unique_ptr<dbn_t>;
