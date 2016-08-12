@@ -12,6 +12,8 @@
 
 #include <opencv2/opencv.hpp>
 
+#include "etl/etl.hpp"
+
 #include "config.hpp"
 #include "image_utils.hpp"
 
@@ -69,6 +71,22 @@ struct sudoku_cell {
 
     std::vector<double> image(const config& conf) const {
         return mat_to_image(mat(conf), conf.gray);
+    }
+
+    etl::dyn_matrix<double, 1> image_1d(const config& conf) const {
+        return etl::dyn_matrix<double, 1>(image(conf));
+    }
+
+    etl::dyn_matrix<double, 3> image_3d(const config& conf) const {
+        decltype(auto) m = mat(conf);
+        etl::dyn_matrix<double, 3> r(1, m.size().height, m.size().width);
+        r = mat_to_image(m, conf.gray);
+        return r;
+    }
+
+    template<size_t W>
+    etl::fast_dyn_matrix<double, 1, W, W> image_fast(const config& conf) const {
+        return etl::fast_dyn_matrix<double, 1, W, W>(image(conf));
     }
 };
 

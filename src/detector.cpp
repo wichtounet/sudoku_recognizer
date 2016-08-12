@@ -67,7 +67,7 @@ std::vector<cv::Point2f> find_intersections(const std::vector<line_t>& lines, co
     std::vector<cv::Point2f> intersections;
 
     //Detect intersections
-    cpp::pairwise_foreach(lines.begin(), lines.end(), [&intersections](auto& p1, auto& p2){
+    cpp::foreach_pair(lines.begin(), lines.end(), [&intersections](auto& p1, auto& p2){
         intersections.emplace_back(find_intersection(p1, p2));
     });
 
@@ -478,7 +478,7 @@ std::vector<line_t> detect_lines_binary(const cv::Mat& binary_image, cv::Mat& de
     do {
         merged_cluster = false;
 
-        cpp::pairwise_foreach(clusters.begin(), clusters.end(), [&merged_cluster](auto& c1, auto& c2){
+        cpp::foreach_pair(clusters.begin(), clusters.end(), [&merged_cluster](auto& c1, auto& c2){
             for(auto& v1 : c1){
                 for(auto& v2 : c2){
                     if(intersects(v1, v2)){

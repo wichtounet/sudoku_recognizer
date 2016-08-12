@@ -13,12 +13,13 @@
 #include "cpp_utils/stop_watch.hpp"
 
 #define DLL_SVM_SUPPORT
-#include "dll/dbn.hpp"
+
+#include "dll/rbm.hpp"
 #include "dll/conv_rbm.hpp"
 #include "dll/conv_rbm_mp.hpp"
-#include "dll/conv_dbn.hpp"
 #include "dll/test.hpp"
-#include "dll/labels.hpp"
+#include "dll/dbn.hpp"
+//#include "dll/labels.hpp"
 #include "dll/ocv_visualizer.hpp"
 
 #include "mnist/mnist_reader.hpp"
@@ -33,53 +34,49 @@
 
 namespace {
 
-using mixed_dbn_pmp_t = dll::conv_dbn_desc<
+using mixed_dbn_pmp_t = dll::dbn_desc<
     dll::dbn_layers<
-        dll::conv_rbm_mp_desc<CELL_SIZE, 1, 22, 30, 2,
+        dll::conv_rbm_mp_desc_square<1, CELL_SIZE, 30, 22, 2,
             dll::momentum,
-            dll::parallel,
             dll::weight_decay<dll::decay_type::L2>,
             //dll::visible<dll::unit_type::GAUSSIAN>,
             dll::sparsity<dll::sparsity_method::LEE>,
             dll::batch_size<25>
-        >::rbm_t,
-        dll::conv_rbm_mp_desc<11, 30, 6, 30, 2,
+        >::layer_t,
+        dll::conv_rbm_mp_desc_square<30, 11, 30, 6, 2,
             dll::momentum,
-            dll::parallel,
             dll::weight_decay<dll::decay_type::L2>,
             dll::sparsity<dll::sparsity_method::LEE>,
-            dll::batch_size<25>>::rbm_t/*,
-        dll::conv_rbm_desc<10, 20, 6, 50, dll::momentum, dll::batch_size<25>>::rbm_t*/
-    >, dll::watcher<dll::opencv_dbn_visualizer>, dll::svm_concatenate/*, dll::svm_scale*/>::dbn_t;
+            dll::batch_size<25>>::layer_t/*,
+        dll::conv_rbm_desc<10, 20, 6, 50, dll::momentum, dll::batch_size<25>>::layer_t*/
+    >, dll::batch_size<64>, /*dll::watcher<dll::opencv_dbn_visualizer>, */dll::svm_concatenate/*, dll::svm_scale*/>::dbn_t;
 
-using mixed_dbn_pmp_big_t = dll::conv_dbn_desc<
+using mixed_dbn_pmp_big_t = dll::dbn_desc<
     dll::dbn_layers<
-        dll::conv_rbm_mp_desc<BIG_CELL_SIZE, 1, 32, 40, 2,
+        dll::conv_rbm_mp_desc_square<1, BIG_CELL_SIZE, 40, 32, 2,
             dll::momentum,
-            dll::parallel,
             dll::weight_decay<dll::decay_type::L2>,
             //dll::visible<dll::unit_type::GAUSSIAN>,
             dll::sparsity<dll::sparsity_method::LEE>,
             dll::batch_size<25>
-        >::rbm_t,
-        dll::conv_rbm_mp_desc<16, 40, 10, 40, 2,
+        >::layer_t,
+        dll::conv_rbm_mp_desc_square<40, 16, 40, 10, 2,
             dll::momentum,
-            dll::parallel,
             dll::weight_decay<dll::decay_type::L2>,
             dll::sparsity<dll::sparsity_method::LEE>,
-            dll::batch_size<25>>::rbm_t/*,
-        dll::conv_rbm_desc<10, 20, 6, 50, dll::momentum, dll::batch_size<25>>::rbm_t*/
-    >, dll::svm_concatenate/*, dll::svm_scale*/>::dbn_t;
+            dll::batch_size<25>>::layer_t/*,
+        dll::conv_rbm_desc<10, 20, 6, 50, dll::momentum, dll::batch_size<25>>::layer_t*/
+    >, dll::batch_size<64>, dll::svm_concatenate/*, dll::svm_scale*/>::dbn_t;
 
 using mixed_dbn_t = mixed_dbn_pmp_t;
 
 using dbn_t = dll::dbn_desc<
     dll::dbn_layers<
-        dll::rbm_desc<CELL_SIZE * CELL_SIZE, 300, dll::momentum, dll::batch_size<10>, dll::init_weights>::rbm_t,
-        dll::rbm_desc<300, 300, dll::momentum, dll::batch_size<10>>::rbm_t,
-        dll::rbm_desc<300, 500, dll::momentum, dll::batch_size<10>>::rbm_t,
-        dll::rbm_desc<500, 9, dll::momentum, dll::batch_size<10>, dll::hidden<dll::unit_type::SOFTMAX>>::rbm_t
-    >>::dbn_t;
+        dll::rbm_desc<CELL_SIZE * CELL_SIZE, 300, dll::momentum, dll::batch_size<10>, dll::init_weights>::layer_t,
+        dll::rbm_desc<300, 300, dll::momentum, dll::batch_size<10>>::layer_t,
+        dll::rbm_desc<300, 500, dll::momentum, dll::batch_size<10>>::layer_t,
+        dll::rbm_desc<500, 9, dll::momentum, dll::batch_size<10>, dll::hidden<dll::unit_type::SOFTMAX>>::layer_t
+    >, dll::batch_size<64>>::dbn_t;
 
 using dbn_p = std::unique_ptr<dbn_t>;
 
@@ -183,16 +180,19 @@ int command_train(const config& conf){
         auto dbn = std::make_unique<mixed_dbn_t>();
         dbn->display();
 
-        dbn->layer<0>().pbias_lambda = 2;
-        dbn->layer<0>().pbias = 0.02;
+        dbn->layer_get<0>().pbias_lambda = 2;
+        dbn->layer_get<0>().pbias = 0.02;
 
-        dbn->layer<1>().pbias_lambda = 2;
-        dbn->layer<1>().pbias = 0.01;
+        dbn->layer_get<1>().pbias_lambda = 2;
+        dbn->layer_get<1>().pbias = 0.01;
+
+        //TODO Check all this 1D shit
 
         std::cout << "Start pretraining" << std::endl;
-        dbn->pretrain(ds.training_images, 25); //TODO Increase
+        //TODO dbn->pretrain(ds.training_images_1d(), 25); //TODO Increase epochs
 
         svm_parameter parameters = dll::default_svm_parameters();
+        cpp_unused(parameters); //TODO Remove
 
         parameters.svm_type = C_SVC;
         parameters.kernel_type = RBF;
@@ -202,7 +202,7 @@ int command_train(const config& conf){
 
         if(conf.grid){
             //Normal grid search
-            dbn->svm_grid_search(ds.training_images, ds.training_labels);
+            //TODO dbn->svm_grid_search(ds.training_images_1d(), ds.training_labels);
 
             //Coarser grid search
 
@@ -217,17 +217,17 @@ int command_train(const config& conf){
             coarse_grid.gamma_steps = 7;
             coarse_grid.gamma_search = svm::grid_search_type::EXP;
 
-            dbn->svm_grid_search(ds.training_images, ds.training_labels, 4, coarse_grid);
+            //TODO dbn->svm_grid_search(ds.training_images_1d(), ds.training_labels, 4, coarse_grid);
         } else {
-            dbn->svm_train(ds.training_images, ds.training_labels, parameters);
+            //TODO dbn->svm_train(ds.training_images_1d(), ds.training_labels, parameters);
 
-            auto training_error = dll::test_set(dbn, ds.training_images, ds.training_labels, dll::svm_predictor());
-            std::cout << "training_error:" << training_error  << std::endl;
+            //auto training_error = dll::test_set(dbn, ds.training_images_1d(), ds.training_labels, dll::svm_predictor());
+            //std::cout << "training_error:" << training_error  << std::endl;
 
-            if(conf.test){
-                auto test_error = dll::test_set(dbn, ds.test_images, ds.test_labels, dll::svm_predictor());
-                std::cout << "test_error:" << test_error << std::endl;
-            }
+            //if(conf.test){
+                //auto test_error = dll::test_set(dbn, ds.test_images_1d(), ds.test_labels, dll::svm_predictor());
+                //std::cout << "test_error:" << test_error << std::endl;
+            //}
 
             std::ofstream os("cdbn.dat", std::ofstream::binary);
             dbn->store(os);
@@ -237,15 +237,15 @@ int command_train(const config& conf){
         dbn->display();
 
         std::cout << "Start pretraining" << std::endl;
-        dbn->pretrain(ds.training_images, 20);
+        dbn->pretrain(ds.training_images_1d(), 20);
 
         std::cout << "Start fine-tuning" << std::endl;
-        dbn->fine_tune(ds.training_images, ds.training_labels, 10, 100);
+        dbn->fine_tune(ds.training_images_1d(), ds.training_labels, 10);
 
-        std::cout << "training_error:" << dll::test_set(dbn, ds.training_images, ds.training_labels, dll::predictor()) << std::endl;
+        std::cout << "training_error:" << dll::test_set(dbn, ds.training_images_1d(), ds.training_labels, dll::predictor()) << std::endl;
 
         if(conf.test){
-            std::cout << "test_error:" << dll::test_set(dbn, ds.test_images, ds.test_labels, dll::predictor()) << std::endl;
+            std::cout << "test_error:" << dll::test_set(dbn, ds.test_images_1d(), ds.test_labels, dll::predictor()) << std::endl;
         }
 
         std::ofstream os("dbn.dat", std::ofstream::binary);
@@ -356,7 +356,8 @@ int command_recog(const config& conf){
 
             for(size_t i = 0; i < 9; ++i){
                 for(size_t j = 0; j < 9; ++j){
-                    matrix[i][j] = dbn->svm_predict(grid(j, i).image(conf));
+                    static constexpr size_t W = mixed_dbn_t::layer_type<0>::NV1;
+                    matrix[i][j] = dbn->svm_predict(grid(j, i).image_fast<W>(conf));
                 }
             }
         } else {
@@ -371,7 +372,7 @@ int command_recog(const config& conf){
                     if(cell.empty()){
                         answer = 0;
                     } else {
-                        auto weights = dbn->activation_probabilities(cell.image(conf));
+                        auto weights = dbn->activation_probabilities(cell.image_1d(conf));
                         answer = dbn->predict_label(weights)+1;
                         for(std::size_t x = 0; x < weights.size(); ++x){
                             if(answer != x + 1 && weights(x) > 1e-5){
@@ -437,8 +438,8 @@ int command_test(const config& conf){
         std::ifstream is("cdbn.dat", std::ofstream::binary);
         dbn->load(is);
 
-        auto error = dll::test_set(dbn, ds.training_images, ds.training_labels, dll::svm_predictor());
-        std::cout << "error:" << error  << std::endl;
+        //auto error = dll::test_set(dbn, ds.training_images_1d(), ds.training_labels, dll::svm_predictor());
+        //std::cout << "error:" << error  << std::endl;
 
         for(std::size_t i = 0; i < ds.source_grids.size(); ++i){
             const auto& grid = ds.source_grids[i];
@@ -458,7 +459,8 @@ int command_test(const config& conf){
 
                     preprocess(image, conf);
 
-                    auto answer = dbn->svm_predict(image) + 1;
+                    static constexpr size_t W = mixed_dbn_t::layer_type<0>::NV1;
+                    auto answer = dbn->svm_predict(etl::fast_dyn_matrix<double, 1, W, W>(image)) + 1;
                     auto correct = cell.correct();
 
                     if(answer == correct){
@@ -496,7 +498,8 @@ int command_test(const config& conf){
         std::ifstream is("dbn.dat", std::ofstream::binary);
         dbn->load(is);
 
-        auto error_rate = dll::test_set(dbn, ds.all_images, ds.all_labels, dll::predictor());
+        //TODO Why all and not test ?
+        auto error_rate = dll::test_set(dbn, ds.all_images_1d(), ds.all_labels, dll::predictor());
 
         std::cout << std::endl;
         std::cout << "DBN Error rate (normal): " << 100.0 * error_rate << "%" << std::endl;
@@ -516,7 +519,7 @@ int command_test(const config& conf){
 
                     auto fill = fill_factor(cell_mat);
 
-                    auto weights = dbn->activation_probabilities(grid(j,i).image(conf));
+                    auto weights = dbn->activation_probabilities(grid(j,i).image_1d(conf));
                     if(fill == 1.0f){
                         answer = 0;
                     } else {
@@ -724,9 +727,11 @@ int command_time(const config& conf){
                     if(cell.empty()){
                         answer = 0;
                     } else {
-                        auto weights = dbn->activation_probabilities(cell.image(conf));
+                        auto weights = dbn->activation_probabilities(cell.image_1d(conf));
                         answer = dbn->predict_label(weights)+1;
                     }
+
+                    cpp_unused(answer);
                 }
             }
         }
@@ -749,9 +754,11 @@ int command_time(const config& conf){
                     if(cell.empty()){
                         answer = 0;
                     } else {
-                        auto weights = dbn->activation_probabilities(cell.image(conf));
+                        auto weights = dbn->activation_probabilities(cell.image_1d(conf));
                         answer = dbn->predict_label(weights)+1;
                     }
+
+                    cpp_unused(answer);
                 }
             }
 
@@ -788,9 +795,11 @@ int command_time(const config& conf){
                     if(cell.empty()){
                         answer = 0;
                     } else {
-                        auto weights = dbn->activation_probabilities(cell.image(conf));
+                        auto weights = dbn->activation_probabilities(cell.image_1d(conf));
                         answer = dbn->predict_label(weights)+1;
                     }
+
+                    cpp_unused(answer);
                 }
             }
 
@@ -817,7 +826,7 @@ int main(int argc, char** argv){
 
     auto conf = parse_args(argc, argv);
 
-    conf.gray = conf.mixed && mixed_dbn_t::rbm_type<0>::visible_unit == dll::unit_type::GAUSSIAN;
+    conf.gray = conf.mixed && mixed_dbn_t::layer_type<0>::visible_unit == dll::unit_type::GAUSSIAN;
     conf.big = conf.mixed && std::is_same<mixed_dbn_t, mixed_dbn_pmp_big_t>::value;
 
     if(conf.shuffle){
