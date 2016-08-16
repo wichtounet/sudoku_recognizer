@@ -20,7 +20,8 @@
 #include "dll/test.hpp"
 #include "dll/dbn.hpp"
 //#include "dll/labels.hpp"
-#include "dll/ocv_visualizer.hpp"
+//#include "dll/ocv_visualizer.hpp"
+#include "dll/trainer/stochastic_gradient_descent.hpp"
 
 #include "mnist/mnist_reader.hpp"
 #include "mnist/mnist_utils.hpp"
@@ -76,11 +77,16 @@ using mixed_dbn_t = mixed_dbn_pmp_t;
 
 using dbn_t = dll::dbn_desc<
     dll::dbn_layers<
-        dll::rbm_desc<CELL_SIZE * CELL_SIZE, 300, dll::weight_type<double>, dll::momentum, dll::batch_size<10>, dll::init_weights>::layer_t,
-        dll::rbm_desc<300, 300, dll::weight_type<double>, dll::momentum, dll::batch_size<10>>::layer_t,
-        dll::rbm_desc<300, 500, dll::weight_type<double>, dll::momentum, dll::batch_size<10>>::layer_t,
-        dll::rbm_desc<500, 9, dll::weight_type<double>, dll::momentum, dll::batch_size<10>, dll::hidden<dll::unit_type::SOFTMAX>>::layer_t
-    >, dll::batch_size<64>>::dbn_t;
+        dll::rbm_desc<CELL_SIZE * CELL_SIZE, 300, dll::momentum, dll::shuffle, dll::batch_size<16>, dll::init_weights>::layer_t,
+        dll::rbm_desc<300, 300, dll::momentum, dll::shuffle, dll::batch_size<16>>::layer_t,
+        dll::rbm_desc<300, 500, dll::momentum, dll::shuffle, dll::batch_size<16>>::layer_t,
+        dll::rbm_desc<500, 9, dll::momentum, dll::shuffle, dll::batch_size<16>, dll::hidden<dll::unit_type::SOFTMAX>>::layer_t
+        >,
+            dll::trainer<dll::sgd_trainer>,
+            dll::batch_size<32>,
+            dll::momentum,
+            dll::weight_decay<dll::decay_type::L2>
+        >::dbn_t;
 
 using dbn_p = std::unique_ptr<dbn_t>;
 
@@ -240,11 +246,17 @@ int command_train(const config& conf){
         auto dbn = std::make_unique<dbn_t>();
         dbn->display();
 
+        dbn->layer_get<0>().initial_momentum = 0.9;
+        dbn->layer_get<1>().initial_momentum = 0.9;
+        dbn->layer_get<2>().initial_momentum = 0.9;
+
+        dbn->initial_momentum = 0.9;
+
         std::cout << "Start pretraining" << std::endl;
-        dbn->pretrain(ds.training_images_1d(), 20);
+        dbn->pretrain(ds.training_images_1d(), 25);
 
         std::cout << "Start fine-tuning" << std::endl;
-        dbn->fine_tune(ds.training_images_1d(), ds.training_labels, 10);
+        dbn->fine_tune(ds.training_images_1d(), ds.training_labels, 100);
 
         std::cout << "training_error:" << dll::test_set(dbn, ds.training_images_1d(), ds.training_labels, dll::predictor()) << std::endl;
 
@@ -376,7 +388,7 @@ int command_recog(const config& conf){
                     if(cell.empty()){
                         answer = 0;
                     } else {
-                        auto weights = dbn->activation_probabilities(cell.image_1d(conf));
+                        auto weights = dbn->activation_probabilities(cell.image_1d<float>(conf));
                         answer = dbn->predict_label(weights)+1;
                         for(std::size_t x = 0; x < weights.size(); ++x){
                             if(answer != x + 1 && weights(x) > 1e-5){
@@ -523,7 +535,7 @@ int command_test(const config& conf){
 
                     auto fill = fill_factor(cell_mat);
 
-                    auto weights = dbn->activation_probabilities(grid(j,i).image_1d(conf));
+                    auto weights = dbn->activation_probabilities(grid(j,i).image_1d<float>(conf));
                     if(fill == 1.0f){
                         answer = 0;
                     } else {
@@ -731,7 +743,7 @@ int command_time(const config& conf){
                     if(cell.empty()){
                         answer = 0;
                     } else {
-                        auto weights = dbn->activation_probabilities(cell.image_1d(conf));
+                        auto weights = dbn->activation_probabilities(cell.image_1d<float>(conf));
                         answer = dbn->predict_label(weights)+1;
                     }
 
@@ -758,7 +770,7 @@ int command_time(const config& conf){
                     if(cell.empty()){
                         answer = 0;
                     } else {
-                        auto weights = dbn->activation_probabilities(cell.image_1d(conf));
+                        auto weights = dbn->activation_probabilities(cell.image_1d<float>(conf));
                         answer = dbn->predict_label(weights)+1;
                     }
 
@@ -799,7 +811,7 @@ int command_time(const config& conf){
                     if(cell.empty()){
                         answer = 0;
                     } else {
-                        auto weights = dbn->activation_probabilities(cell.image_1d(conf));
+                        auto weights = dbn->activation_probabilities(cell.image_1d<float>(conf));
                         answer = dbn->predict_label(weights)+1;
                     }
 

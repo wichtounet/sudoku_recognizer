@@ -73,8 +73,9 @@ struct sudoku_cell {
         return mat_to_image(mat(conf), conf.gray);
     }
 
-    etl::dyn_matrix<double, 1> image_1d(const config& conf) const {
-        return etl::dyn_matrix<double, 1>(image(conf));
+    template<typename T = double>
+    etl::dyn_matrix<T, 1> image_1d(const config& conf) const {
+        return etl::dyn_matrix<T, 1>(image(conf));
     }
 
     etl::dyn_matrix<double, 3> image_3d(const config& conf) const {
