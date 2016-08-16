@@ -1,14 +1,14 @@
 [submodule "dbn"]
 	path = dbn
-	url = git@github.com:wichtounet/dbn.git
+	url = https://github.com/wichtounet/dll.git
 	branch = master
 [submodule "mnist"]
 	path = mnist
-	url = git@github.com:wichtounet/mnist.git
+	url = https://github.com/wichtounet/mnist.git
 [submodule "make-utils"]
 	path = make-utils
 	url = https://github.com/wichtounet/make-utils.git
 	branch = master
 [submodule "hmm"]
 	path = hmm
-	url = git@github.com:antonio86/HMM_lib.git
+	url = https://github.com/antonio86/HMM_lib.git
