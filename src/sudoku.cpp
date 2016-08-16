@@ -85,6 +85,7 @@ using dbn_t = dll::dbn_desc<
             dll::trainer<dll::sgd_trainer>,
             dll::batch_size<32>,
             dll::momentum,
+            dll::shuffle,
             dll::weight_decay<dll::decay_type::L2>
         >::dbn_t;
 
