@@ -77,15 +77,16 @@ using mixed_dbn_t = mixed_dbn_pmp_t;
 
 using dbn_t = dll::dbn_desc<
     dll::dbn_layers<
-        dll::rbm_desc<CELL_SIZE * CELL_SIZE, 300, dll::momentum, dll::shuffle, dll::batch_size<16>, dll::init_weights>::layer_t,
-        dll::rbm_desc<300, 300, dll::momentum, dll::shuffle, dll::batch_size<16>>::layer_t,
-        dll::rbm_desc<300, 500, dll::momentum, dll::shuffle, dll::batch_size<16>>::layer_t,
-        dll::rbm_desc<500, 9, dll::momentum, dll::shuffle, dll::batch_size<16>, dll::hidden<dll::unit_type::SOFTMAX>>::layer_t
+        dll::rbm_desc<CELL_SIZE * CELL_SIZE, 500, dll::momentum, dll::shuffle, dll::batch_size<32>, dll::weight_decay<dll::decay_type::L2>, dll::init_weights>::layer_t,
+        dll::rbm_desc<500, 1000, dll::momentum, dll::shuffle, dll::batch_size<32>, dll::weight_decay<dll::decay_type::L2>>::layer_t,
+        //dll::rbm_desc<300, 500, dll::momentum, dll::shuffle, dll::batch_size<16>, dll::weight_decay<dll::decay_type::L2>>::layer_t,
+        dll::rbm_desc<1000, 9, dll::momentum, dll::shuffle, dll::batch_size<32>, dll::weight_decay<dll::decay_type::L2>, dll::hidden<dll::unit_type::SOFTMAX>>::layer_t
         >,
             dll::trainer<dll::sgd_trainer>,
             dll::batch_size<32>,
             dll::momentum,
             dll::shuffle,
+            //dll::verbose,
             dll::weight_decay<dll::decay_type::L2>
         >::dbn_t;
 
@@ -252,9 +253,10 @@ int command_train(const config& conf){
         dbn->layer_get<2>().initial_momentum = 0.9;
 
         dbn->initial_momentum = 0.9;
+        dbn->learning_rate = 0.01;
 
         std::cout << "Start pretraining" << std::endl;
-        dbn->pretrain(ds.training_images_1d(), 25);
+        dbn->pretrain(ds.training_images_1d(), 100);
 
         std::cout << "Start fine-tuning" << std::endl;
         dbn->fine_tune(ds.training_images_1d(), ds.training_labels, 100);
@@ -515,11 +517,14 @@ int command_test(const config& conf){
         std::ifstream is("dbn.dat", std::ofstream::binary);
         dbn->load(is);
 
-        //TODO Why all and not test ?
-        auto error_rate = dll::test_set(dbn, ds.all_images_1d(), ds.all_labels, dll::predictor());
+        auto train_error_rate = dll::test_set(dbn, ds.training_images_1d(), ds.training_labels, dll::predictor());
+        auto test_error_rate = dll::test_set(dbn, ds.test_images_1d(), ds.test_labels, dll::predictor());
+        auto all_error_rate = dll::test_set(dbn, ds.all_images_1d(), ds.all_labels, dll::predictor());
 
         std::cout << std::endl;
-        std::cout << "DBN Error rate (normal): " << 100.0 * error_rate << "%" << std::endl;
+        std::cout << "DBN   Train Error rate (normal): " << 100.0 * train_error_rate << "%" << std::endl;
+        std::cout << "DBN    Test Error rate (normal): " << 100.0 * test_error_rate << "%" << std::endl;
+        std::cout << "DBN Overall Error rate (normal): " << 100.0 * all_error_rate << "%" << std::endl;
 
         for(std::size_t i = 0; i < ds.source_grids.size(); ++i){
             const auto& grid = ds.source_grids[i];

@@ -13,7 +13,7 @@ LD_FLAGS  += -lopencv_core -lopencv_imgproc -lopencv_highgui -lsvm -pthread
 # Let ETL vectorize as much as possible
 CXX_FLAGS += -DETL_VECTORIZE_FULL
 
-DLL_BLAS_PKG ?= mkl
+DLL_BLAS_PKG ?= mkl-threads
 
 # Activate BLAS mode on demand
 ifneq (,$(ETL_MKL))
