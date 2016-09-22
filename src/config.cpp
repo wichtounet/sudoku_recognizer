@@ -19,6 +19,7 @@ void print_usage(){
     std::cout << " * recog_binary" << std::endl;
     std::cout << " * time" << std::endl;
     std::cout << "Supported options: " << std::endl;
+    std::cout << " -c : Convolutional DBN" << std::endl;
     std::cout << " -m : Mixed mode" << std::endl;
     std::cout << " -s : Take only subsets" << std::endl;
     std::cout << " -q : Quiet mode" << std::endl;
@@ -40,6 +41,8 @@ config parse_args(int argc, char** argv){
             conf.subset = true;
         } else if(conf.args[i] == "-m"){
             conf.mixed = true;
+        } else if(conf.args[i] == "-c"){
+            conf.conv = true;
         } else if(conf.args[i] == "-q"){
             conf.quiet = true;
         } else if(conf.args[i] == "-t"){

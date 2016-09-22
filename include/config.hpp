@@ -15,15 +15,18 @@ struct config {
     std::vector<std::string> args;
     std::vector<std::string> files;
     std::string command;
-    bool subset = false;
-    bool mixed = false;
-    bool quiet = false;
-    bool test = false;
-    bool grid = false;
-    bool oracle = false;
+
+    bool subset  = false;
+    bool mixed   = false;
+    bool quiet   = false;
+    bool test    = false;
+    bool grid    = false;
+    bool oracle  = false;
     bool shuffle = false;
-    bool gray = false;    //This is computed at compile-time
-    bool big = false;     //This is computed at compile-time
+    bool conv    = false;
+
+    bool gray = false; //This is computed at compile-time
+    bool big  = false; //This is computed at compile-time
 };
 
 void print_usage();
