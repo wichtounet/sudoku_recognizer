@@ -17,10 +17,9 @@
 #include "dll/rbm.hpp"
 #include "dll/conv_rbm.hpp"
 #include "dll/conv_rbm_mp.hpp"
+#include "dll/mp_layer.hpp"
 #include "dll/test.hpp"
 #include "dll/dbn.hpp"
-//#include "dll/labels.hpp"
-//#include "dll/ocv_visualizer.hpp"
 #include "dll/trainer/stochastic_gradient_descent.hpp"
 
 #include "mnist/mnist_reader.hpp"
@@ -82,6 +81,38 @@ using dbn_t = dll::dbn_desc<
         //dll::rbm_desc<300, 500, dll::momentum, dll::shuffle, dll::batch_size<16>, dll::weight_decay<dll::decay_type::L2>>::layer_t,
         dll::rbm_desc<1000, 9, dll::momentum, dll::shuffle, dll::batch_size<32>, dll::weight_decay<dll::decay_type::L2>, dll::hidden<dll::unit_type::SOFTMAX>>::layer_t
         >,
+            dll::trainer<dll::sgd_trainer>,
+            dll::batch_size<32>,
+            dll::momentum,
+            dll::shuffle,
+            //dll::verbose,
+            dll::weight_decay<dll::decay_type::L2>
+        >::dbn_t;
+
+using cdbn_t = dll::dbn_desc<
+    dll::dbn_layers<
+        dll::conv_rbm_desc<1, CELL_SIZE, CELL_SIZE, 10, 24, 24,
+            dll::weight_type<float>,
+            dll::momentum,
+            dll::shuffle,
+            dll::weight_decay<dll::decay_type::L2>,
+            //dll::visible<dll::unit_type::GAUSSIAN>,
+            //dll::sparsity<dll::sparsity_method::LEE>,
+            dll::batch_size<32>
+        >::layer_t,
+        dll::mp_layer_3d_desc<10, 24, 24, 1, 2, 2, dll::weight_type<float>>::layer_t,
+        //dll::conv_rbm_desc<10, 12, 12, 10, 8, 8,
+            //dll::weight_type<float>,
+            //dll::momentum,
+            //dll::shuffle,
+            //dll::weight_decay<dll::decay_type::L2>,
+            ////dll::visible<dll::unit_type::GAUSSIAN>,
+            ////dll::sparsity<dll::sparsity_method::LEE>,
+            //dll::batch_size<32>
+        //>::layer_t,
+        dll::rbm_desc<10 * 12 * 12, 500, dll::momentum, dll::shuffle, dll::batch_size<32>, dll::weight_decay<dll::decay_type::L2>, dll::hidden<dll::unit_type::BINARY>>::layer_t,
+        dll::rbm_desc<500, 9, dll::momentum, dll::shuffle, dll::batch_size<32>, dll::weight_decay<dll::decay_type::L2>, dll::hidden<dll::unit_type::SOFTMAX>>::layer_t
+    >,
             dll::trainer<dll::sgd_trainer>,
             dll::batch_size<32>,
             dll::momentum,
@@ -241,34 +272,63 @@ int command_train(const config& conf){
                 //std::cout << "test_error:" << test_error << std::endl;
             //}
 
-            std::ofstream os("cdbn.dat", std::ofstream::binary);
+            //TODO Rename file!
+            std::ofstream os("asdf.dat", std::ofstream::binary);
             dbn->store(os);
         }
     } else {
-        auto dbn = std::make_unique<dbn_t>();
-        dbn->display();
+        if(!conf.conv){
+            auto dbn = std::make_unique<dbn_t>();
+            dbn->display();
 
-        dbn->layer_get<0>().initial_momentum = 0.9;
-        dbn->layer_get<1>().initial_momentum = 0.9;
-        dbn->layer_get<2>().initial_momentum = 0.9;
+            dbn->layer_get<0>().initial_momentum = 0.9;
+            dbn->layer_get<1>().initial_momentum = 0.9;
+            dbn->layer_get<2>().initial_momentum = 0.9;
 
-        dbn->initial_momentum = 0.9;
-        dbn->learning_rate = 0.01;
+            dbn->initial_momentum = 0.9;
+            dbn->learning_rate = 0.01;
 
-        std::cout << "Start pretraining" << std::endl;
-        dbn->pretrain(ds.training_images_1d(), 100);
+            std::cout << "Start pretraining" << std::endl;
+            dbn->pretrain(ds.training_images_1d(), 100);
 
-        std::cout << "Start fine-tuning" << std::endl;
-        dbn->fine_tune(ds.training_images_1d(), ds.training_labels, 100);
+            std::cout << "Start fine-tuning" << std::endl;
+            dbn->fine_tune(ds.training_images_1d(), ds.training_labels, 100);
 
-        std::cout << "training_error:" << dll::test_set(dbn, ds.training_images_1d(), ds.training_labels, dll::predictor()) << std::endl;
+            std::cout << "training_error:" << dll::test_set(dbn, ds.training_images_1d(), ds.training_labels, dll::predictor()) << std::endl;
 
-        if(conf.test){
-            std::cout << "test_error:" << dll::test_set(dbn, ds.test_images_1d(), ds.test_labels, dll::predictor()) << std::endl;
+            if(conf.test){
+                std::cout << "test_error:" << dll::test_set(dbn, ds.test_images_1d(), ds.test_labels, dll::predictor()) << std::endl;
+            }
+
+            std::ofstream os("dbn.dat", std::ofstream::binary);
+            dbn->store(os);
+        } else {
+            auto cdbn = std::make_unique<cdbn_t>();
+            cdbn->display();
+
+            cdbn->layer_get<0>().initial_momentum = 0.9; // C1
+            cdbn->layer_get<2>().initial_momentum = 0.9; // F1
+
+            cdbn->layer_get<0>().learning_rate = 0.01; // C1
+
+            cdbn->initial_momentum = 0.9;
+            cdbn->learning_rate = 0.01;
+
+            std::cout << "Start pretraining" << std::endl;
+            cdbn->pretrain(ds.training_images_1d(), 50);
+
+            std::cout << "Start fine-tuning" << std::endl;
+            cdbn->fine_tune(ds.training_images_1d(), ds.training_labels, 100);
+
+            std::cout << "training_error:" << dll::test_set(cdbn, ds.training_images_1d(), ds.training_labels, dll::predictor()) << std::endl;
+
+            if(conf.test){
+                std::cout << "test_error:" << dll::test_set(cdbn, ds.test_images_1d(), ds.test_labels, dll::predictor()) << std::endl;
+            }
+
+            std::ofstream os("cdbn.dat", std::ofstream::binary);
+            cdbn->store(os);
         }
-
-        std::ofstream os("dbn.dat", std::ofstream::binary);
-        dbn->store(os);
     }
 
     return 0;
