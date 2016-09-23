@@ -77,9 +77,9 @@ using mixed_dbn_t = mixed_dbn_pmp_t;
 using dbn_t = dll::dbn_desc<
     dll::dbn_layers<
         dll::rbm_desc<CELL_SIZE * CELL_SIZE, 500, dll::momentum, dll::shuffle, dll::batch_size<32>, dll::weight_decay<dll::decay_type::L2>, dll::init_weights>::layer_t,
-        dll::rbm_desc<500, 1000, dll::momentum, dll::shuffle, dll::batch_size<32>, dll::weight_decay<dll::decay_type::L2>>::layer_t,
+        dll::rbm_desc<500, 500, dll::momentum, dll::shuffle, dll::batch_size<32>, dll::weight_decay<dll::decay_type::L2>>::layer_t,
         //dll::rbm_desc<300, 500, dll::momentum, dll::shuffle, dll::batch_size<16>, dll::weight_decay<dll::decay_type::L2>>::layer_t,
-        dll::rbm_desc<1000, 9, dll::momentum, dll::shuffle, dll::batch_size<32>, dll::weight_decay<dll::decay_type::L2>, dll::hidden<dll::unit_type::SOFTMAX>>::layer_t
+        dll::rbm_desc<500, 9, dll::momentum, dll::shuffle, dll::batch_size<32>, dll::weight_decay<dll::decay_type::L2>, dll::hidden<dll::unit_type::SOFTMAX>>::layer_t
         >,
             dll::trainer<dll::sgd_trainer>,
             dll::batch_size<32>,
@@ -223,7 +223,6 @@ int command_train(const config& conf){
     auto ds = get_dataset(conf);
 
     std::cout << "Train with " << ds.source_grids.size() << " sudokus" << std::endl;
-
     std::cout << "Train with " << ds.training_images.size() << " cells" << std::endl;
 
     if(conf.test){
@@ -231,61 +230,62 @@ int command_train(const config& conf){
     }
 
     if(conf.mixed){
-        auto dbn = std::make_unique<mixed_dbn_t>();
-        dbn->display();
+        if(!conf.conv){
+            auto dbn = std::make_unique<dbn_t>();
+            dbn->display();
 
-        dbn->layer_get<0>().pbias_lambda = 2;
-        dbn->layer_get<0>().pbias = 0.02;
+            dbn->layer_get<0>().initial_momentum = 0.9;
+            dbn->layer_get<1>().initial_momentum = 0.9;
+            dbn->layer_get<2>().initial_momentum = 0.9;
 
-        dbn->layer_get<1>().pbias_lambda = 2;
-        dbn->layer_get<1>().pbias = 0.01;
+            dbn->initial_momentum = 0.9;
+            dbn->learning_rate = 0.01;
 
-        //TODO Check all this 1D shit
+            std::cout << "Start pretraining" << std::endl;
+            dbn->pretrain(ds.training_images_1d(), 50);
 
-        std::cout << "Start pretraining" << std::endl;
-        //TODO dbn->pretrain(ds.training_images_1d(), 25); //TODO Increase epochs
+            std::cout << "Start fine-tuning" << std::endl;
+            dbn->fine_tune(ds.training_images_1d(), ds.training_labels, 100);
 
-        svm_parameter parameters = dll::default_svm_parameters();
-        cpp_unused(parameters); //TODO Remove
+            std::cout << "training_error:" << dll::test_set(dbn, ds.training_images_1d(), ds.training_labels, dll::predictor()) << std::endl;
 
-        parameters.svm_type = C_SVC;
-        parameters.kernel_type = RBF;
-        parameters.probability = 1;
-        parameters.C = 2.8;
-        parameters.gamma = 0.001;
+            if(conf.test){
+                std::cout << "test_error:" << dll::test_set(dbn, ds.test_images_1d(), ds.test_labels, dll::predictor()) << std::endl;
+            }
 
-        if(conf.grid){
-            //Normal grid search
-            //TODO dbn->svm_grid_search(ds.training_images_1d(), ds.training_labels);
-
-            //Coarser grid search
-
-            svm::rbf_grid coarse_grid;
-            coarse_grid.c_first = 0.1;
-            coarse_grid.c_last = 20;
-            coarse_grid.c_steps = 10;
-            coarse_grid.c_search = svm::grid_search_type::LINEAR;
-
-            coarse_grid.gamma_first = 1e-4;
-            coarse_grid.gamma_last = 2e-2;
-            coarse_grid.gamma_steps = 7;
-            coarse_grid.gamma_search = svm::grid_search_type::EXP;
-
-            //TODO dbn->svm_grid_search(ds.training_images_1d(), ds.training_labels, 4, coarse_grid);
-        } else {
-            //TODO dbn->svm_train(ds.training_images_1d(), ds.training_labels, parameters);
-
-            //auto training_error = dll::test_set(dbn, ds.training_images_1d(), ds.training_labels, dll::svm_predictor());
-            //std::cout << "training_error:" << training_error  << std::endl;
-
-            //if(conf.test){
-                //auto test_error = dll::test_set(dbn, ds.test_images_1d(), ds.test_labels, dll::svm_predictor());
-                //std::cout << "test_error:" << test_error << std::endl;
-            //}
-
-            //TODO Rename file!
-            std::ofstream os("asdf.dat", std::ofstream::binary);
+            std::ofstream os("dbn_mixed.dat", std::ofstream::binary);
             dbn->store(os);
+        } else {
+            auto cdbn = std::make_unique<cdbn_t>();
+            cdbn->display();
+
+            cdbn->layer_get<0>().initial_momentum = 0.9; // C1
+            cdbn->layer_get<2>().initial_momentum = 0.9; // C2
+            cdbn->layer_get<4>().initial_momentum = 0.9; // F1
+            cdbn->layer_get<4>().initial_momentum = 0.9; // F1
+            cdbn->layer_get<5>().initial_momentum = 0.9; // F2
+
+            cdbn->layer_get<0>().learning_rate = 1e-3; // C1
+            cdbn->layer_get<2>().learning_rate = 1e-4; // C1
+            cdbn->layer_get<4>().learning_rate = 1e-3; // R1
+
+            cdbn->initial_momentum = 0.9;
+            cdbn->learning_rate = 0.01;
+
+            std::cout << "Start pretraining" << std::endl;
+            cdbn->pretrain(ds.training_images_1d(), 100);
+
+            std::cout << "Start fine-tuning" << std::endl;
+            cdbn->fine_tune(ds.training_images_1d(), ds.training_labels, 200);
+
+            std::cout << "training_error:" << dll::test_set(cdbn, ds.training_images_1d(), ds.training_labels, dll::predictor()) << std::endl;
+
+            if(conf.test){
+                std::cout << "test_error:" << dll::test_set(cdbn, ds.test_images_1d(), ds.test_labels, dll::predictor()) << std::endl;
+            }
+
+            std::ofstream os("cdbn_mixed.dat", std::ofstream::binary);
+            cdbn->store(os);
         }
     } else {
         if(!conf.conv){
@@ -300,7 +300,7 @@ int command_train(const config& conf){
             dbn->learning_rate = 0.01;
 
             std::cout << "Start pretraining" << std::endl;
-            dbn->pretrain(ds.training_images_1d(), 100);
+            dbn->pretrain(ds.training_images_1d(), 50);
 
             std::cout << "Start fine-tuning" << std::endl;
             dbn->fine_tune(ds.training_images_1d(), ds.training_labels, 100);
@@ -601,6 +601,84 @@ void standard_test_network(const Net& dbn, const config& conf, dataset& ds){
     }
 }
 
+template<typename Net>
+void mixed_test_network(const Net& dbn, const config& conf, dataset& ds){
+    auto train_error_rate = dll::test_set(dbn, ds.training_images_1d(), ds.training_labels, dll::predictor());
+    auto test_error_rate = dll::test_set(dbn, ds.test_images_1d(), ds.test_labels, dll::predictor());
+    auto all_error_rate = dll::test_set(dbn, ds.all_images_1d(), ds.all_labels, dll::predictor());
+
+    std::cout << std::endl;
+    std::cout << "DBN   Train Error rate (normal): " << 100.0 * train_error_rate << "%" << std::endl;
+    std::cout << "DBN    Test Error rate (normal): " << 100.0 * test_error_rate << "%" << std::endl;
+    std::cout << "DBN Overall Error rate (normal): " << 100.0 * all_error_rate << "%" << std::endl;
+
+    size_t sudoku_hits = 0;
+    size_t cell_hits = 0;
+    size_t dbn_errors = 0;
+
+    for(std::size_t i = 0; i < ds.source_grids.size(); ++i){
+        const auto& grid = ds.source_grids[i];
+
+        std::cout << grid.source_image_path << std::endl;
+
+        std::size_t local_hits = 0;
+
+        for(size_t i = 0; i < 9; ++i){
+            for(size_t j = 0; j < 9; ++j){
+                uint8_t answer;
+                auto correct = grid(j,i).correct();
+                auto& cell_mat = grid(j,i).mat(conf);
+
+                auto fill = fill_factor(cell_mat);
+
+                auto weights = dbn->activation_probabilities(grid(j,i).image_1d<float>(conf));
+                if(fill == 1.0f){
+                    answer = 0;
+                } else {
+                    answer = dbn->predict_label(weights)+1;
+                }
+
+                if(answer == correct){
+                    ++local_hits;
+                } else {
+                    ++dbn_errors;
+
+                    if(!conf.quiet){
+                        std::cout << "ERROR: " << std::endl;
+                        std::cout << "\t where: " << i << ":" << j << std::endl;
+                        std::cout << "\t answer: " << static_cast<size_t>(answer) << std::endl;
+                        std::cout << "\t was: " << static_cast<size_t>(correct) << std::endl;
+                        std::cout << "\t fill_factor: " << fill << std::endl;
+
+                        std::cout << "\t weights: {";
+                        for(std::size_t i = 0; i < weights.size(); ++i){
+                            if(i > 0){
+                                std::cout << ",";
+                            }
+                            std::cout << weights[i];
+                        }
+                        std::cout << "}" << std::endl;
+                    }
+                }
+            }
+        }
+
+        if(local_hits == 81){
+            ++sudoku_hits;
+        }
+
+        cell_hits += local_hits;
+    }
+
+    auto total_s = static_cast<double>(ds.source_grids.size());
+    auto total_c = total_s * 81.0;
+    auto tot = dbn_errors;
+
+    std::cout << "Cell Error Rate " << 100.0 * (total_c - cell_hits) / total_c << "% (" << (total_c - cell_hits) << "/" << total_c << ")" << std::endl;
+    std::cout << "Sudoku Error Rate " << 100.0 * (total_s - sudoku_hits) / total_s << "% (" << (total_s - sudoku_hits) << "/" << total_s << ")" << std::endl;
+    std::cout << "DBN errors: " << 100.0 * dbn_errors / tot << "% (" << dbn_errors << "/" << tot << ")" << std::endl;
+}
+
 int command_test(const config& conf){
     auto ds = get_dataset(conf);
 
@@ -608,75 +686,25 @@ int command_test(const config& conf){
     std::cout << "Test with " << ds.all_images.size() << " cells" << std::endl;
 
     if(conf.mixed){
-        std::size_t sudoku_hits = 0;
-        std::size_t cell_hits = 0;
-        std::size_t dbn_errors = 0;
+        if(!conf.conv){
+            auto dbn = std::make_unique<dbn_t>();
 
-        auto dbn = std::make_unique<mixed_dbn_t>();
+            dbn->display();
 
-        dbn->display();
+            std::ifstream is("dbn_mixed.dat", std::ofstream::binary);
+            dbn->load(is);
 
-        std::ifstream is("cdbn.dat", std::ofstream::binary);
-        dbn->load(is);
+            mixed_test_network(dbn, conf, ds);
+        } else {
+            auto cdbn = std::make_unique<cdbn_t>();
 
-        //auto error = dll::test_set(dbn, ds.training_images_1d(), ds.training_labels, dll::svm_predictor());
-        //std::cout << "error:" << error  << std::endl;
+            cdbn->display();
 
-        for(std::size_t i = 0; i < ds.source_grids.size(); ++i){
-            const auto& grid = ds.source_grids[i];
+            std::ifstream is("cdbn_mixed.dat", std::ofstream::binary);
+            cdbn->load(is);
 
-            if(!conf.quiet){
-                std::cout << grid.source_image_path << std::endl;
-            }
-
-            auto pure_data = read_data_pure(grid.source_image_path);
-
-            std::size_t local_hits = 0;
-
-            for(size_t i = 0; i < 9; ++i){
-                for(size_t j = 0; j < 9; ++j){
-                    auto& cell = grid(j,i);
-                    auto image = cell.image(conf);
-
-                    preprocess(image, conf);
-
-                    static constexpr size_t W = mixed_dbn_t::layer_type<0>::NV1;
-                    auto answer = dbn->svm_predict(etl::fast_dyn_matrix<double, 1, W, W>(image)) + 1;
-                    auto correct = cell.correct();
-
-                    if(answer == correct){
-                        ++local_hits;
-                    } else {
-                        ++dbn_errors;
-
-                        if(!conf.quiet){
-                            std::cout << "ERROR: " << std::endl;
-                            std::cout << "\t where: " << i << ":" << j << std::endl;
-                            std::cout << "\t answer: " << static_cast<size_t>(answer) << std::endl;
-                            std::cout << "\t was: " << static_cast<size_t>(correct) << std::endl;
-
-                            if(pure_data.results[i][j]){
-                                std::cout  << "\t PRINTED DIGIT" << std::endl;
-                            } else {
-                                std::cout  << "\t HANDWRITTEN DIGIT" << std::endl;
-                            }
-                        }
-                    }
-                }
-            }
-
-            if(local_hits == 81){
-                ++sudoku_hits;
-            }
-
-            cell_hits += local_hits;
+            mixed_test_network(cdbn, conf, ds);
         }
-
-        auto total_s = static_cast<double>(ds.source_grids.size());
-        auto total_c = total_s * 81.0;
-
-        std::cout << "Cell Error Rate " << 100.0 * (total_c - cell_hits) / total_c << "% (" << (total_c - cell_hits) << "/" << total_c << ")" << std::endl;
-        std::cout << "Sudoku Error Rate " << 100.0 * (total_s - sudoku_hits) / total_s << "% (" << (total_s - sudoku_hits) << "/" << total_s << ")" << std::endl;
     } else {
         if(!conf.conv){
             auto dbn = std::make_unique<dbn_t>();
@@ -950,8 +978,19 @@ int main(int argc, char** argv){
 
     auto conf = parse_args(argc, argv);
 
-    conf.gray = conf.mixed && mixed_dbn_t::layer_type<0>::visible_unit == dll::unit_type::GAUSSIAN;
-    conf.big = conf.mixed && std::is_same<mixed_dbn_t, mixed_dbn_pmp_big_t>::value;
+    // TODO Maybe review this
+    if(conf.mixed){
+        if(conf.conv){
+            conf.gray = false;
+            conf.big = false;
+        } else {
+            conf.gray = false;
+            conf.big = false;
+        }
+    } else {
+        conf.gray = false;
+        conf.big  = false;
+    }
 
     if(conf.shuffle){
         std::random_device rd{};
