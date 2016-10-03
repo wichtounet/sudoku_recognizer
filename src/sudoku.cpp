@@ -738,12 +738,8 @@ int command_test(const config& conf){
     return 0;
 }
 
-int command_time(const config& conf){
-    auto dbn = std::make_unique<dbn_t>();
-
-    std::ifstream is("dbn.dat", std::ofstream::binary);
-    dbn->load(is);
-
+template<typename Net>
+int time_network(const config& conf, Net& dbn){
     {
         //1. Image loading
 
@@ -969,6 +965,46 @@ int command_time(const config& conf){
     }
 
     return 0;
+}
+
+int command_time(const config& conf){
+    if(conf.mixed){
+        if(!conf.conv){
+            auto dbn = std::make_unique<dbn_t>();
+
+            std::ifstream is(dbn_mixed_model_file, std::ofstream::binary);
+            dbn->load(is);
+            std::cout << "Load model from " << dbn_mixed_model_file << std::endl;
+
+            return time_network(conf, dbn);
+        } else {
+            auto cdbn = std::make_unique<cdbn_t>();
+
+            std::ifstream is(cdbn_mixed_model_file, std::ofstream::binary);
+            cdbn->load(is);
+            std::cout << "Load model from " << cdbn_mixed_model_file << std::endl;
+
+            return time_network(conf, cdbn);
+        }
+    } else {
+        if(!conf.conv){
+            auto dbn = std::make_unique<dbn_t>();
+
+            std::ifstream is(dbn_model_file, std::ofstream::binary);
+            dbn->load(is);
+            std::cout << "Load model from " << dbn_model_file << std::endl;
+
+            return time_network(conf, dbn);
+        } else {
+            auto cdbn = std::make_unique<cdbn_t>();
+
+            std::ifstream is(cdbn_model_file, std::ofstream::binary);
+            cdbn->load(is);
+            std::cout << "Load model from " << cdbn_model_file << std::endl;
+
+            return time_network(conf, cdbn);
+        }
+    }
 }
 
 } //end of anonymous namespace
