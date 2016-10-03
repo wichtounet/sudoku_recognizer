@@ -636,16 +636,9 @@ void mixed_test_network(const Net& dbn, const config& conf, dataset& ds){
             for(size_t j = 0; j < 9; ++j){
                 uint8_t answer;
                 auto correct = grid(j,i).correct();
-                auto& cell_mat = grid(j,i).mat(conf);
-
-                auto fill = fill_factor(cell_mat);
 
                 auto weights = dbn->activation_probabilities(grid(j,i).image_1d<float>(conf));
-                if(fill == 1.0f){
-                    answer = 0;
-                } else {
-                    answer = dbn->predict_label(weights)+1;
-                }
+                answer = dbn->predict_label(weights)+1;
 
                 if(answer == correct){
                     ++local_hits;
@@ -657,7 +650,6 @@ void mixed_test_network(const Net& dbn, const config& conf, dataset& ds){
                         std::cout << "\t where: " << i << ":" << j << std::endl;
                         std::cout << "\t answer: " << static_cast<size_t>(answer) << std::endl;
                         std::cout << "\t was: " << static_cast<size_t>(correct) << std::endl;
-                        std::cout << "\t fill_factor: " << fill << std::endl;
 
                         std::cout << "\t weights: {";
                         for(std::size_t i = 0; i < weights.size(); ++i){
