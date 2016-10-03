@@ -736,11 +736,6 @@ int command_test(const config& conf){
 }
 
 int command_time(const config& conf){
-    if(conf.mixed){
-        std::cout << "the time command does not support mixed mode" << std::endl;
-        return 1;
-    }
-
     auto dbn = std::make_unique<dbn_t>();
 
     std::ifstream is("dbn.dat", std::ofstream::binary);
@@ -778,7 +773,7 @@ int command_time(const config& conf){
         for(auto& image_source_path : conf.files){
             auto source_image = open_image(image_source_path);
             auto dest_image = source_image.clone();
-            detect_lines(source_image, dest_image);
+            detect_lines(source_image, dest_image, conf.mixed);
         }
 
         for(auto& image_source_path : conf.files){
@@ -787,7 +782,7 @@ int command_time(const config& conf){
             cpp::stop_watch<std::chrono::microseconds> ld_watch;
 
             auto dest_image = source_image.clone();
-            detect_lines(source_image, dest_image);
+            detect_lines(source_image, dest_image, conf.mixed);
 
             ld_sum.push_back(ld_watch.elapsed());
         }
@@ -807,18 +802,18 @@ int command_time(const config& conf){
         for(auto& image_source_path : conf.files){
             auto source_image = open_image(image_source_path);
             auto dest_image = source_image.clone();
-            auto lines = detect_lines(source_image, dest_image);
-            detect_grid(source_image, dest_image, lines);
+            auto lines = detect_lines(source_image, dest_image, conf.mixed);
+            detect_grid(source_image, dest_image, lines, conf.mixed);
         }
 
         for(auto& image_source_path : conf.files){
             auto source_image = open_image(image_source_path);
             auto dest_image = source_image.clone();
-            auto lines = detect_lines(source_image, dest_image);
+            auto lines = detect_lines(source_image, dest_image, conf.mixed);
 
             cpp::stop_watch<std::chrono::microseconds> gd_watch;
 
-            detect_grid(source_image, dest_image, lines);
+            detect_grid(source_image, dest_image, lines, conf.mixed);
 
             gd_sum.push_back(gd_watch.elapsed());
         }
@@ -838,20 +833,20 @@ int command_time(const config& conf){
         for(auto& image_source_path : conf.files){
             auto source_image = open_image(image_source_path);
             auto dest_image = source_image.clone();
-            auto lines = detect_lines(source_image, dest_image);
-            auto cells = detect_grid(source_image, dest_image, lines);
-            split(source_image, dest_image, cells, lines);
+            auto lines = detect_lines(source_image, dest_image, conf.mixed);
+            auto cells = detect_grid(source_image, dest_image, lines, conf.mixed);
+            split(source_image, dest_image, cells, lines, conf.mixed);
         }
 
         for(auto& image_source_path : conf.files){
             auto source_image = open_image(image_source_path);
             auto dest_image = source_image.clone();
-            auto lines = detect_lines(source_image, dest_image);
-            auto cells = detect_grid(source_image, dest_image, lines);
+            auto lines = detect_lines(source_image, dest_image, conf.mixed);
+            auto cells = detect_grid(source_image, dest_image, lines, conf.mixed);
 
             cpp::stop_watch<std::chrono::microseconds> dd_watch;
 
-            split(source_image, dest_image, cells, lines);
+            split(source_image, dest_image, cells, lines, conf.mixed);
 
             dd_sum.push_back(dd_watch.elapsed());
         }
@@ -871,9 +866,9 @@ int command_time(const config& conf){
         for(auto& image_source_path : conf.files){
             auto source_image = open_image(image_source_path);
             auto dest_image = source_image.clone();
-            auto lines = detect_lines(source_image, dest_image);
-            auto cells = detect_grid(source_image, dest_image, lines);
-            auto image = split(source_image, dest_image, cells, lines);
+            auto lines = detect_lines(source_image, dest_image, conf.mixed);
+            auto cells = detect_grid(source_image, dest_image, lines, conf.mixed);
+            auto image = split(source_image, dest_image, cells, lines, conf.mixed);
 
             for(size_t i = 0; i < 9; ++i){
                 for(size_t j = 0; j < 9; ++j){
@@ -881,7 +876,7 @@ int command_time(const config& conf){
 
                     auto& cell = image(i, j);
 
-                    if(cell.empty()){
+                    if(!conf.mixed && cell.empty()){
                         answer = 0;
                     } else {
                         auto weights = dbn->activation_probabilities(cell.image_1d<float>(conf));
@@ -896,9 +891,9 @@ int command_time(const config& conf){
         for(auto& image_source_path : conf.files){
             auto source_image = open_image(image_source_path);
             auto dest_image = source_image.clone();
-            auto lines = detect_lines(source_image, dest_image);
-            auto cells = detect_grid(source_image, dest_image, lines);
-            auto image = split(source_image, dest_image, cells, lines);
+            auto lines = detect_lines(source_image, dest_image, conf.mixed);
+            auto cells = detect_grid(source_image, dest_image, lines, conf.mixed);
+            auto image = split(source_image, dest_image, cells, lines, conf.mixed);
 
             cpp::stop_watch<std::chrono::microseconds> dr_watch;
 
@@ -908,7 +903,7 @@ int command_time(const config& conf){
 
                     auto& cell = image(i, j);
 
-                    if(cell.empty()){
+                    if(!conf.mixed && cell.empty()){
                         answer = 0;
                     } else {
                         auto weights = dbn->activation_probabilities(cell.image_1d<float>(conf));
@@ -939,9 +934,9 @@ int command_time(const config& conf){
 
             auto source_image = open_image(image_source_path);
             auto dest_image = source_image.clone();
-            auto lines = detect_lines(source_image, dest_image);
-            auto cells = detect_grid(source_image, dest_image, lines);
-            auto image = split(source_image, dest_image, cells, lines);
+            auto lines = detect_lines(source_image, dest_image, conf.mixed);
+            auto cells = detect_grid(source_image, dest_image, lines, conf.mixed);
+            auto image = split(source_image, dest_image, cells, lines, conf.mixed);
 
             for(size_t i = 0; i < 9; ++i){
                 for(size_t j = 0; j < 9; ++j){
@@ -949,7 +944,7 @@ int command_time(const config& conf){
 
                     auto& cell = image(i,j);
 
-                    if(cell.empty()){
+                    if(!conf.mixed && cell.empty()){
                         answer = 0;
                     } else {
                         auto weights = dbn->activation_probabilities(cell.image_1d<float>(conf));
