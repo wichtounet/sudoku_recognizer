@@ -525,6 +525,8 @@ int command_recog(const config& conf){
 
 template<typename Net>
 void standard_test_network(const Net& dbn, const config& conf, dataset& ds){
+    std::cout << "Start testing in standard mode" << std::endl;
+
     auto train_error_rate = dll::test_set(dbn, ds.training_images_1d(), ds.training_labels, dll::predictor());
     auto test_error_rate = dll::test_set(dbn, ds.test_images_1d(), ds.test_labels, dll::predictor());
     auto all_error_rate = dll::test_set(dbn, ds.all_images_1d(), ds.all_labels, dll::predictor());
@@ -612,6 +614,8 @@ void standard_test_network(const Net& dbn, const config& conf, dataset& ds){
 
 template<typename Net>
 void mixed_test_network(const Net& dbn, const config& conf, dataset& ds){
+    std::cout << "Start testing in mixed mode" << std::endl;
+
     auto train_error_rate = dll::test_set(dbn, ds.training_images_1d(), ds.training_labels, dll::predictor());
     auto test_error_rate = dll::test_set(dbn, ds.test_images_1d(), ds.test_labels, dll::predictor());
     auto all_error_rate = dll::test_set(dbn, ds.all_images_1d(), ds.all_labels, dll::predictor());
