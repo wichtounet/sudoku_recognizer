@@ -34,6 +34,11 @@
 
 namespace {
 
+const auto dbn_model_file        = "dbn.dat";
+const auto cdbn_mixed_model_file = "cdbn_mixed.dat";
+const auto dbn_mixed_model_file  = "dbn_mixed.dat";
+const auto cdbn_model_file       = "cdbn.dat";
+
 using mixed_dbn_pmp_t = dll::dbn_desc<
     dll::dbn_layers<
         dll::conv_rbm_mp_desc_square<1, CELL_SIZE, 30, 22, 2,
@@ -253,8 +258,9 @@ int command_train(const config& conf){
                 std::cout << "test_error:" << dll::test_set(dbn, ds.test_images_1d(), ds.test_labels, dll::predictor()) << std::endl;
             }
 
-            std::ofstream os("dbn_mixed.dat", std::ofstream::binary);
+            std::ofstream os(dbn_mixed_model_file, std::ofstream::binary);
             dbn->store(os);
+            std::cout << "store the model in " << dbn_mixed_model_file << std::endl;
         } else {
             auto cdbn = std::make_unique<cdbn_t>();
             cdbn->display();
@@ -284,8 +290,9 @@ int command_train(const config& conf){
                 std::cout << "test_error:" << dll::test_set(cdbn, ds.test_images_1d(), ds.test_labels, dll::predictor()) << std::endl;
             }
 
-            std::ofstream os("cdbn_mixed.dat", std::ofstream::binary);
+            std::ofstream os(cdbn_mixed_model_file, std::ofstream::binary);
             cdbn->store(os);
+            std::cout << "store the model in " << cdbn_mixed_model_file << std::endl;
         }
     } else {
         if(!conf.conv){
@@ -311,8 +318,9 @@ int command_train(const config& conf){
                 std::cout << "test_error:" << dll::test_set(dbn, ds.test_images_1d(), ds.test_labels, dll::predictor()) << std::endl;
             }
 
-            std::ofstream os("dbn.dat", std::ofstream::binary);
+            std::ofstream os(dbn_model_file, std::ofstream::binary);
             dbn->store(os);
+            std::cout << "store the model in " << dbn_model_file << std::endl;
         } else {
             auto cdbn = std::make_unique<cdbn_t>();
             cdbn->display();
@@ -342,8 +350,9 @@ int command_train(const config& conf){
                 std::cout << "test_error:" << dll::test_set(cdbn, ds.test_images_1d(), ds.test_labels, dll::predictor()) << std::endl;
             }
 
-            std::ofstream os("cdbn.dat", std::ofstream::binary);
+            std::ofstream os(cdbn_model_file, std::ofstream::binary);
             cdbn->store(os);
+            std::cout << "store the model in " << cdbn_model_file << std::endl;
         }
     }
 
@@ -691,8 +700,9 @@ int command_test(const config& conf){
 
             dbn->display();
 
-            std::ifstream is("dbn_mixed.dat", std::ofstream::binary);
+            std::ifstream is(dbn_mixed_model_file, std::ofstream::binary);
             dbn->load(is);
+            std::cout << "Load model from " << dbn_mixed_model_file << std::endl;
 
             mixed_test_network(dbn, conf, ds);
         } else {
@@ -700,8 +710,9 @@ int command_test(const config& conf){
 
             cdbn->display();
 
-            std::ifstream is("cdbn_mixed.dat", std::ofstream::binary);
+            std::ifstream is(cdbn_mixed_model_file, std::ofstream::binary);
             cdbn->load(is);
+            std::cout << "Load model from " << cdbn_mixed_model_file << std::endl;
 
             mixed_test_network(cdbn, conf, ds);
         }
@@ -711,8 +722,9 @@ int command_test(const config& conf){
 
             dbn->display();
 
-            std::ifstream is("dbn.dat", std::ofstream::binary);
+            std::ifstream is(dbn_model_file, std::ofstream::binary);
             dbn->load(is);
+            std::cout << "Load model from " << dbn_model_file << std::endl;
 
             standard_test_network(dbn, conf, ds);
         } else {
@@ -720,8 +732,9 @@ int command_test(const config& conf){
 
             cdbn->display();
 
-            std::ifstream is("cdbn.dat", std::ofstream::binary);
+            std::ifstream is(cdbn_model_file, std::ofstream::binary);
             cdbn->load(is);
+            std::cout << "Load model from " << cdbn_model_file << std::endl;
 
             standard_test_network(cdbn, conf, ds);
         }
