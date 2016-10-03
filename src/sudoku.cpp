@@ -551,13 +551,12 @@ void standard_test_network(const Net& dbn, const config& conf, dataset& ds){
         for(size_t i = 0; i < 9; ++i){
             for(size_t j = 0; j < 9; ++j){
                 uint8_t answer;
-                auto correct = grid(j,i).correct();
-                auto& cell_mat = grid(j,i).mat(conf);
+                auto& cell = grid(j,i);
+                auto& cell_mat = cell.mat(conf);
+                auto correct = cell.correct();
 
-                auto fill = fill_factor(cell_mat);
-
-                auto weights = dbn->activation_probabilities(grid(j,i).image_1d<float>(conf));
-                if(fill == 1.0f){
+                auto weights = dbn->activation_probabilities(cell.image_1d<float>(conf));
+                if(cell.empty()){
                     answer = 0;
                 } else {
                     answer = dbn->predict_label(weights)+1;
@@ -577,7 +576,7 @@ void standard_test_network(const Net& dbn, const config& conf, dataset& ds){
                         std::cout << "\t where: " << i << ":" << j << std::endl;
                         std::cout << "\t answer: " << static_cast<size_t>(answer) << std::endl;
                         std::cout << "\t was: " << static_cast<size_t>(correct) << std::endl;
-                        std::cout << "\t fill_factor: " << fill << std::endl;
+                        std::cout << "\t fill_factor: " << fill_factor(cell_mat) << std::endl;
 
                         std::cout << "\t weights: {";
                         for(std::size_t i = 0; i < weights.size(); ++i){
