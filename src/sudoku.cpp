@@ -79,63 +79,81 @@ using mixed_dbn_pmp_big_t = dll::dbn_desc<
 
 using mixed_dbn_t = mixed_dbn_pmp_t;
 
-using dbn_t = dll::dbn_desc<
-    dll::dbn_layers<
-        dll::rbm_desc<CELL_SIZE * CELL_SIZE, 500, dll::momentum, dll::shuffle, dll::batch_size<32>, dll::weight_decay<dll::decay_type::L2>, dll::init_weights>::layer_t,
-        dll::rbm_desc<500, 500, dll::momentum, dll::shuffle, dll::batch_size<32>, dll::weight_decay<dll::decay_type::L2>>::layer_t,
-        //dll::rbm_desc<300, 500, dll::momentum, dll::shuffle, dll::batch_size<16>, dll::weight_decay<dll::decay_type::L2>>::layer_t,
-        dll::rbm_desc<500, 9, dll::momentum, dll::shuffle, dll::batch_size<32>, dll::weight_decay<dll::decay_type::L2>, dll::hidden<dll::unit_type::SOFTMAX>>::layer_t
+using dbn_t =
+    dll::dbn_desc<
+        dll::dbn_layers<
+            dll::rbm_desc<CELL_SIZE * CELL_SIZE, 500,
+                dll::momentum,
+                dll::shuffle,
+                dll::batch_size<32>,
+                dll::weight_decay<dll::decay_type::L2>,
+                dll::init_weights
+            >::layer_t,
+            dll::rbm_desc<500, 500,
+                dll::momentum,
+                dll::shuffle,
+                dll::batch_size<32>,
+                dll::weight_decay<dll::decay_type::L2>
+            >::layer_t,
+            dll::rbm_desc<500, 9,
+                dll::momentum,
+                dll::shuffle,
+                dll::batch_size<32>,
+                dll::weight_decay<dll::decay_type::L2>,
+                dll::hidden<dll::unit_type::SOFTMAX>
+            >::layer_t
         >,
-            dll::trainer<dll::sgd_trainer>,
-            dll::batch_size<32>,
-            dll::momentum,
-            dll::shuffle,
-            //dll::verbose,
-            dll::weight_decay<dll::decay_type::L2>
-        >::dbn_t;
+        dll::trainer<dll::sgd_trainer>,
+        dll::batch_size<32>,
+        dll::momentum,
+        dll::shuffle,
+        //dll::verbose,
+        dll::weight_decay<dll::decay_type::L2>
+    >::dbn_t;
 
-using cdbn_t = dll::dbn_desc<
-    dll::dbn_layers<
-        dll::conv_rbm_desc<1, CELL_SIZE, CELL_SIZE, 4, 28, 28,
-            dll::weight_type<float>,
-            dll::momentum,
-            dll::shuffle,
-            dll::weight_decay<dll::decay_type::L2>,
-            dll::batch_size<32>,
-            dll::hidden<dll::unit_type::BINARY>
-        >::layer_t,
-        dll::mp_layer_3d_desc<4, 28, 28, 1, 2, 2, dll::weight_type<float>>::layer_t,
-        dll::conv_rbm_desc<4, 14, 14, 6, 10, 10,
-            dll::weight_type<float>,
-            dll::momentum,
-            dll::shuffle,
-            dll::weight_decay<dll::decay_type::L2>,
-            dll::batch_size<32>,
-            dll::hidden<dll::unit_type::BINARY>
-        >::layer_t,
-        dll::mp_layer_3d_desc<6, 10, 10, 1, 2, 2, dll::weight_type<float>>::layer_t,
-        dll::rbm_desc<6 * 5 * 5, 120,
-            dll::momentum,
-            dll::shuffle,
-            dll::weight_decay<dll::decay_type::L2>,
-            dll::batch_size<32>,
-            dll::hidden<dll::unit_type::BINARY>
-        >::layer_t,
-        dll::rbm_desc<120, 9,
-            dll::momentum,
-            dll::shuffle,
-            dll::batch_size<32>,
-            dll::weight_decay<dll::decay_type::L2>,
-            dll::hidden<dll::unit_type::SOFTMAX>
-        >::layer_t
-    >,
-            dll::trainer<dll::sgd_trainer>,
-            dll::batch_size<32>,
-            dll::momentum,
-            dll::shuffle,
-            //dll::verbose,
-            dll::weight_decay<dll::decay_type::L2>
-        >::dbn_t;
+using cdbn_t =
+    dll::dbn_desc<
+        dll::dbn_layers<
+            dll::conv_rbm_desc<1, CELL_SIZE, CELL_SIZE, 4, 28, 28,
+                dll::weight_type<float>,
+                dll::momentum,
+                dll::shuffle,
+                dll::weight_decay<dll::decay_type::L2>,
+                dll::batch_size<32>,
+                dll::hidden<dll::unit_type::BINARY>
+            >::layer_t,
+            dll::mp_layer_3d_desc<4, 28, 28, 1, 2, 2, dll::weight_type<float>>::layer_t,
+            dll::conv_rbm_desc<4, 14, 14, 6, 10, 10,
+                dll::weight_type<float>,
+                dll::momentum,
+                dll::shuffle,
+                dll::weight_decay<dll::decay_type::L2>,
+                dll::batch_size<32>,
+                dll::hidden<dll::unit_type::BINARY>
+            >::layer_t,
+            dll::mp_layer_3d_desc<6, 10, 10, 1, 2, 2, dll::weight_type<float>>::layer_t,
+            dll::rbm_desc<6 * 5 * 5, 120,
+                dll::momentum,
+                dll::shuffle,
+                dll::weight_decay<dll::decay_type::L2>,
+                dll::batch_size<32>,
+                dll::hidden<dll::unit_type::BINARY>
+            >::layer_t,
+            dll::rbm_desc<120, 9,
+                dll::momentum,
+                dll::shuffle,
+                dll::batch_size<32>,
+                dll::weight_decay<dll::decay_type::L2>,
+                dll::hidden<dll::unit_type::SOFTMAX>
+            >::layer_t
+        >,
+        dll::trainer<dll::sgd_trainer>,
+        dll::batch_size<32>,
+        dll::momentum,
+        dll::shuffle,
+        //dll::verbose,
+        dll::weight_decay<dll::decay_type::L2>
+    >::dbn_t;
 
 using dbn_p = std::unique_ptr<dbn_t>;
 
