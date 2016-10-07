@@ -89,13 +89,47 @@ using dbn_t =
                 dll::weight_decay<dll::decay_type::L2>,
                 dll::init_weights
             >::layer_t,
-            dll::rbm_desc<500, 500,
+            dll::rbm_desc<500, 1000,
                 dll::momentum,
                 dll::shuffle,
                 dll::batch_size<32>,
                 dll::weight_decay<dll::decay_type::L2>
             >::layer_t,
-            dll::rbm_desc<500, 9,
+            dll::rbm_desc<1000, 9,
+                dll::momentum,
+                dll::shuffle,
+                dll::batch_size<32>,
+                dll::weight_decay<dll::decay_type::L2>,
+                dll::hidden<dll::unit_type::SOFTMAX>
+            >::layer_t
+        >,
+        dll::trainer<dll::sgd_trainer>,
+        dll::batch_size<32>,
+        dll::momentum,
+        dll::shuffle,
+        //dll::verbose,
+        dll::weight_decay<dll::decay_type::L2>
+    >::dbn_t;
+
+using dbn_mixed_t =
+    dll::dbn_desc<
+        dll::dbn_layers<
+            dll::rbm_desc<CELL_SIZE * CELL_SIZE, 300,
+                dll::momentum,
+                dll::shuffle,
+                dll::batch_size<32>,
+                dll::weight_decay<dll::decay_type::L2>,
+                dll::hidden<dll::unit_type::BINARY>,
+                dll::init_weights
+            >::layer_t,
+            dll::rbm_desc<300, 300,
+                dll::momentum,
+                dll::shuffle,
+                dll::batch_size<32>,
+                dll::weight_decay<dll::decay_type::L2>,
+                dll::hidden<dll::unit_type::BINARY>
+            >::layer_t,
+            dll::rbm_desc<300, 9,
                 dll::momentum,
                 dll::shuffle,
                 dll::batch_size<32>,
@@ -154,8 +188,6 @@ using cdbn_t =
         //dll::verbose,
         dll::weight_decay<dll::decay_type::L2>
     >::dbn_t;
-
-using dbn_p = std::unique_ptr<dbn_t>;
 
 int command_detect(const config& conf){
     if(conf.files.empty()){
@@ -252,29 +284,85 @@ int command_train(const config& conf){
         std::cout << "Test with " << ds.test_images.size() << " cells" << std::endl;
     }
 
+    bool distort = false;
+
     if(conf.mixed){
         if(!conf.conv){
-            auto dbn = std::make_unique<dbn_t>();
+            auto dbn = std::make_unique<dbn_mixed_t>();
             dbn->display();
 
             dbn->layer_get<0>().initial_momentum = 0.9;
             dbn->layer_get<1>().initial_momentum = 0.9;
+            dbn->layer_get<1>().learning_rate = 0.05;
             dbn->layer_get<2>().initial_momentum = 0.9;
 
             dbn->initial_momentum = 0.9;
-            dbn->learning_rate = 0.01;
+            dbn->learning_rate    = 0.03;
+
+            dbn->l2_weight_cost = 0.005;
+            dbn->goal           = 0.01;
+
+            // Copy the data (for augmentation)
+            auto images = ds.training_images_1d();
+            auto labels = ds.training_labels;
+            auto size = images.size();
+
+            if (distort) {
+                images.reserve(size * 5);
+                labels.reserve(size * 5);
+
+                for (size_t i = 0; i < size; ++i) {
+                    auto& image = images[i];
+
+                    auto copy_left   = image;
+                    auto copy_right  = image;
+                    auto copy_top    = image;
+                    auto copy_bottom = image;
+
+                    copy_left   = 0;
+                    copy_right  = 0;
+                    copy_top    = 0;
+                    copy_bottom = 0;
+
+                    for (size_t x = 0; x < CELL_SIZE; ++x) {
+                        for (size_t y = 0; y < CELL_SIZE; ++y) {
+                            if (y > 2) {
+                                copy_left[x * CELL_SIZE + y] = image[x * CELL_SIZE + y - 2];
+                            }
+
+                            if (y < CELL_SIZE - 2) {
+                                copy_right[x * CELL_SIZE + y] = image[x * CELL_SIZE + y + 2];
+                            }
+
+                            if (x > 2) {
+                                copy_top[x * CELL_SIZE + y] = image[(x - 2) * CELL_SIZE + y];
+                            }
+
+                            if (x < CELL_SIZE - 2) {
+                                copy_bottom[x * CELL_SIZE + y] = image[(x + 2) * CELL_SIZE + y];
+                            }
+                        }
+                    }
+
+                    labels.push_back(labels[i]);
+                    labels.push_back(labels[i]);
+                    labels.push_back(labels[i]);
+                    labels.push_back(labels[i]);
+
+                    images.push_back(std::move(copy_left));
+                    images.push_back(std::move(copy_right));
+                    images.push_back(std::move(copy_top));
+                    images.push_back(std::move(copy_bottom));
+                }
+            }
 
             std::cout << "Start pretraining" << std::endl;
-            dbn->pretrain(ds.training_images_1d(), 50);
+            dbn->pretrain(images, 25);
 
             std::cout << "Start fine-tuning" << std::endl;
-            dbn->fine_tune(ds.training_images_1d(), ds.training_labels, 100);
+            dbn->fine_tune(images, labels, 200);
 
-            std::cout << "training_error:" << dll::test_set(dbn, ds.training_images_1d(), ds.training_labels, dll::predictor()) << std::endl;
-
-            if(conf.test){
-                std::cout << "test_error:" << dll::test_set(dbn, ds.test_images_1d(), ds.test_labels, dll::predictor()) << std::endl;
-            }
+            std::cout << "training_error:" << dll::test_set(dbn, images, labels, dll::predictor()) << std::endl;
 
             std::ofstream os(dbn_mixed_model_file, std::ofstream::binary);
             dbn->store(os);
@@ -709,7 +797,7 @@ int command_test(const config& conf){
 
     if(conf.mixed){
         if(!conf.conv){
-            auto dbn = std::make_unique<dbn_t>();
+            auto dbn = std::make_unique<dbn_mixed_t>();
 
             dbn->display();
 
@@ -988,7 +1076,7 @@ int time_network(const config& conf, Net& dbn){
 int command_time(const config& conf){
     if(conf.mixed){
         if(!conf.conv){
-            auto dbn = std::make_unique<dbn_t>();
+            auto dbn = std::make_unique<dbn_mixed_t>();
 
             std::ifstream is(dbn_mixed_model_file, std::ofstream::binary);
             dbn->load(is);
