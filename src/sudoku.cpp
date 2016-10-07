@@ -401,7 +401,7 @@ int command_train(const config& conf){
             }
 
             std::cout << "Start pretraining" << std::endl;
-            //dbn->pretrain(images, 50);
+            dbn->pretrain(images, 50);
 
             std::cout << "Start fine-tuning" << std::endl;
             dbn->fine_tune(images, labels, 200);
@@ -427,6 +427,7 @@ int command_train(const config& conf){
 
             cdbn->initial_momentum = 0.9;
             cdbn->learning_rate = 0.03;
+            cdbn->goal = 0.005;
 
             auto& images = ds.training_images_1d();
             auto& labels = ds.training_labels;
