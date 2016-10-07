@@ -189,6 +189,50 @@ using cdbn_t =
         dll::weight_decay<dll::decay_type::L2>
     >::dbn_t;
 
+using cdbn_mixed_t =
+    dll::dbn_desc<
+        dll::dbn_layers<
+            dll::conv_rbm_desc<1, CELL_SIZE, CELL_SIZE, 4, 28, 28,
+                dll::weight_type<float>,
+                dll::momentum,
+                dll::shuffle,
+                dll::weight_decay<dll::decay_type::L2>,
+                dll::batch_size<32>,
+                dll::hidden<dll::unit_type::BINARY>
+            >::layer_t,
+            dll::mp_layer_3d_desc<4, 28, 28, 1, 2, 2, dll::weight_type<float>>::layer_t,
+            dll::conv_rbm_desc<4, 14, 14, 6, 10, 10,
+                dll::weight_type<float>,
+                dll::momentum,
+                dll::shuffle,
+                dll::weight_decay<dll::decay_type::L2>,
+                dll::batch_size<32>,
+                dll::hidden<dll::unit_type::BINARY>
+            >::layer_t,
+            dll::mp_layer_3d_desc<6, 10, 10, 1, 2, 2, dll::weight_type<float>>::layer_t,
+            dll::rbm_desc<6 * 5 * 5, 100,
+                dll::momentum,
+                dll::shuffle,
+                dll::weight_decay<dll::decay_type::L2>,
+                dll::batch_size<32>,
+                dll::hidden<dll::unit_type::BINARY>
+            >::layer_t,
+            dll::rbm_desc<100, 9,
+                dll::momentum,
+                dll::shuffle,
+                dll::batch_size<32>,
+                dll::weight_decay<dll::decay_type::L2>,
+                dll::hidden<dll::unit_type::SOFTMAX>
+            >::layer_t
+        >,
+        dll::trainer<dll::sgd_trainer>,
+        dll::batch_size<32>,
+        dll::momentum,
+        dll::shuffle,
+        //dll::verbose,
+        dll::weight_decay<dll::decay_type::L2>
+    >::dbn_t;
+
 int command_detect(const config& conf){
     if(conf.files.empty()){
         std::cout << "Usage: sudoku detect <image>..." << std::endl;
@@ -368,7 +412,7 @@ int command_train(const config& conf){
             dbn->store(os);
             std::cout << "store the model in " << dbn_mixed_model_file << std::endl;
         } else {
-            auto cdbn = std::make_unique<cdbn_t>();
+            auto cdbn = std::make_unique<cdbn_mixed_t>();
             cdbn->display();
 
             cdbn->layer_get<0>().initial_momentum = 0.9; // C1
@@ -806,7 +850,7 @@ int command_test(const config& conf){
 
             mixed_test_network(dbn, conf, ds);
         } else {
-            auto cdbn = std::make_unique<cdbn_t>();
+            auto cdbn = std::make_unique<cdbn_mixed_t>();
 
             cdbn->display();
 
@@ -1083,7 +1127,7 @@ int command_time(const config& conf){
 
             return time_network(conf, dbn);
         } else {
-            auto cdbn = std::make_unique<cdbn_t>();
+            auto cdbn = std::make_unique<cdbn_mixed_t>();
 
             std::ifstream is(cdbn_mixed_model_file, std::ofstream::binary);
             cdbn->load(is);
