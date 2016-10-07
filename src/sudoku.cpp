@@ -357,7 +357,7 @@ int command_train(const config& conf){
             }
 
             std::cout << "Start pretraining" << std::endl;
-            dbn->pretrain(images, 25);
+            //dbn->pretrain(images, 50);
 
             std::cout << "Start fine-tuning" << std::endl;
             dbn->fine_tune(images, labels, 200);
@@ -382,19 +382,18 @@ int command_train(const config& conf){
             cdbn->layer_get<4>().learning_rate = 1e-3; // R1
 
             cdbn->initial_momentum = 0.9;
-            cdbn->learning_rate = 0.01;
+            cdbn->learning_rate = 0.03;
+
+            auto& images = ds.training_images_1d();
+            auto& labels = ds.training_labels;
 
             std::cout << "Start pretraining" << std::endl;
-            cdbn->pretrain(ds.training_images_1d(), 100);
+            cdbn->pretrain(images, 100);
 
             std::cout << "Start fine-tuning" << std::endl;
-            cdbn->fine_tune(ds.training_images_1d(), ds.training_labels, 200);
+            cdbn->fine_tune(images, labels, 200);
 
-            std::cout << "training_error:" << dll::test_set(cdbn, ds.training_images_1d(), ds.training_labels, dll::predictor()) << std::endl;
-
-            if(conf.test){
-                std::cout << "test_error:" << dll::test_set(cdbn, ds.test_images_1d(), ds.test_labels, dll::predictor()) << std::endl;
-            }
+            std::cout << "training_error:" << dll::test_set(cdbn, images, labels, dll::predictor()) << std::endl;
 
             std::ofstream os(cdbn_mixed_model_file, std::ofstream::binary);
             cdbn->store(os);
