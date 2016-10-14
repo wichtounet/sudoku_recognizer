@@ -185,14 +185,14 @@ using cdbn_t =
         dll::batch_size<32>,
         dll::momentum,
         dll::shuffle,
-        //dll::verbose,
+        dll::verbose,
         dll::weight_decay<dll::decay_type::L2>
     >::dbn_t;
 
 using cdbn_mixed_t =
     dll::dbn_desc<
         dll::dbn_layers<
-            dll::conv_rbm_desc<1, CELL_SIZE, CELL_SIZE, 4, 28, 28,
+            dll::conv_rbm_desc<1, CELL_SIZE, CELL_SIZE, 6, 28, 28,
                 dll::weight_type<float>,
                 dll::momentum,
                 dll::shuffle,
@@ -200,8 +200,8 @@ using cdbn_mixed_t =
                 dll::batch_size<32>,
                 dll::hidden<dll::unit_type::BINARY>
             >::layer_t,
-            dll::mp_layer_3d_desc<4, 28, 28, 1, 2, 2, dll::weight_type<float>>::layer_t,
-            dll::conv_rbm_desc<4, 14, 14, 6, 10, 10,
+            dll::mp_layer_3d_desc<6, 28, 28, 1, 2, 2, dll::weight_type<float>>::layer_t,
+            dll::conv_rbm_desc<6, 14, 14, 6, 10, 10,
                 dll::weight_type<float>,
                 dll::momentum,
                 dll::shuffle,
@@ -229,7 +229,7 @@ using cdbn_mixed_t =
         dll::batch_size<32>,
         dll::momentum,
         dll::shuffle,
-        //dll::verbose,
+        dll::verbose,
         dll::weight_decay<dll::decay_type::L2>
     >::dbn_t;
 
@@ -423,10 +423,11 @@ int command_train(const config& conf){
 
             cdbn->layer_get<0>().learning_rate = 1e-3; // C1
             cdbn->layer_get<2>().learning_rate = 1e-4; // C1
-            cdbn->layer_get<4>().learning_rate = 1e-3; // R1
+            cdbn->layer_get<4>().learning_rate = 1e-2; // R1
 
+            cdbn->l2_weight_cost = 0.0005;
             cdbn->initial_momentum = 0.9;
-            cdbn->learning_rate = 0.03;
+            cdbn->learning_rate = 0.07;
             cdbn->goal = 0.005;
 
             auto& images = ds.training_images_1d();
@@ -489,10 +490,10 @@ int command_train(const config& conf){
             cdbn->learning_rate = 0.01;
 
             std::cout << "Start pretraining" << std::endl;
-            cdbn->pretrain(ds.training_images_1d(), 100);
+            cdbn->pretrain(ds.training_images_1d(), 25);
 
             std::cout << "Start fine-tuning" << std::endl;
-            cdbn->fine_tune(ds.training_images_1d(), ds.training_labels, 200);
+            cdbn->fine_tune(ds.training_images_1d(), ds.training_labels, 100);
 
             std::cout << "training_error:" << dll::test_set(cdbn, ds.training_images_1d(), ds.training_labels, dll::predictor()) << std::endl;
 
