@@ -15,6 +15,9 @@ CXX_FLAGS += -DETL_VECTORIZE_FULL
 
 DLL_BLAS_PKG ?= mkl-threads
 
+# Disable one warning
+CXX_FLAGS += -Wno-ignored-attributes
+
 # Activate BLAS mode on demand
 ifneq (,$(ETL_MKL))
 CXX_FLAGS += -DETL_MKL_MODE $(shell pkg-config --cflags $(DLL_BLAS_PKG))
